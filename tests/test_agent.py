@@ -28,6 +28,7 @@ from basic_agent.evaluation import EVAL_CONFIG, EVAL_SET, build_eval_command
 from basic_agent.telemetry import tracer
 from basic_agent.auth import keycloak_enabled
 from basic_agent.auth_gateway import app as auth_gateway_app
+from basic_agent.config import load_settings
 
 
 def test_root_agent_is_focused_on_release_readiness():
@@ -215,3 +216,15 @@ def test_keycloak_forward_auth_gateway_exposes_verification_and_health():
     routes = {route.path for route in auth_gateway_app.routes}
 
     assert routes >= {"/healthz", "/verify"}
+
+
+def test_runtime_settings_are_externalized(monkeypatch):
+    monkeypatch.setenv("APP_NAME", "release-agent-test")
+    monkeypatch.setenv("ADK_MODEL", "configured-model")
+    monkeypatch.setenv("RELEASE_API_ROLES", "release-reader,release-operator")
+
+    configured = load_settings()
+
+    assert configured.app_name == "release-agent-test"
+    assert configured.model == "configured-model"
+    assert configured.release_api_roles == ("release-reader", "release-operator")

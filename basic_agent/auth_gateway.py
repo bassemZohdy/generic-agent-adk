@@ -6,9 +6,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import Response
 
 from .auth import authenticate_request, keycloak_enabled
+from .config import settings
 
 
-app = FastAPI(title="Keycloak ForwardAuth", version="0.1.0")
+app = FastAPI(title="Keycloak ForwardAuth", version=settings.app_version)
 
 
 @app.get("/healthz")
@@ -21,7 +22,9 @@ def verify(request: Request) -> Response:
     """Return 2xx only for a valid Keycloak bearer token."""
     if not keycloak_enabled():
         return Response(status_code=503, content="Keycloak authentication is not configured")
-    claims = authenticate_request(request)
+    claims = authenticate_request(
+        request, required_roles=settings.keycloak_required_roles
+    )
     response = Response(status_code=200)
     if claims:
         if subject := claims.get("sub"):

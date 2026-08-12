@@ -31,9 +31,14 @@ services:
     <<: *app-image
     command: ["uvicorn", "basic_agent.auth_gateway:app", "--host", "0.0.0.0", "--port", "8010"]
     environment:
+      APP_NAME: ${APP_NAME:-basic_agent}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+      KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
+      KEYCLOAK_REQUIRED_ROLES: ${KEYCLOAK_REQUIRED_ROLES:-release-reader}
     depends_on:
       - keycloak
     labels:
@@ -67,12 +72,17 @@ services:
     command: ["adk", "api_server", "--host", "0.0.0.0", "--port", "8002", "--auto_create_session", "--a2a", "--session_service_uri=sqlite:////app/.adk/api-sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.ReleaseReadinessPlugin", "/app/basic_agent"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      APP_NAME: ${APP_NAME:-basic_agent}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
       ADK_MODEL: ${ADK_MODEL:-gemini-3.6-flash}
       RELEASE_API_URL: http://release-api:8001
       RELEASE_API_KEY: ${RELEASE_API_KEY:-local-release-key}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+      KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
+      RELEASE_API_ROLES: ${RELEASE_API_ROLES:-release-reader}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-}
       DATABASE_URL: ${DATABASE_URL:-}
       STORAGE_PATH: ${STORAGE_PATH:-}
@@ -109,10 +119,15 @@ services:
     ports:
       - "${RELEASE_API_PORT:-8001}:8001"
     environment:
+      APP_NAME: ${APP_NAME:-basic_agent}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
       RELEASE_API_KEY: ${RELEASE_API_KEY:-local-release-key}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+      KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
+      RELEASE_API_ROLES: ${RELEASE_API_ROLES:-release-reader}
     restart: unless-stopped
     depends_on:
       - keycloak
@@ -124,7 +139,11 @@ services:
       - "${LIVE_API_PORT:-8003}:8003"
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      APP_NAME: ${APP_NAME:-basic_agent}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
       ADK_MODEL: ${LIVE_ADK_MODEL:-gemini-3.1-flash-live-preview}
+      LIVE_ADK_MODEL: ${LIVE_ADK_MODEL:-gemini-3.1-flash-live-preview}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-}
       DATABASE_URL: ${DATABASE_URL:-}
       STORAGE_PATH: ${STORAGE_PATH:-}
@@ -145,6 +164,8 @@ services:
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+      KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
+      LIVE_API_ROLES: ${LIVE_API_ROLES:-release-reader}
     restart: unless-stopped
     depends_on:
       - otel-lgtm
@@ -155,6 +176,9 @@ services:
     command: ["adk", "web", "--host", "0.0.0.0", "--port", "8000", "--session_service_uri=sqlite:////app/.adk/sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.ReleaseReadinessPlugin", "/app/basic_agent"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      APP_NAME: ${APP_NAME:-basic_agent}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
       ADK_MODEL: ${ADK_MODEL:-gemini-3.6-flash}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-}
       DATABASE_URL: ${DATABASE_URL:-}

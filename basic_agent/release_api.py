@@ -1,13 +1,12 @@
 """Small local release API described by the OpenAPI toolset."""
 
-import os
-
 from fastapi import FastAPI, Header, HTTPException, Request
 
 from .auth import authenticate_request
+from .config import settings
 
 
-app = FastAPI(title="Release Status API", version="0.1.0")
+app = FastAPI(title="Release Status API", version=settings.app_version)
 
 
 def get_release_status() -> dict[str, str]:
@@ -16,8 +15,8 @@ def get_release_status() -> dict[str, str]:
         "service": "basic-adk-agent",
         "environment": "local",
         "status": "healthy",
-        "version": "0.1.0",
-        "deployment": "docker-compose",
+        "version": settings.app_version,
+        "deployment": settings.deployment,
     }
 
 
@@ -27,8 +26,10 @@ def release_status(
     x_api_key: str | None = Header(default=None),
 ) -> dict[str, str]:
     """Return status after Keycloak or internal API-key authentication."""
-    authenticate_request(request, api_key=x_api_key)
-    expected_key = os.getenv("RELEASE_API_KEY")
+    authenticate_request(
+        request, api_key=x_api_key, required_roles=settings.release_api_roles
+    )
+    expected_key = settings.release_api_key
     if expected_key and x_api_key != expected_key and not request.headers.get("authorization"):
         raise HTTPException(status_code=401, detail="Invalid release API key")
     return get_release_status()

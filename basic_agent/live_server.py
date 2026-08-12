@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -17,15 +16,16 @@ from google.genai import types
 from .agent import ReleaseReadinessPlugin, root_agent
 from .autoconfig import discover_capabilities
 from .auth import authenticate_websocket
+from .config import settings
 
 
-APP_NAME = "basic_agent"
-LIVE_MODEL = os.getenv("ADK_MODEL", "gemini-3.1-flash-live-preview")
+APP_NAME = settings.app_name
+LIVE_MODEL = settings.live_model
 
 app = FastAPI(
     title="Release Readiness Live API",
     description="Bidirectional ADK Live API access to the existing root agent.",
-    version="0.1.0",
+    version=settings.app_version,
 )
 session_service = InMemorySessionService()
 memory_service = InMemoryMemoryService()
@@ -85,7 +85,7 @@ async def healthz() -> dict[str, object]:
 async def live(websocket: WebSocket) -> None:
     """Handle JSON text/audio messages and stream ADK events back as JSON."""
     try:
-        authenticate_websocket(websocket)
+        authenticate_websocket(websocket, required_roles=settings.live_api_roles)
     except Exception:
         await websocket.close(code=4401)
         return

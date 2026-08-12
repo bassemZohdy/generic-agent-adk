@@ -4,6 +4,8 @@ import json
 
 from mcp.server.fastmcp import FastMCP
 
+from basic_agent.config import settings
+
 
 mcp = FastMCP("basic-project")
 
@@ -16,8 +18,8 @@ def get_release_status() -> str:
             "service": "basic-adk-agent",
             "environment": "local",
             "status": "healthy",
-            "version": "0.1.0",
-            "deployment": "docker-compose",
+            "version": settings.app_version,
+            "deployment": settings.deployment,
         }
     )
 

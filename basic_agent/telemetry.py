@@ -11,6 +11,8 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
+from .config import settings
+
 
 def configure_telemetry() -> trace.Tracer:
     """Configure OTLP only when an endpoint is supplied; otherwise no-op."""
@@ -22,7 +24,7 @@ def configure_telemetry() -> trace.Tracer:
                     "service.name": os.getenv(
                         "OTEL_SERVICE_NAME", "basic-adk-agent"
                     ),
-                    "service.version": "0.1.0",
+                    "service.version": settings.app_version,
                 }
             )
         )
@@ -30,7 +32,7 @@ def configure_telemetry() -> trace.Tracer:
             BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
         )
         trace.set_tracer_provider(provider)
-    return trace.get_tracer("basic_agent")
+    return trace.get_tracer(settings.app_name)
 
 
 tracer = configure_telemetry()
@@ -40,5 +42,5 @@ def invocation_attributes(invocation_context: Any) -> dict[str, str]:
     """Return stable low-cardinality attributes for an ADK invocation span."""
     return {
         "adk.invocation_id": str(invocation_context.invocation_id),
-        "adk.app_name": str(getattr(invocation_context, "app_name", "basic_agent")),
+        "adk.app_name": str(getattr(invocation_context, "app_name", settings.app_name)),
     }

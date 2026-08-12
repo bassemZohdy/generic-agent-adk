@@ -20,6 +20,7 @@ from mcp import StdioServerParameters
 from pydantic import BaseModel, Field
 
 from .autoconfig import CapabilityProvider, discover_capabilities
+from .config import settings
 from .telemetry import invocation_attributes, tracer
 
 logger = logging.getLogger(__name__)
@@ -172,7 +173,7 @@ def get_release_metrics() -> str:
 
 def release_api_headers(_context) -> dict[str, str]:
     """Provide the optional API key to the OpenAPI release service."""
-    api_key = os.getenv("RELEASE_API_KEY")
+    api_key = settings.release_api_key
     return {"x-api-key": api_key} if api_key else {}
 
 
@@ -191,9 +192,9 @@ project_mcp_toolset = McpToolset(
 release_api_toolset = OpenAPIToolset(
     spec_dict={
         "openapi": "3.0.3",
-        "info": {"title": "Release Status API", "version": "0.1.0"},
+        "info": {"title": "Release Status API", "version": settings.app_version},
         "servers": [
-            {"url": os.getenv("RELEASE_API_URL", "http://127.0.0.1:8001")}
+            {"url": settings.release_api_url}
         ],
         "paths": {
             "/release/status": {
@@ -251,7 +252,7 @@ if os.getenv("GCP_INTEGRATION") and os.getenv("GOOGLE_CLOUD_PROJECT"):
 
 release_knowledge_agent = Agent(
     name="release_knowledge_agent",
-    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    model=settings.model,
     description="Retrieves release requirements and project runbook evidence.",
     instruction=(
         "Retrieve the release readiness criteria and relevant project runbook "
@@ -264,7 +265,7 @@ release_knowledge_agent = Agent(
 
 release_research_agent = Agent(
     name="release_research_agent",
-    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    model=settings.model,
     description="Checks current external release and dependency information.",
     instruction=(
         "Use Google Search to check current release risks, dependency advisories, "
@@ -277,7 +278,7 @@ release_research_agent = Agent(
 
 release_metrics_agent = Agent(
     name="release_metrics_agent",
-    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    model=settings.model,
     description="Analyzes CI metrics using code execution.",
     instruction=(
         "Retrieve the CI metrics, calculate the pass rate, and identify blocking "
@@ -291,7 +292,7 @@ release_metrics_agent = Agent(
 
 release_operations_agent = Agent(
     name="release_operations_agent",
-    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    model=settings.model,
     description="Checks live service health through MCP.",
     instruction=(
         "Use the MCP release-status tool to check service health, deployed version, "
@@ -308,7 +309,7 @@ release_operations_agent = Agent(
 
 release_api_agent = Agent(
     name="release_api_agent",
-    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    model=settings.model,
     description="Checks release status through a documented OpenAPI service.",
     instruction=(
         "Call the OpenAPI release-status operation to retrieve the current "
@@ -334,7 +335,7 @@ release_evidence_workflow = ParallelAgent(
 
 release_synthesis_agent = Agent(
     name="release_synthesis_agent",
-    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    model=settings.model,
     description="Synthesizes release evidence into a recommendation.",
     instruction=(
         "Combine {release_requirements}, {external_findings}, {test_metrics}, "
@@ -348,7 +349,7 @@ release_synthesis_agent = Agent(
 
 release_review_agent = Agent(
     name="release_review_agent",
-    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    model=settings.model,
     description="Critiques a release-readiness recommendation.",
     instruction=(
         "Review {release_draft} for unsupported claims, missing evidence, and "
@@ -360,7 +361,7 @@ release_review_agent = Agent(
 
 release_refinement_agent = Agent(
     name="release_refinement_agent",
-    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    model=settings.model,
     description="Refines a release recommendation after critique.",
     instruction=(
         "Use {release_draft} and {release_review} to produce a corrected, concise "
@@ -390,8 +391,8 @@ release_readiness_workflow = SequentialAgent(
 
 
 root_agent = ReleaseReadinessAgent(
-    name="basic_agent",
-    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    name=settings.app_name,
+    model=settings.model,
     description="A release-readiness coordinator built with Google ADK.",
     instruction=(
         "You are a release-readiness coordinator. For questions about whether "

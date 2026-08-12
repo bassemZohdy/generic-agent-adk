@@ -80,6 +80,26 @@ servers are behind the Traefik `auth-proxy`, which validates every request
 through the Keycloak-backed ForwardAuth service. The host ports remain 8000
 (Web UI) and 8002 (ADK API), but the agent containers are not directly exposed.
 
+Runtime customization and authorization policy are injected through environment
+variables, not edited in Python. The main settings are `APP_NAME`, `APP_VERSION`,
+`ADK_MODEL`, `LIVE_ADK_MODEL`, `RELEASE_API_URL`, `KEYCLOAK_*`,
+`RELEASE_API_ROLES`, and `LIVE_API_ROLES`; `.env.example` is the local template.
+Keep credentials in environment or secret-manager values and keep realm
+definitions in versioned Keycloak import configuration.
+
+The default role policy is:
+
+| Surface | Required role configuration | Development role |
+| --- | --- | --- |
+| ADK Web/API/A2A proxy | `KEYCLOAK_REQUIRED_ROLES` | `release-reader` |
+| Release status API | `RELEASE_API_ROLES` | `release-reader` |
+| Live WebSocket | `LIVE_API_ROLES` | `release-reader` |
+| Human approval workflows | `release-operator` realm role | Reserved for approval policy |
+
+Role claims are read from `KEYCLOAK_ROLE_CLAIM` (default:
+`realm_access.roles`). Production deployments should replace the development
+realm, user, and admin credentials with managed Keycloak configuration.
+
 The bidirectional Live API WebSocket is available at `ws://localhost:8003/live`
 and can be changed with `LIVE_API_PORT`. Connect with optional `user_id` and
 `session_id` query parameters, then send JSON messages such as

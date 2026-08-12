@@ -2,6 +2,12 @@
   "realm": "basic-agent",
   "enabled": true,
   "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      {"name": "release-reader"},
+      {"name": "release-operator"}
+    ]
+  },
   "clients": [
     {
       "clientId": "basic-agent",
@@ -25,7 +31,8 @@
           "value": "demo",
           "temporary": false
         }
-      ]
+      ],
+      "realmRoles": ["release-reader", "release-operator"]
     }
   ]
 }

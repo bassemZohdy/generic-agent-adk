@@ -14,4 +14,4 @@ RUN pip install --upgrade pip \
 
 EXPOSE 8000
 
-CMD ["adk", "web", "--host", "0.0.0.0", "--port", "8000", "/app"]
+CMD ["adk", "web", "--host", "0.0.0.0", "--port", "8000", "/app/basic_agent"]

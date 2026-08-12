@@ -41,5 +41,6 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open http://localhost:8000 and select `basic_agent`. Set `ADK_PORT` in `.env`
-to change the host port.
+Open http://localhost:8000 and select `basic_agent`. The container points ADK
+directly at the single agent directory to avoid duplicate agent discovery. Set
+`ADK_PORT` in `.env` to change the host port.

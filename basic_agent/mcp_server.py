@@ -1,4 +1,6 @@
-"""Small local MCP server used by the ADK MCP integration example."""
+"""Local MCP server exposing project and release operations data."""
+
+import json
 
 from mcp.server.fastmcp import FastMCP
 
@@ -10,6 +12,20 @@ mcp = FastMCP("basic-project")
 def get_project_status() -> str:
     """Return the current status exposed by this project's MCP server."""
     return "The basic ADK project is running with local MCP integration enabled."
+
+
+@mcp.tool()
+def get_release_status() -> str:
+    """Return the current service status used by release-readiness checks."""
+    return json.dumps(
+        {
+            "service": "basic-adk-agent",
+            "environment": "local",
+            "status": "healthy",
+            "version": "0.1.0",
+            "deployment": "docker-compose",
+        }
+    )
 
 
 if __name__ == "__main__":

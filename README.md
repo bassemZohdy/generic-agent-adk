@@ -45,6 +45,34 @@ Open http://localhost:8000 and select `basic_agent`. The container points ADK
 directly at the single agent directory to avoid duplicate agent discovery. Set
 `ADK_PORT` in `.env` to change the host port.
 
+## Unified live example: release readiness
+
+The main use case is a release-readiness assessment. Ask the agent:
+
+> Is version 1.4 ready for release? Check the project requirements, current
+> dependency information, test metrics, and live service status. Give me a
+> recommendation with risks and next steps.
+
+The coordinator runs the evidence-gathering branches in parallel, synthesizes
+the results in sequence, then performs two bounded review/refinement passes:
+
+```text
+root_agent
+└── release_readiness_workflow
+    ├── release_evidence_workflow (parallel)
+    │   ├── local RAG: release requirements and runbook
+    │   ├── Google Search: current external findings
+    │   ├── code execution: test metrics and pass rate
+    │   └── MCP: live service and deployment status
+    ├── release_synthesis_agent
+    └── release_review_loop (two iterations)
+```
+
+The final response follows `ReleaseReadinessReport` with a recommendation,
+confidence, risks, evidence, and next steps. Local metrics and MCP status are
+deterministic for repeatable development; Google Search requires a configured
+API key and current network access.
+
 ## ADK feature checklist
 
 The table below tracks the major Google ADK capabilities against this starter
@@ -63,7 +91,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | ADK CLI execution | Supports `adk run basic_agent`. |
 | - [x] | Environment configuration | `.env.example` documents API key and model settings. |
 | - [x] | Containerization | Dockerfile and Compose configuration are included. |
-| - [x] | Structured output / response schemas | `AgentResponse` enforces an `answer` and `used_project_tool` response shape. |
+| - [x] | Structured output / response schemas | `ReleaseReadinessReport` enforces recommendation, confidence, risks, evidence, and next steps. |
 | - [x] | Multi-agent delegation | `root_agent` can delegate repository questions to `project_guide_agent`. |
 | - [x] | Sequential workflows | `project_overview_workflow` gathers facts and then summarizes them. |
 | - [x] | Parallel workflows | `project_parallel_workflow` analyzes structure and runtime setup concurrently. |

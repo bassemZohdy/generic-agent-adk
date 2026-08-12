@@ -1,5 +1,6 @@
 from basic_agent.agent import (
     AgentResponse,
+    ReleaseReadinessReport,
     get_project_info,
     project_guide_agent,
     project_facts_agent,
@@ -17,12 +18,17 @@ from basic_agent.agent import (
     mcp_agent,
     project_mcp_toolset,
     retrieve_project_knowledge,
+    get_release_metrics,
+    release_evidence_workflow,
+    release_readiness_workflow,
+    release_review_loop,
+    release_synthesis_agent,
     root_agent,
 )
 
 
 def test_agent_uses_structured_output_schema():
-    assert root_agent.output_schema is AgentResponse
+    assert root_agent.output_schema is ReleaseReadinessReport
     assert root_agent.output_key == "last_response"
 
 
@@ -79,6 +85,21 @@ def test_mcp_agent_uses_local_mcp_toolset():
     assert project_mcp_toolset.tool_name_prefix == "project_mcp_"
 
 
+def test_release_readiness_workflow_combines_adk_features():
+    assert release_readiness_workflow in root_agent.sub_agents
+    assert release_readiness_workflow.sub_agents == [
+        release_evidence_workflow,
+        release_synthesis_agent,
+        release_review_loop,
+    ]
+    assert len(release_evidence_workflow.sub_agents) == 4
+    assert release_review_loop.max_iterations == 2
+
+
+def test_release_metrics_are_analyzable():
+    assert '"critical_failures": 0' in get_release_metrics()
+
+
 def test_agent_response_contract():
     response = AgentResponse(answer="Ready.", used_project_tool=False)
 
@@ -86,6 +107,20 @@ def test_agent_response_contract():
         "answer": "Ready.",
         "used_project_tool": False,
     }
+
+
+def test_release_report_contract():
+    report = ReleaseReadinessReport(
+        answer="Ready with conditions.",
+        recommendation="ready_with_conditions",
+        confidence=0.8,
+        risks=["Two non-critical tests failed."],
+        evidence=["Service is healthy."],
+        next_steps=["Review the failed tests."],
+    )
+
+    assert report.recommendation == "ready_with_conditions"
+    assert report.confidence == 0.8
 
 
 def test_project_info_tool_is_deterministic():

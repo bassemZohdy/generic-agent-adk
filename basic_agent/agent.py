@@ -3,6 +3,16 @@
 import os
 
 from google.adk.agents import Agent
+from pydantic import BaseModel, Field
+
+
+class AgentResponse(BaseModel):
+    """Stable response contract returned by the agent."""
+
+    answer: str = Field(description="The concise answer for the user.")
+    used_project_tool: bool = Field(
+        description="Whether get_project_info was used to answer the request."
+    )
 
 
 def get_project_info(topic: str) -> str:
@@ -30,7 +40,10 @@ root_agent = Agent(
     description="A concise, helpful starter agent built with Google ADK.",
     instruction=(
         "You are a helpful starter agent. Answer clearly and briefly. "
-        "If the user asks about this project, use get_project_info when useful."
+        "If the user asks about this project, use get_project_info when useful. "
+        "Return only the structured response described by the response schema."
     ),
     tools=[get_project_info],
+    output_schema=AgentResponse,
+    output_key="last_response",
 )

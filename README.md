@@ -63,7 +63,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | ADK CLI execution | Supports `adk run basic_agent`. |
 | - [x] | Environment configuration | `.env.example` documents API key and model settings. |
 | - [x] | Containerization | Dockerfile and Compose configuration are included. |
-| - [ ] | Structured output / response schemas | No response schema is configured. |
+| - [x] | Structured output / response schemas | `AgentResponse` enforces an `answer` and `used_project_tool` response shape. |
 | - [ ] | Multi-agent delegation | No sub-agents or agent delegation are configured. |
 | - [ ] | Sequential workflows | No `SequentialAgent` workflow is configured. |
 | - [ ] | Parallel workflows | No `ParallelAgent` workflow is configured. |

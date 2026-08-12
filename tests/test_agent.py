@@ -1,0 +1,19 @@
+from basic_agent.agent import AgentResponse, get_project_info, root_agent
+
+
+def test_agent_uses_structured_output_schema():
+    assert root_agent.output_schema is AgentResponse
+    assert root_agent.output_key == "last_response"
+
+
+def test_agent_response_contract():
+    response = AgentResponse(answer="Ready.", used_project_tool=False)
+
+    assert response.model_dump() == {
+        "answer": "Ready.",
+        "used_project_tool": False,
+    }
+
+
+def test_project_info_tool_is_deterministic():
+    assert get_project_info("run").startswith("Run `adk web`")

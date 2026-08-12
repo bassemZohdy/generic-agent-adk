@@ -48,6 +48,12 @@ class ReleaseReadinessReport(BaseModel):
     next_steps: list[str] = Field(default_factory=list)
 
 
+class ReleaseReadinessAgent(Agent):
+    """Domain-specific specialization of the existing root ADK agent."""
+
+    domain: str = "release_readiness"
+
+
 class ReleaseWorkflowState(BaseModel):
     """Typed state contract shared by the release workflow."""
 
@@ -365,7 +371,7 @@ release_readiness_workflow = SequentialAgent(
 )
 
 
-root_agent = Agent(
+root_agent = ReleaseReadinessAgent(
     name="basic_agent",
     model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
     description="A release-readiness coordinator built with Google ADK.",

@@ -1,5 +1,6 @@
 from basic_agent.agent import (
     ReleaseReadinessReport,
+    ReleaseReadinessAgent,
     ReleaseWorkflowState,
     get_release_metrics,
     release_api_agent,
@@ -27,6 +28,8 @@ def test_root_agent_is_focused_on_release_readiness():
     assert root_agent.output_schema is ReleaseReadinessReport
     assert root_agent.output_key == "last_response"
     assert root_agent.sub_agents == [release_readiness_workflow]
+    assert isinstance(root_agent, ReleaseReadinessAgent)
+    assert root_agent.domain == "release_readiness"
     assert root_agent.state_schema is ReleaseWorkflowState
     assert root_agent.before_agent_callback is not None
     assert root_agent.after_agent_callback is not None

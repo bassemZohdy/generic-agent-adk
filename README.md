@@ -107,7 +107,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Sequential workflows | The release workflow gathers evidence, synthesizes it, and reviews the result. |
 | - [x] | Parallel workflows | `release_evidence_workflow` gathers docs, web, metrics, and operations evidence concurrently. |
 | - [x] | Loop workflows | `release_review_loop` runs two bounded review/refinement iterations. |
-| - [ ] | Custom agent classes | Uses the built-in `Agent` class only. |
+| - [x] | Custom agent classes | The existing root agent uses the `ReleaseReadinessAgent` specialization without adding another agent node. |
 | - [x] | Built-in Google Search tool | `release_research_agent` uses ADK's `google_search` tool for current release risks. |
 | - [x] | Code execution tool | `release_metrics_agent` uses `BuiltInCodeExecutor` for CI calculations. |
 | - [x] | Retrieval / RAG | `release_knowledge_agent` retrieves release criteria and runbook passages. |

@@ -9,12 +9,6 @@ mcp = FastMCP("basic-project")
 
 
 @mcp.tool()
-def get_project_status() -> str:
-    """Return the current status exposed by this project's MCP server."""
-    return "The basic ADK project is running with local MCP integration enabled."
-
-
-@mcp.tool()
 def get_release_status() -> str:
     """Return the current service status used by release-readiness checks."""
     return json.dumps(

@@ -1,7 +1,8 @@
-# Basic ADK agent
+# Release readiness ADK agent
 
-A minimal conversational agent built with [Google's Agent Development Kit
-(ADK)](https://google.github.io/adk-docs/).
+A release-readiness coordinator built with [Google's Agent Development Kit
+(ADK)](https://google.github.io/adk-docs/). It gathers project, external,
+metrics, and operational evidence before returning a structured recommendation.
 
 ## Setup
 
@@ -75,8 +76,8 @@ API key and current network access.
 
 ## ADK feature checklist
 
-The table below tracks the major Google ADK capabilities against this starter
-repository. `Implemented` means the feature is present and usable here;
+The table below tracks the major Google ADK capabilities against this release-
+readiness application. `Implemented` means the feature is present and usable here;
 `Partial` means ADK provides it but this project only uses the default or a
 minimal form; `Not yet` means it still needs to be added to this project.
 
@@ -86,21 +87,21 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Agent instructions | System behavior is defined with `instruction`. |
 | - [x] | Agent description | The agent has a human-readable `description`. |
 | - [x] | Gemini model integration | Uses configurable `gemini-3.6-flash` via `ADK_MODEL`. |
-| - [x] | Custom function tools | Includes the deterministic `get_project_info` tool. |
+| - [x] | Custom function tools | Includes deterministic release-metrics and retrieval tools. |
 | - [x] | Local ADK Web UI | Available with `adk web` or Docker Compose. |
 | - [x] | ADK CLI execution | Supports `adk run basic_agent`. |
 | - [x] | Environment configuration | `.env.example` documents API key and model settings. |
 | - [x] | Containerization | Dockerfile and Compose configuration are included. |
 | - [x] | Structured output / response schemas | `ReleaseReadinessReport` enforces recommendation, confidence, risks, evidence, and next steps. |
-| - [x] | Multi-agent delegation | `root_agent` can delegate repository questions to `project_guide_agent`. |
-| - [x] | Sequential workflows | `project_overview_workflow` gathers facts and then summarizes them. |
-| - [x] | Parallel workflows | `project_parallel_workflow` analyzes structure and runtime setup concurrently. |
-| - [x] | Loop workflows | `project_review_loop` runs bounded review/refinement iterations. |
+| - [x] | Multi-agent delegation | `root_agent` delegates release assessments to `release_readiness_workflow`. |
+| - [x] | Sequential workflows | The release workflow gathers evidence, synthesizes it, and reviews the result. |
+| - [x] | Parallel workflows | `release_evidence_workflow` gathers docs, web, metrics, and operations evidence concurrently. |
+| - [x] | Loop workflows | `release_review_loop` runs two bounded review/refinement iterations. |
 | - [ ] | Custom agent classes | Uses the built-in `Agent` class only. |
-| - [x] | Built-in Google Search tool | `research_agent` uses ADK's `google_search` tool for current/external information. |
-| - [x] | Code execution tool | `analysis_agent` uses ADK's `BuiltInCodeExecutor` for calculations and data analysis. |
-| - [x] | Retrieval / RAG | `knowledge_agent` retrieves relevant passages from a local project knowledge base before answering. |
-| - [x] | MCP tools | `mcp_agent` connects to the bundled local stdio MCP server through `McpToolset`. |
+| - [x] | Built-in Google Search tool | `release_research_agent` uses ADK's `google_search` tool for current release risks. |
+| - [x] | Code execution tool | `release_metrics_agent` uses `BuiltInCodeExecutor` for CI calculations. |
+| - [x] | Retrieval / RAG | `release_knowledge_agent` retrieves release criteria and runbook passages. |
+| - [x] | MCP tools | `release_operations_agent` connects to the bundled stdio MCP server through `McpToolset`. |
 | - [ ] | OpenAPI tools | No OpenAPI specification is connected. |
 | - [ ] | Application Integration tools | No Google Cloud Application Integration toolset is connected. |
 | - [ ] | Tool authentication | No OAuth/API-key tool authentication flow is configured. |
@@ -115,7 +116,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [ ] | Callbacks | No before/after agent, model, or tool callbacks are implemented. |
 | - [ ] | Plugins | No ADK plugin is registered. |
 | - [ ] | Evaluation datasets | No ADK evaluation set or regression cases are included. |
-| - [ ] | Automated agent tests | No agent behavior tests are included yet. |
+| - [x] | Automated agent tests | `tests/test_agent.py` covers the unified workflow structure, tools, and response contract. |
 | - [ ] | Tracing / observability | No cloud telemetry, tracing, or dashboard integration is configured. |
 | - [ ] | Authentication / authorization | The local Web UI has no application-level user authentication. |
 | - [ ] | Cloud deployment | No Cloud Run, Agent Engine, GKE, or other cloud deployment configuration is included. |

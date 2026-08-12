@@ -1,11 +1,24 @@
 services:
+  release-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uvicorn", "basic_agent.release_api:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "${RELEASE_API_PORT:-8001}:8001"
+    restart: unless-stopped
+
   agent:
     build:
       context: .
       dockerfile: Dockerfile
+    command: ["adk", "web", "--host", "0.0.0.0", "--port", "8000", "--session_service_uri=sqlite:////app/.adk/sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "/app/basic_agent"]
     ports:
       - "${ADK_PORT:-8000}:8000"
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       ADK_MODEL: ${ADK_MODEL:-gemini-3.6-flash}
+      RELEASE_API_URL: http://release-api:8001
+    depends_on:
+      - release-api
     restart: unless-stopped

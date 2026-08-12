@@ -5,13 +5,19 @@ import os
 from pathlib import Path
 import re
 import sys
+import logging
+from typing import Any
 
 from google.adk.agents import Agent, LoopAgent, ParallelAgent, SequentialAgent
+from google.adk.agents.context import Context
 from google.adk.code_executors import BuiltInCodeExecutor
 from google.adk.tools import google_search
 from google.adk.tools.mcp_tool import McpToolset, StdioConnectionParams
+from google.adk.tools.openapi_tool import OpenAPIToolset
 from mcp import StdioServerParameters
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class ReleaseReadinessReport(BaseModel):
@@ -25,6 +31,29 @@ class ReleaseReadinessReport(BaseModel):
     risks: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     next_steps: list[str] = Field(default_factory=list)
+
+
+class ReleaseWorkflowState(BaseModel):
+    """Typed state contract shared by the release workflow."""
+
+    release_requirements: Any = None
+    external_findings: Any = None
+    test_metrics: Any = None
+    service_status: Any = None
+    api_status: Any = None
+    release_draft: Any = None
+    release_review: Any = None
+    last_response: Any = None
+
+
+def on_release_workflow_start(context: Context) -> None:
+    """Record the start of a release assessment for ADK diagnostics."""
+    logger.info("Starting release-readiness assessment: %s", context.invocation_id)
+
+
+def on_release_workflow_complete(context: Context) -> None:
+    """Record completion of a release assessment for ADK diagnostics."""
+    logger.info("Completed release-readiness assessment: %s", context.invocation_id)
 
 
 PROJECT_KNOWLEDGE = (
@@ -94,6 +123,38 @@ project_mcp_toolset = McpToolset(
     tool_name_prefix="release_mcp_",
 )
 
+release_api_toolset = OpenAPIToolset(
+    spec_dict={
+        "openapi": "3.0.3",
+        "info": {"title": "Release Status API", "version": "0.1.0"},
+        "servers": [
+            {"url": os.getenv("RELEASE_API_URL", "http://127.0.0.1:8001")}
+        ],
+        "paths": {
+            "/release/status": {
+                "get": {
+                    "operationId": "getReleaseStatus",
+                    "summary": "Get current release service status",
+                    "responses": {
+                        "200": {
+                            "description": "Current service status",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "additionalProperties": {"type": "string"},
+                                    }
+                                }
+                            },
+                        }
+                    },
+                }
+            }
+        },
+    },
+    tool_name_prefix="release_api_",
+)
+
 
 release_knowledge_agent = Agent(
     name="release_knowledge_agent",
@@ -148,6 +209,19 @@ release_operations_agent = Agent(
 )
 
 
+release_api_agent = Agent(
+    name="release_api_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Checks release status through a documented OpenAPI service.",
+    instruction=(
+        "Call the OpenAPI release-status operation to retrieve the current "
+        "service status. Return the observed API response without guessing."
+    ),
+    tools=[release_api_toolset],
+    output_key="api_status",
+)
+
+
 release_evidence_workflow = ParallelAgent(
     name="release_evidence_workflow",
     description="Gathers release evidence from docs, web, metrics, and operations.",
@@ -156,6 +230,7 @@ release_evidence_workflow = ParallelAgent(
         release_research_agent,
         release_metrics_agent,
         release_operations_agent,
+        release_api_agent,
     ],
 )
 
@@ -229,6 +304,9 @@ root_agent = Agent(
         "response described by the response schema."
     ),
     sub_agents=[release_readiness_workflow],
+    state_schema=ReleaseWorkflowState,
+    before_agent_callback=on_release_workflow_start,
+    after_agent_callback=on_release_workflow_complete,
     output_schema=ReleaseReadinessReport,
     output_key="last_response",
 )

@@ -10,7 +10,8 @@ COPY pyproject.toml README.md ./
 COPY basic_agent ./basic_agent
 
 RUN pip install --upgrade pip \
-    && pip install .
+    && pip install . \
+    && mkdir -p /app/.adk/artifacts
 
 EXPOSE 8000
 

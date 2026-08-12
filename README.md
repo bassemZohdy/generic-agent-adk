@@ -44,7 +44,8 @@ docker compose up --build
 
 Open http://localhost:8000 and select `basic_agent`. The container points ADK
 directly at the single agent directory to avoid duplicate agent discovery. Set
-`ADK_PORT` in `.env` to change the host port.
+`ADK_PORT` in `.env` to change the host port. The local OpenAPI service is
+available at http://localhost:8001 and can be changed with `RELEASE_API_PORT`.
 
 ## Unified live example: release readiness
 
@@ -65,6 +66,7 @@ root_agent
     │   ├── Google Search: current external findings
     │   ├── code execution: test metrics and pass rate
     │   └── MCP: live service and deployment status
+    │   └── OpenAPI: documented release-status service
     ├── release_synthesis_agent
     └── release_review_loop (two iterations)
 ```
@@ -102,18 +104,18 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Code execution tool | `release_metrics_agent` uses `BuiltInCodeExecutor` for CI calculations. |
 | - [x] | Retrieval / RAG | `release_knowledge_agent` retrieves release criteria and runbook passages. |
 | - [x] | MCP tools | `release_operations_agent` connects to the bundled stdio MCP server through `McpToolset`. |
-| - [ ] | OpenAPI tools | No OpenAPI specification is connected. |
+| - [x] | OpenAPI tools | `release_api_agent` calls the local FastAPI release-status API through `OpenAPIToolset`. |
 | - [ ] | Application Integration tools | No Google Cloud Application Integration toolset is connected. |
 | - [ ] | Tool authentication | No OAuth/API-key tool authentication flow is configured. |
 | - [ ] | Tool confirmation / approval | No human approval callback is configured. |
-| - [ ] | Sessions | Uses ADK defaults; no explicit persistent session service is configured. |
-| - [ ] | Persistent state | No application state schema or state-backed workflow is implemented. |
-| - [ ] | Artifacts | No artifact service or file-producing agent flow is implemented. |
+| - [x] | Sessions | Docker Compose configures a persistent SQLite session service under `.adk/sessions.db`. |
+| - [x] | Persistent state | `ReleaseWorkflowState` types the evidence and draft keys shared by the workflow. |
+| - [x] | Artifacts | Docker Compose configures ADK's local file artifact service under `.adk/artifacts`. |
 | - [ ] | Memory service | No long-term memory or memory search is configured. |
 | - [ ] | Streaming / Live API | No bidirectional streaming or voice agent is configured. |
 | - [ ] | A2A interoperability | No A2A endpoint or remote agent integration is configured. |
 | - [ ] | REST API server | Only the ADK Web UI is exposed; no dedicated API deployment is configured. |
-| - [ ] | Callbacks | No before/after agent, model, or tool callbacks are implemented. |
+| - [x] | Callbacks | Root-agent before/after callbacks record assessment lifecycle events. |
 | - [ ] | Plugins | No ADK plugin is registered. |
 | - [ ] | Evaluation datasets | No ADK evaluation set or regression cases are included. |
 | - [x] | Automated agent tests | `tests/test_agent.py` covers the unified workflow structure, tools, and response contract. |

@@ -1,6 +1,9 @@
 from basic_agent.agent import (
     ReleaseReadinessReport,
+    ReleaseWorkflowState,
     get_release_metrics,
+    release_api_agent,
+    release_api_toolset,
     release_evidence_workflow,
     release_knowledge_agent,
     release_metrics_agent,
@@ -14,21 +17,26 @@ from basic_agent.agent import (
     retrieve_project_knowledge,
     root_agent,
 )
+from basic_agent.release_api import get_release_status
 
 
 def test_root_agent_is_focused_on_release_readiness():
     assert root_agent.output_schema is ReleaseReadinessReport
     assert root_agent.output_key == "last_response"
     assert root_agent.sub_agents == [release_readiness_workflow]
+    assert root_agent.state_schema is ReleaseWorkflowState
+    assert root_agent.before_agent_callback is not None
+    assert root_agent.after_agent_callback is not None
 
 
-def test_release_evidence_fans_out_to_four_sources():
+def test_release_evidence_fans_out_to_five_sources():
     assert release_readiness_workflow.sub_agents[0] is release_evidence_workflow
     assert release_evidence_workflow.sub_agents == [
         release_knowledge_agent,
         release_research_agent,
         release_metrics_agent,
         release_operations_agent,
+        release_api_agent,
     ]
 
 
@@ -54,6 +62,19 @@ def test_release_metrics_are_deterministic():
 
     assert '"total_tests": 120' in metrics
     assert '"critical_failures": 0' in metrics
+
+
+def test_release_api_agent_uses_openapi_toolset():
+    assert release_api_agent in release_evidence_workflow.sub_agents
+    assert release_api_toolset in release_api_agent.tools
+    assert release_api_toolset.tool_name_prefix == "release_api_"
+
+
+def test_release_api_returns_live_status_shape():
+    status = get_release_status()
+
+    assert status["status"] == "healthy"
+    assert status["deployment"] == "docker-compose"
 
 
 def test_release_report_contract():

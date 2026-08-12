@@ -1,7 +1,7 @@
 [project]
 name = "basic-adk-agent"
 version = "0.1.0"
-description = "A minimal Google ADK agent"
+description = "A generic configuration-driven Google ADK agent"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-release-readiness-eval = "basic_agent.evaluation:main"
+generic-agent-eval = "basic_agent.evaluation:main"
 
 [dependency-groups]
 dev = [

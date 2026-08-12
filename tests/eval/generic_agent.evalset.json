@@ -1,14 +1,14 @@
 {
-  "eval_set_id": "release_readiness_smoke",
+  "eval_set_id": "generic_agent_smoke",
   "eval_cases": [
     {
-      "eval_id": "release_readiness_request",
+      "eval_id": "generic_agent_request",
       "conversation": [
         {
           "user_content": {
             "parts": [
               {
-                "text": "Is version 1.4 ready for release? Check requirements, test metrics, and service status."
+                "text": "Explain which capabilities are enabled and how you can help with a configured task."
               }
             ]
           }

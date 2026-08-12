@@ -1,4 +1,4 @@
-"""Local MCP server exposing project and release operations data."""
+"""Local MCP server exposing generic configured service data."""
 
 import json
 
@@ -11,8 +11,8 @@ mcp = FastMCP("basic-project")
 
 
 @mcp.tool()
-def get_release_status() -> str:
-    """Return the current service status used by release-readiness checks."""
+def get_service_status() -> str:
+    """Return the current status of the configured application service."""
     return json.dumps(
         {
             "service": "basic-adk-agent",

@@ -1,70 +1,82 @@
-# Release readiness ADK agent
+# Generic configuration-driven ADK agent
 
-A release-readiness coordinator built with [Google's Agent Development Kit
-(ADK)](https://google.github.io/adk-docs/). It gathers project, external,
-metrics, and operational evidence before returning a structured recommendation.
+This project is a reusable Google Agent Development Kit (ADK) runtime. It is
+not tied to release readiness, CI metrics, or a fixed business workflow. The
+agent identity, behavior, model, tools, knowledge source, authorization roles,
+storage, observability, and deployment endpoints are external configuration.
 
-## Setup
+The code supplies stable runtime adapters; users supply the agent policy.
 
-Python 3.10+ and `uv` are recommended:
+## Configure
 
 ```bash
 uv sync
 cp .env.example .env
 ```
 
-Add a Gemini API key to `.env`, or configure Google Cloud/Vertex AI
-authentication using the ADK instructions.
+Set `GOOGLE_API_KEY` or configure Vertex AI authentication. The most important
+agent settings are:
 
-## Run
+| Setting | Purpose |
+| --- | --- |
+| `APP_NAME` / `APP_VERSION` | Agent identity and metadata |
+| `ADK_MODEL` / `LIVE_ADK_MODEL` | Text and Live API models |
+| `AGENT_DESCRIPTION` | Agent description shown by ADK |
+| `AGENT_INSTRUCTION` | Complete system instruction/policy |
+| `AGENT_TOOLS` | Comma-separated enabled tools |
+| `AGENT_KNOWLEDGE_FILE` | Optional JSON or text knowledge source |
+| `AGENT_OPENAPI_*` | External OpenAPI service contract |
+| `AGENT_MCP_*` | MCP tool selection and namespacing |
+| `KEYCLOAK_*` / `*_ROLES` | OIDC validation and authorization policy |
 
-Start the local ADK web UI from this directory:
+Available `AGENT_TOOLS` values are `knowledge`, `search`,
+`code_execution`, `mcp`, `openapi`, `application_integration`, `approval`,
+`runtime`, and `structured_output`. Remove a value to disable that capability;
+no code change or new Agent is required.
+
+`AGENT_KNOWLEDGE_FILE` accepts a JSON list of `{ "title", "content" }` objects
+or a plain text/Markdown file. This makes the default retrieval tool useful for
+any domain without embedding project content in Python.
+
+## Run locally
 
 ```bash
 uv run adk web
-```
-
-Select `basic_agent` in the UI. For a terminal session, use:
-
-```bash
 uv run adk run basic_agent
 ```
 
-The agent entry point is `basic_agent/agent.py:root_agent`. Set `ADK_MODEL` to
-override the default model.
+The entry point is `basic_agent/agent.py:root_agent`. It is one generic ADK
+Agent whose tools are assembled from configuration. The agent does not create
+domain-specific sub-agents or workflows.
 
 ## Run with Docker
-
-Create `.env` from the example and add your API key:
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Compose builds one named application image, `${APP_IMAGE}` (default:
-`basic-adk-agent:local`), and reuses it for the ADK Web, ADK REST/A2A, Live,
-release API, and authentication-gateway containers. Their commands and
-environment are externalized per service, so the containers remain isolated
-without duplicating application images. Keycloak, Traefik, and the LGTM
-observability stack continue to use their own infrastructure images.
+Compose builds one `${APP_IMAGE}` (default `basic-adk-agent:local`) and reuses
+it for the Web, REST/A2A, Live, service-status, and auth-gateway containers.
+Commands and environment are externalized per service. Keycloak, Traefik, and
+Grafana/OTEL-LGTM remain infrastructure images.
 
-One image does not mean one process: the Web UI and REST/A2A server both load
-the same `root_agent`, but run as separate services because they have different
-ports, protocols, and lifecycle requirements. This is why the Compose file can
-still contain several `/app/basic_agent` references while Docker maintains one
-application image.
+One image does not mean one process: separate containers preserve protocol and
+lifecycle isolation while loading the same generic `root_agent`.
 
-Open http://localhost:8000 and select `basic_agent`. The container points ADK
-directly at the single agent directory to avoid duplicate agent discovery. Set
-`ADK_PORT` in `.env` to change the host port. The local OpenAPI service is
-available at http://localhost:8001 and can be changed with `RELEASE_API_PORT`.
-The ADK REST API is available at http://localhost:8002 and can be changed with
-`ADK_API_PORT`.
+Services:
 
-Keycloak is available at http://localhost:8080. Compose imports the local
-`basic-agent` realm with the development user `demo` / `demo`. Obtain a token
-for the `basic-agent` client with:
+- Web UI: `http://localhost:8000` (Keycloak bearer token required)
+- ADK REST/A2A: `http://localhost:8002` (Keycloak bearer token required)
+- Live WebSocket: `ws://localhost:8003/live`
+- Generic status API: `http://localhost:8001/status`
+- Keycloak: `http://localhost:8080`
+- Grafana: `http://localhost:3000`
+
+## Authentication and roles
+
+Compose imports the development `basic-agent` Keycloak realm. The development
+user is `demo` / `demo`; obtain an access token with:
 
 ```bash
 curl -s -X POST http://localhost:8080/realms/basic-agent/protocol/openid-connect/token \
@@ -72,167 +84,62 @@ curl -s -X POST http://localhost:8080/realms/basic-agent/protocol/openid-connect
   -d grant_type=password
 ```
 
-Send the returned access token as `Authorization: Bearer <token>` to the
-release API, or as `?access_token=<token>` for a browser WebSocket connection
-to `/live`. The internal release-status tool continues to use
-`RELEASE_API_KEY` for service-to-service calls. The built-in ADK Web/API
-servers are behind the Traefik `auth-proxy`, which validates every request
-through the Keycloak-backed ForwardAuth service. The host ports remain 8000
-(Web UI) and 8002 (ADK API), but the agent containers are not directly exposed.
+Use the returned token as `Authorization: Bearer <token>`. The default policy
+requires `agent-user` for the Web/API proxy, status API, and Live API.
+Override `KEYCLOAK_REQUIRED_ROLES`, `AGENT_SERVICE_API_ROLES`, and `LIVE_API_ROLES`
+with comma-separated roles. Role claims are configured by
+`KEYCLOAK_ROLE_CLAIM`, defaulting to `realm_access.roles`.
 
-Runtime customization and authorization policy are injected through environment
-variables, not edited in Python. The main settings are `APP_NAME`, `APP_VERSION`,
-`ADK_MODEL`, `LIVE_ADK_MODEL`, `RELEASE_API_URL`, `KEYCLOAK_*`,
-`RELEASE_API_ROLES`, and `LIVE_API_ROLES`; `.env.example` is the local template.
-Keep credentials in environment or secret-manager values and keep realm
-definitions in versioned Keycloak import configuration.
+`agent-operator` is available as a separate realm role for policies that
+require human approval. Credentials and realm administration must be replaced
+with managed secrets/configuration outside development.
 
-The default role policy is:
+## Auto-configured subsystems
 
-| Surface | Required role configuration | Development role |
+Each subsystem discovers the first satisfied provider without a type flag:
+
+| Capability | Priority chain | Final fallback |
 | --- | --- | --- |
-| ADK Web/API/A2A proxy | `KEYCLOAK_REQUIRED_ROLES` | `release-reader` |
-| Release status API | `RELEASE_API_ROLES` | `release-reader` |
-| Live WebSocket | `LIVE_API_ROLES` | `release-reader` |
-| Human approval workflows | `release-operator` realm role | Reserved for approval policy |
+| Storage | cloud bucket → database → local disk | in-memory |
+| Messaging | cloud endpoint → local broker | in-memory |
+| Caching | cloud/Redis → local disk | in-memory |
+| Search | cloud endpoint → local index | in-memory |
+| Logging | cloud endpoint → local file | in-memory |
 
-Role claims are read from `KEYCLOAK_ROLE_CLAIM` (default:
-`realm_access.roles`). Production deployments should replace the development
-realm, user, and admin credentials with managed Keycloak configuration.
+Partial or malformed detected configuration fails fast. Unconfigured providers
+are skipped. The selected strategies are visible from the Live health endpoint
+and included in telemetry attributes.
 
-The bidirectional Live API WebSocket is available at `ws://localhost:8003/live`
-and can be changed with `LIVE_API_PORT`. Connect with optional `user_id` and
-`session_id` query parameters, then send JSON messages such as
-`{"text":"Is version 1.4 ready?"}`. Audio input can be sent as
-`{"audio":{"mime_type":"audio/pcm;rate=16000","data":"<base64>"}}`;
-ADK events, including streamed response parts, are returned as JSON. The Live
-service uses the existing `root_agent` and defaults to
-`gemini-3.1-flash-live-preview`.
+## Observability
 
-The REST server exposes ADK's streaming response endpoints and A2A endpoint.
-The container is also Cloud Run-compatible: replace the placeholders in
-`deploy/cloudrun/service.yaml`, build and push the image, create the referenced
-Secret Manager secret, then deploy the manifest with `gcloud run services
-replace`.
+Compose starts `grafana/otel-lgtm` and exports invocation spans over OTLP/gRPC.
+Open Grafana at `http://localhost:3000`; ports `4317` and `4318` accept OTLP
+gRPC and HTTP. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to use another collector.
 
-## Auto-configuration fallback chain
+## Evaluation and tests
 
-At startup, the application discovers each subsystem independently and selects
-the first provider whose prerequisites are satisfied. It does not require a
-provider type flag or enum:
-
-| Capability | Priority order | In-memory fallback |
-| --- | --- | --- |
-| Storage | `STORAGE_BUCKET` → `DATABASE_URL` → `STORAGE_PATH` | yes |
-| Messaging | `MESSAGING_URL` → `BROKER_URL` | yes |
-| Caching | `CACHE_URL`/`REDIS_URL` → `CACHE_PATH` | yes |
-| Search | `SEARCH_URL` + `SEARCH_API_KEY` → `SEARCH_INDEX_PATH` | yes |
-| Logging | `LOG_ENDPOINT` + `LOG_API_KEY` → `LOG_FILE` | yes |
-
-The selected strategy is exposed in the Live API health response and logged by
-the ADK plugin. A provider is considered detected as soon as any of its
-identifying values are present. If detected configuration is incomplete or
-malformed, startup raises `ProviderConfigurationError` instead of silently
-downgrading to a weaker strategy. If no provider is detected, the capability
-uses the in-memory implementation.
-
-## Evaluation
-
-Run the checked-in ADK evaluation set with configured Gemini credentials:
+The repository includes a smoke evaluation only as a regression check for the
+generic runtime; it is not the product behavior:
 
 ```bash
 uv run python -m basic_agent.evaluation
-uv run python -m basic_agent.evaluation --detailed
+uv run pytest -q
 ```
 
-The entry point invokes the installed ADK evaluator with
-`tests/eval/release_readiness.evalset.json` and its explicit metric
-configuration in `tests/eval/eval_config.json`.
+## ADK capability status
 
-## Local OpenTelemetry observability
-
-Compose starts the `grafana/otel-lgtm` development stack and exports ADK
-invocation spans over OTLP/gRPC. Open [Grafana](http://localhost:3000) after
-starting Compose; the default local ports are Grafana `3000`, OTLP/gRPC `4317`,
-and OTLP/HTTP `4318`. The ADK plugin emits an invocation span with the selected
-capability strategies. Override `OTEL_EXPORTER_OTLP_ENDPOINT` when the
-collector runs outside Compose.
-
-## Unified live example: release readiness
-
-The main use case is a release-readiness assessment. Ask the agent:
-
-> Is version 1.4 ready for release? Check the project requirements, current
-> dependency information, test metrics, and live service status. Give me a
-> recommendation with risks and next steps.
-
-The coordinator runs the evidence-gathering branches in parallel, synthesizes
-the results in sequence, then performs two bounded review/refinement passes:
-
-```text
-root_agent
-└── release_readiness_workflow
-    ├── release_evidence_workflow (parallel)
-    │   ├── local RAG: release requirements and runbook
-    │   ├── Google Search: current external findings
-    │   ├── code execution: test metrics and pass rate
-    │   └── MCP: live service and deployment status
-    │   └── OpenAPI: documented release-status service
-    ├── release_synthesis_agent
-    └── release_review_loop (two iterations)
-```
-
-The final response follows `ReleaseReadinessReport` with a recommendation,
-confidence, risks, evidence, and next steps. Local metrics and MCP status are
-deterministic for repeatable development; Google Search requires a configured
-API key and current network access.
-
-## ADK feature checklist
-
-The table below tracks the major Google ADK capabilities against this release-
-readiness application. `Implemented` means the feature is present and usable here;
-`Partial` means ADK provides it but this project only uses the default or a
-minimal form; `Not yet` means it still needs to be added to this project.
-
-| Status | ADK capability | Current project implementation |
+| Status | Capability | Generic implementation |
 | --- | --- | --- |
-| - [x] | LLM agent | `root_agent` is a Google ADK `Agent`. |
-| - [x] | Agent instructions | System behavior is defined with `instruction`. |
-| - [x] | Agent description | The agent has a human-readable `description`. |
-| - [x] | Gemini model integration | Uses configurable `gemini-3.6-flash` via `ADK_MODEL`. |
-| - [x] | Custom function tools | Includes deterministic release-metrics and retrieval tools. |
-| - [x] | Local ADK Web UI | Available with `adk web` or Docker Compose. |
-| - [x] | ADK CLI execution | Supports `adk run basic_agent`. |
-| - [x] | Environment configuration | `.env.example` documents API key and model settings. |
-| - [x] | Containerization | Dockerfile and Compose configuration are included. |
-| - [x] | Structured output / response schemas | `ReleaseReadinessReport` enforces recommendation, confidence, risks, evidence, and next steps. |
-| - [x] | Multi-agent delegation | `root_agent` delegates release assessments to `release_readiness_workflow`. |
-| - [x] | Sequential workflows | The release workflow gathers evidence, synthesizes it, and reviews the result. |
-| - [x] | Parallel workflows | `release_evidence_workflow` gathers docs, web, metrics, and operations evidence concurrently. |
-| - [x] | Loop workflows | `release_review_loop` runs two bounded review/refinement iterations. |
-| - [x] | Custom agent classes | The existing root agent uses the `ReleaseReadinessAgent` specialization without adding another agent node. |
-| - [x] | Built-in Google Search tool | `release_research_agent` uses ADK's `google_search` tool for current release risks. |
-| - [x] | Code execution tool | `release_metrics_agent` uses `BuiltInCodeExecutor` for CI calculations. |
-| - [x] | Retrieval / RAG | `release_knowledge_agent` retrieves release criteria and runbook passages. |
-| - [x] | MCP tools | `release_operations_agent` connects to the bundled stdio MCP server through `McpToolset`. |
-| - [x] | OpenAPI tools | `release_api_agent` calls the local FastAPI release-status API through `OpenAPIToolset`. |
-| - [x] | Application Integration tools | `release_operations_agent` optionally loads `ApplicationIntegrationToolset` when GCP integration variables are configured. |
-| - [x] | Tool authentication | The OpenAPI release service supports an optional `x-api-key` flow. |
-| - [x] | Tool confirmation / approval | `request_release_approval` pauses before recording a release decision until confirmed. |
-| - [x] | Sessions | Docker Compose configures a persistent SQLite session service under `.adk/sessions.db`. |
-| - [x] | Persistent state | `ReleaseWorkflowState` types the evidence and draft keys shared by the workflow. |
-| - [x] | Artifacts | Docker Compose configures ADK's local file artifact service under `.adk/artifacts`. |
-| - [x] | Memory service | Completed sessions are added to ADK's configured memory service; Compose enables `memory://` for local operation. |
-| - [x] | Streaming / Live API | REST streaming is available through ADK API Server, and `live-api` exposes a bidirectional WebSocket for text/audio input using the existing `root_agent`. |
-| - [x] | A2A interoperability | The Compose ADK API server enables the ADK A2A endpoint for the existing root agent. |
-| - [x] | REST API server | Compose exposes the same agent through `adk api_server` on port 8002. |
-| - [x] | Callbacks | Root-agent before/after callbacks record assessment lifecycle events. |
-| - [x] | Plugins | `ReleaseReadinessPlugin` is loaded by the ADK Web server for lifecycle logging. |
-| - [x] | Evaluation datasets | The checked-in dataset and `python -m basic_agent.evaluation` command run the ADK evaluator with a tool-trajectory threshold. |
-| - [x] | Automated agent tests | `tests/test_agent.py` covers the unified workflow structure, tools, and response contract. |
-| - [x] | Tracing / observability | Compose runs `grafana/otel-lgtm`; the ADK plugin exports invocation spans over OTLP and Cloud Trace remains an optional deployment target. |
-| - [x] | Authentication / authorization | Keycloak bearer JWTs protect the release API, Live WebSocket, ADK Web UI, and ADK REST/A2A API through the Traefik ForwardAuth gateway. |
-| - [ ] | Cloud deployment | The Cloud Run manifest is a generic template; production image, service identity, secrets, and the release API endpoint still require deployment configuration. |
-| - [x] | Stack-agnostic subsystem auto-configuration | `basic_agent.autoconfig` resolves Storage, Messaging, Caching, Search, and Logging through implicit cloud/local/in-memory fallback chains. |
+| [x] | Agent/model/instructions | Externalized `AGENT_*` settings drive one root Agent. |
+| [x] | Tools | Function, Search, code execution, MCP, OpenAPI, integration, approval, and retrieval are configurable. |
+| [x] | Structured output | Optional `GenericAgentResponse` contract. |
+| [x] | Sessions/state/artifacts/memory | ADK service URIs are supplied by Compose. |
+| [x] | REST/A2A/Web/Live | Existing ADK and Live endpoints use the same root Agent. |
+| [x] | Keycloak authorization | JWT validation, configurable roles, and Traefik ForwardAuth. |
+| [x] | OTEL-LGTM | Local spans exported to Grafana/Tempo/Loki/Prometheus stack. |
+| [x] | Auto-configuration | Storage, Messaging, Caching, Search, and Logging fallback chains. |
+| [x] | Container reuse | One configurable application image across Python services. |
+| [ ] | Production cloud deployment | Cloud Run manifest still requires environment-specific image, identity, secrets, and endpoints. |
 
-For the full framework reference, see the [Google ADK documentation](https://google.github.io/adk-docs/).
+See the [Google ADK documentation](https://google.github.io/adk-docs/) for the
+framework reference.

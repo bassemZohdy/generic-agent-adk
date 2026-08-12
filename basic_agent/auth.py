@@ -67,7 +67,7 @@ def authenticate_request(
         claims = _decode(token)
         require_roles(claims, required_roles)
         return claims
-    if settings.release_api_key and api_key == settings.release_api_key:
+    if settings.service_api_key and api_key == settings.service_api_key:
         return {"sub": "internal-service", "auth_method": "api_key"}
     raise HTTPException(status_code=401, detail="Bearer token required")
 

@@ -4,8 +4,8 @@
   "registrationAllowed": false,
   "roles": {
     "realm": [
-      {"name": "release-reader"},
-      {"name": "release-operator"}
+      {"name": "agent-user"},
+      {"name": "agent-operator"}
     ]
   },
   "clients": [
@@ -32,7 +32,7 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["release-reader", "release-operator"]
+      "realmRoles": ["agent-user", "agent-operator"]
     }
   ]
 }

@@ -1,4 +1,4 @@
-"""WebSocket adapter for the existing release-readiness root agent."""
+"""WebSocket adapter for the generic configured root agent."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from .agent import ReleaseReadinessPlugin, root_agent
+from .agent import GenericAgentPlugin, root_agent
 from .autoconfig import discover_capabilities
 from .auth import authenticate_websocket
 from .config import settings
@@ -23,8 +23,8 @@ APP_NAME = settings.app_name
 LIVE_MODEL = settings.live_model
 
 app = FastAPI(
-    title="Release Readiness Live API",
-    description="Bidirectional ADK Live API access to the existing root agent.",
+    title="Generic Agent Live API",
+    description="Bidirectional ADK Live API access to the configured root agent.",
     version=settings.app_version,
 )
 session_service = InMemorySessionService()
@@ -99,7 +99,7 @@ async def live(websocket: WebSocket) -> None:
         app_name=APP_NAME,
         session_service=session_service,
         memory_service=memory_service,
-        plugins=[ReleaseReadinessPlugin()],
+        plugins=[GenericAgentPlugin()],
     )
     event_task = None
     try:

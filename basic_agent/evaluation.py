@@ -1,4 +1,4 @@
-"""Project entry point for running the ADK release-readiness evaluation set."""
+"""Project entry point for running the generic ADK evaluation set."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Sequence
 
 
 ROOT = Path(__file__).resolve().parent.parent
-EVAL_SET = ROOT / "tests" / "eval" / "release_readiness.evalset.json"
+EVAL_SET = ROOT / "tests" / "eval" / "generic_agent.evalset.json"
 EVAL_CONFIG = ROOT / "tests" / "eval" / "eval_config.json"
 
 

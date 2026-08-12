@@ -34,11 +34,22 @@ services:
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
+      AGENT_DESCRIPTION: ${AGENT_DESCRIPTION:-A general-purpose, configuration-driven ADK agent.}
+      AGENT_INSTRUCTION: ${AGENT_INSTRUCTION:-Answer the user's request helpfully and accurately.}
+      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,code_execution,mcp,openapi,approval,runtime,structured_output}
+      AGENT_KNOWLEDGE_FILE: ${AGENT_KNOWLEDGE_FILE:-}
+      AGENT_KNOWLEDGE_RESULT_LIMIT: ${AGENT_KNOWLEDGE_RESULT_LIMIT:-3}
+      AGENT_MCP_TOOLS: ${AGENT_MCP_TOOLS:-get_service_status}
+      AGENT_MCP_TOOL_PREFIX: ${AGENT_MCP_TOOL_PREFIX:-mcp_}
+      AGENT_OPENAPI_URL: http://service-api:8001
+      AGENT_OPENAPI_PATH: ${AGENT_OPENAPI_PATH:-/status}
+      AGENT_OPENAPI_TITLE: ${AGENT_OPENAPI_TITLE:-Configured Service API}
+      AGENT_OPENAPI_TOOL_PREFIX: ${AGENT_OPENAPI_TOOL_PREFIX:-api_}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
-      KEYCLOAK_REQUIRED_ROLES: ${KEYCLOAK_REQUIRED_ROLES:-release-reader}
+      KEYCLOAK_REQUIRED_ROLES: ${KEYCLOAK_REQUIRED_ROLES:-agent-user}
     depends_on:
       - keycloak
     labels:
@@ -69,20 +80,29 @@ services:
 
   adk-api:
     <<: *app-image
-    command: ["adk", "api_server", "--host", "0.0.0.0", "--port", "8002", "--auto_create_session", "--a2a", "--session_service_uri=sqlite:////app/.adk/api-sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.ReleaseReadinessPlugin", "/app/basic_agent"]
+    command: ["adk", "api_server", "--host", "0.0.0.0", "--port", "8002", "--auto_create_session", "--a2a", "--session_service_uri=sqlite:////app/.adk/api-sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.GenericAgentPlugin", "/app/basic_agent"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
+      AGENT_DESCRIPTION: ${AGENT_DESCRIPTION:-A general-purpose, configuration-driven ADK agent.}
+      AGENT_INSTRUCTION: ${AGENT_INSTRUCTION:-Answer the user's request helpfully and accurately.}
+      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,code_execution,mcp,openapi,approval,runtime,structured_output}
+      AGENT_KNOWLEDGE_FILE: ${AGENT_KNOWLEDGE_FILE:-}
+      AGENT_KNOWLEDGE_RESULT_LIMIT: ${AGENT_KNOWLEDGE_RESULT_LIMIT:-3}
+      AGENT_MCP_TOOLS: ${AGENT_MCP_TOOLS:-get_service_status}
+      AGENT_OPENAPI_URL: http://service-api:8001
+      AGENT_OPENAPI_PATH: ${AGENT_OPENAPI_PATH:-/status}
+      AGENT_OPENAPI_TITLE: ${AGENT_OPENAPI_TITLE:-Configured Service API}
       ADK_MODEL: ${ADK_MODEL:-gemini-3.6-flash}
-      RELEASE_API_URL: http://release-api:8001
-      RELEASE_API_KEY: ${RELEASE_API_KEY:-local-release-key}
+      AGENT_SERVICE_API_URL: http://service-api:8001
+      AGENT_SERVICE_API_KEY: ${AGENT_SERVICE_API_KEY:-local-service-key}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
-      RELEASE_API_ROLES: ${RELEASE_API_ROLES:-release-reader}
+      AGENT_SERVICE_API_ROLES: ${AGENT_SERVICE_API_ROLES:-agent-user}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-}
       DATABASE_URL: ${DATABASE_URL:-}
       STORAGE_PATH: ${STORAGE_PATH:-}
@@ -101,7 +121,7 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: basic-adk-api
     depends_on:
-      - release-api
+      - service-api
       - otel-lgtm
       - keycloak
     labels:
@@ -113,21 +133,26 @@ services:
       traefik.http.services.adk-api.loadbalancer.server.port: "8002"
     restart: unless-stopped
 
-  release-api:
+  service-api:
     <<: *app-image
-    command: ["uvicorn", "basic_agent.release_api:app", "--host", "0.0.0.0", "--port", "8001"]
+    command: ["uvicorn", "basic_agent.service_api:app", "--host", "0.0.0.0", "--port", "8001"]
     ports:
-      - "${RELEASE_API_PORT:-8001}:8001"
+      - "${AGENT_SERVICE_API_PORT:-8001}:8001"
     environment:
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
-      RELEASE_API_KEY: ${RELEASE_API_KEY:-local-release-key}
+      AGENT_DESCRIPTION: ${AGENT_DESCRIPTION:-A general-purpose, configuration-driven ADK agent.}
+      AGENT_INSTRUCTION: ${AGENT_INSTRUCTION:-Answer the user's request helpfully and accurately.}
+      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,code_execution,mcp,openapi,approval,runtime,structured_output}
+      AGENT_OPENAPI_URL: http://service-api:8001
+      AGENT_OPENAPI_PATH: ${AGENT_OPENAPI_PATH:-/status}
+      AGENT_SERVICE_API_KEY: ${AGENT_SERVICE_API_KEY:-local-service-key}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
-      RELEASE_API_ROLES: ${RELEASE_API_ROLES:-release-reader}
+      AGENT_SERVICE_API_ROLES: ${AGENT_SERVICE_API_ROLES:-agent-user}
     restart: unless-stopped
     depends_on:
       - keycloak
@@ -142,6 +167,9 @@ services:
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
+      AGENT_DESCRIPTION: ${AGENT_DESCRIPTION:-A general-purpose, configuration-driven ADK agent.}
+      AGENT_INSTRUCTION: ${AGENT_INSTRUCTION:-Answer the user's request helpfully and accurately.}
+      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,code_execution,mcp,openapi,approval,runtime,structured_output}
       ADK_MODEL: ${LIVE_ADK_MODEL:-gemini-3.1-flash-live-preview}
       LIVE_ADK_MODEL: ${LIVE_ADK_MODEL:-gemini-3.1-flash-live-preview}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-}
@@ -165,7 +193,7 @@ services:
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
-      LIVE_API_ROLES: ${LIVE_API_ROLES:-release-reader}
+      LIVE_API_ROLES: ${LIVE_API_ROLES:-agent-user}
     restart: unless-stopped
     depends_on:
       - otel-lgtm
@@ -173,7 +201,7 @@ services:
 
   agent:
     <<: *app-image
-    command: ["adk", "web", "--host", "0.0.0.0", "--port", "8000", "--session_service_uri=sqlite:////app/.adk/sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.ReleaseReadinessPlugin", "/app/basic_agent"]
+    command: ["adk", "web", "--host", "0.0.0.0", "--port", "8000", "--session_service_uri=sqlite:////app/.adk/sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.GenericAgentPlugin", "/app/basic_agent"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       APP_NAME: ${APP_NAME:-basic_agent}
@@ -197,10 +225,10 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4317}
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: basic-adk-web
-      RELEASE_API_URL: http://release-api:8001
-      RELEASE_API_KEY: ${RELEASE_API_KEY:-local-release-key}
+      AGENT_SERVICE_API_URL: http://service-api:8001
+      AGENT_SERVICE_API_KEY: ${AGENT_SERVICE_API_KEY:-local-service-key}
     depends_on:
-      - release-api
+      - service-api
       - keycloak
     labels:
       traefik.enable: "true"

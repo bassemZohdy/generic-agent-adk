@@ -8,7 +8,7 @@ from basic_agent.agent import (
     retrieve_knowledge,
     root_agent,
 )
-from basic_agent.auth import keycloak_enabled
+from basic_agent.auth import authenticate_request, keycloak_enabled
 from basic_agent.auth import require_roles
 from basic_agent.auth_gateway import app as auth_gateway_app
 from basic_agent.autoconfig import ProviderConfigurationError, discover_capabilities
@@ -17,6 +17,8 @@ from basic_agent.evaluation import EVAL_CONFIG, EVAL_SET, build_eval_command
 from basic_agent.live_server import LIVE_MODEL, app
 from basic_agent.service_api import get_service_status
 from basic_agent.telemetry import tracer
+import pytest
+from starlette.requests import Request
 
 
 def test_root_agent_is_generic_and_configuration_driven():
@@ -145,6 +147,34 @@ def test_detected_malformed_provider_fails_without_silent_fallback():
         raise AssertionError("Malformed detected configuration was accepted")
 
 
+@pytest.mark.parametrize(
+    "environment, capability",
+    [
+        ({"SEARCH_URL": "https://search.example"}, "search"),
+        ({"SEARCH_API_KEY": "secret"}, "search"),
+        ({"LOG_ENDPOINT": "https://logs.example"}, "logging"),
+        ({"LOG_API_KEY": "secret"}, "logging"),
+    ],
+)
+def test_partial_detected_provider_configuration_fails_fast(environment, capability):
+    with pytest.raises(ProviderConfigurationError, match=capability):
+        discover_capabilities(environment)
+
+
+@pytest.mark.parametrize(
+    "environment",
+    [
+        {"STORAGE_PATH": "/"},
+        {"CACHE_PATH": "/"},
+        {"SEARCH_INDEX_PATH": "/"},
+        {"LOG_FILE": "/"},
+    ],
+)
+def test_invalid_local_paths_fail_fast(environment):
+    with pytest.raises(ProviderConfigurationError):
+        discover_capabilities(environment)
+
+
 def test_live_api_reuses_generic_root_agent():
     routes = {route.path for route in app.routes}
     assert routes >= {"/healthz", "/live"}
@@ -154,6 +184,24 @@ def test_live_api_reuses_generic_root_agent():
 def test_keycloak_and_forward_auth_surfaces_exist():
     assert keycloak_enabled() is False
     assert {route.path for route in auth_gateway_app.routes} >= {"/healthz", "/verify"}
+
+
+def test_authentication_is_optional_when_keycloak_is_not_configured():
+    request = Request({"type": "http", "headers": []})
+
+    assert authenticate_request(request) is None
+
+
+def test_authentication_requires_bearer_token_when_keycloak_is_configured():
+    from basic_agent import auth
+
+    old_issuer = auth.settings.keycloak_issuer
+    object.__setattr__(auth.settings, "keycloak_issuer", "https://keycloak.example/realms/agent")
+    try:
+        with pytest.raises(Exception, match="Bearer token required"):
+            authenticate_request(Request({"type": "http", "headers": []}))
+    finally:
+        object.__setattr__(auth.settings, "keycloak_issuer", old_issuer)
 
 
 def test_role_claims_accept_nested_configured_roles(monkeypatch):

@@ -129,14 +129,15 @@ uv run pytest -q
 ## CI/CD
 
 GitHub Actions runs on pushes to `main` and on pull requests through
-`.github/workflows/ci.yml`. The pipeline uses the locked uv environment and
-checks:
+`.github/workflows/ci.yml`. The pipeline tests Python 3.10 through 3.13,
+builds the shared application image, and checks:
 
 - all Python tests;
 - evaluation, realm, and configuration JSON fixtures;
 - the evaluation entry point;
 - Docker Compose interpolation and service configuration; and
 - patch whitespace errors.
+- the production Dockerfile build.
 
 The workflow intentionally does not call Gemini, Keycloak, or external
 providers. Network-backed evaluation and deployment should be separate

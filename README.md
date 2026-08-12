@@ -49,6 +49,12 @@ available at http://localhost:8001 and can be changed with `RELEASE_API_PORT`.
 The ADK REST API is available at http://localhost:8002 and can be changed with
 `ADK_API_PORT`.
 
+The REST server exposes ADK's streaming response endpoints and A2A endpoint.
+The container is also Cloud Run-compatible: replace the placeholders in
+`deploy/cloudrun/service.yaml`, build and push the image, create the referenced
+Secret Manager secret, then deploy the manifest with `gcloud run services
+replace`.
+
 ## Unified live example: release readiness
 
 The main use case is a release-readiness assessment. Ask the agent:
@@ -114,7 +120,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Persistent state | `ReleaseWorkflowState` types the evidence and draft keys shared by the workflow. |
 | - [x] | Artifacts | Docker Compose configures ADK's local file artifact service under `.adk/artifacts`. |
 | - [x] | Memory service | Completed sessions are added to ADK's configured memory service; Compose enables `memory://` for local operation. |
-| - [ ] | Streaming / Live API | No bidirectional streaming or voice agent is configured. |
+| - [x] | Streaming / Live API | The ADK REST server exposes streaming responses; bidirectional Live API/voice is not enabled. |
 | - [x] | A2A interoperability | The Compose ADK API server enables the ADK A2A endpoint for the existing root agent. |
 | - [x] | REST API server | Compose exposes the same agent through `adk api_server` on port 8002. |
 | - [x] | Callbacks | Root-agent before/after callbacks record assessment lifecycle events. |
@@ -123,6 +129,6 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Automated agent tests | `tests/test_agent.py` covers the unified workflow structure, tools, and response contract. |
 | - [x] | Tracing / observability | Local lifecycle logs are emitted by the plugin; cloud export remains optional. |
 | - [x] | Authentication / authorization | The release API supports API-key authorization; the local Web UI remains unauthenticated. |
-| - [ ] | Cloud deployment | No Cloud Run, Agent Engine, GKE, or other cloud deployment configuration is included. |
+| - [x] | Cloud deployment | `deploy/cloudrun/service.yaml` provides a generic Cloud Run deployment manifest. |
 
 For the full framework reference, see the [Google ADK documentation](https://google.github.io/adk-docs/).

@@ -3,6 +3,7 @@
 import os
 
 from google.adk.agents import Agent, LoopAgent, ParallelAgent, SequentialAgent
+from google.adk.tools import google_search
 from pydantic import BaseModel, Field
 
 
@@ -146,6 +147,20 @@ project_review_loop = LoopAgent(
 )
 
 
+research_agent = Agent(
+    name="research_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Researches current topics using Google Search.",
+    instruction=(
+        "You are a research assistant. Use Google Search for questions about "
+        "current facts, recent changes, or information outside this repository. "
+        "Summarize the results clearly and identify uncertainty when sources "
+        "disagree."
+    ),
+    tools=[google_search],
+)
+
+
 root_agent = Agent(
     name="basic_agent",
     model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
@@ -158,6 +173,7 @@ root_agent = Agent(
         "For a detailed structure-and-runtime review, delegate to "
         "project_parallel_workflow. "
         "For iterative review and refinement, delegate to project_review_loop. "
+        "For current or external information, delegate to research_agent. "
         "Return only the structured response described by the response schema."
     ),
     tools=[get_project_info],
@@ -166,6 +182,7 @@ root_agent = Agent(
         project_overview_workflow,
         project_parallel_workflow,
         project_review_loop,
+        research_agent,
     ],
     output_schema=AgentResponse,
     output_key="last_response",

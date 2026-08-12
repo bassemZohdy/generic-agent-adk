@@ -69,7 +69,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Parallel workflows | `project_parallel_workflow` analyzes structure and runtime setup concurrently. |
 | - [x] | Loop workflows | `project_review_loop` runs bounded review/refinement iterations. |
 | - [ ] | Custom agent classes | Uses the built-in `Agent` class only. |
-| - [ ] | Built-in Google Search tool | Search grounding is not configured. |
+| - [x] | Built-in Google Search tool | `research_agent` uses ADK's `google_search` tool for current/external information. |
 | - [ ] | Code execution tool | No code execution tool is enabled. |
 | - [ ] | Retrieval / RAG | No corpus, embeddings, or retriever is configured. |
 | - [ ] | MCP tools | No MCP server or MCP toolset is connected. |

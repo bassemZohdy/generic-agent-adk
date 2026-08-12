@@ -13,6 +13,8 @@ from basic_agent.agent import (
     project_structure_agent,
     research_agent,
     analysis_agent,
+    knowledge_agent,
+    retrieve_project_knowledge,
     root_agent,
 )
 
@@ -60,6 +62,13 @@ def test_research_agent_uses_google_search():
 def test_analysis_agent_uses_code_execution():
     assert analysis_agent in root_agent.sub_agents
     assert analysis_agent.code_executor.__class__.__name__ == "BuiltInCodeExecutor"
+
+
+def test_knowledge_agent_retrieves_relevant_passages():
+    assert knowledge_agent in root_agent.sub_agents
+    result = retrieve_project_knowledge("How do I run Docker?")
+    assert "Docker deployment" in result
+    assert "docker compose up --build" in result
 
 
 def test_agent_response_contract():

@@ -71,7 +71,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [ ] | Custom agent classes | Uses the built-in `Agent` class only. |
 | - [x] | Built-in Google Search tool | `research_agent` uses ADK's `google_search` tool for current/external information. |
 | - [x] | Code execution tool | `analysis_agent` uses ADK's `BuiltInCodeExecutor` for calculations and data analysis. |
-| - [ ] | Retrieval / RAG | No corpus, embeddings, or retriever is configured. |
+| - [x] | Retrieval / RAG | `knowledge_agent` retrieves relevant passages from a local project knowledge base before answering. |
 | - [ ] | MCP tools | No MCP server or MCP toolset is connected. |
 | - [ ] | OpenAPI tools | No OpenAPI specification is connected. |
 | - [ ] | Application Integration tools | No Google Cloud Application Integration toolset is connected. |

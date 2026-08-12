@@ -1,6 +1,7 @@
 """A small, runnable Google ADK agent."""
 
 import os
+import re
 
 from google.adk.agents import Agent, LoopAgent, ParallelAgent, SequentialAgent
 from google.adk.code_executors import BuiltInCodeExecutor
@@ -33,6 +34,53 @@ def get_project_info(topic: str) -> str:
     return topics.get(
         normalized_topic,
         "Available topics are: purpose, run, and structure.",
+    )
+
+
+PROJECT_KNOWLEDGE = (
+    {
+        "title": "Agent entry point",
+        "content": (
+            "The root agent is defined in basic_agent/agent.py as root_agent. "
+            "The package also contains specialized research, analysis, and "
+            "workflow agents."
+        ),
+    },
+    {
+        "title": "Local development",
+        "content": (
+            "Run uv sync, configure GOOGLE_API_KEY in .env, and start the web "
+            "interface with uv run adk web."
+        ),
+    },
+    {
+        "title": "Docker deployment",
+        "content": (
+            "Run docker compose up --build to start the ADK Web UI on port 8000. "
+            "ADK_PORT changes the host port."
+        ),
+    },
+)
+
+
+def retrieve_project_knowledge(query: str) -> str:
+    """Retrieve the most relevant project knowledge passages for a query."""
+    query_terms = set(re.findall(r"[a-z0-9]+", query.lower()))
+    ranked = sorted(
+        PROJECT_KNOWLEDGE,
+        key=lambda entry: len(
+            query_terms
+            & set(re.findall(r"[a-z0-9]+", f"{entry['title']} {entry['content']}".lower()))
+        ),
+        reverse=True,
+    )
+    matches = [entry for entry in ranked if query_terms & set(re.findall(
+        r"[a-z0-9]+", f"{entry['title']} {entry['content']}".lower()
+    ))]
+    if not matches:
+        matches = list(ranked[:1])
+    return "\n\n".join(
+        f"[{entry['title']}] {entry['content']}" for entry in matches[:2]
     )
 
 
@@ -175,6 +223,19 @@ analysis_agent = Agent(
 )
 
 
+knowledge_agent = Agent(
+    name="knowledge_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Answers project questions using retrieved knowledge passages.",
+    instruction=(
+        "You are a retrieval-augmented knowledge assistant. Retrieve relevant "
+        "project passages first, then answer using only those passages. Say "
+        "when the knowledge base does not contain the answer."
+    ),
+    tools=[retrieve_project_knowledge],
+)
+
+
 root_agent = Agent(
     name="basic_agent",
     model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
@@ -189,6 +250,8 @@ root_agent = Agent(
         "For iterative review and refinement, delegate to project_review_loop. "
         "For current or external information, delegate to research_agent. "
         "For calculations or data analysis, delegate to analysis_agent. "
+        "For questions about documented project knowledge, delegate to "
+        "knowledge_agent. "
         "Return only the structured response described by the response schema."
     ),
     tools=[get_project_info],
@@ -199,6 +262,7 @@ root_agent = Agent(
         project_review_loop,
         research_agent,
         analysis_agent,
+        knowledge_agent,
     ],
     output_schema=AgentResponse,
     output_key="last_response",

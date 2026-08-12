@@ -49,6 +49,15 @@ available at http://localhost:8001 and can be changed with `RELEASE_API_PORT`.
 The ADK REST API is available at http://localhost:8002 and can be changed with
 `ADK_API_PORT`.
 
+The bidirectional Live API WebSocket is available at `ws://localhost:8003/live`
+and can be changed with `LIVE_API_PORT`. Connect with optional `user_id` and
+`session_id` query parameters, then send JSON messages such as
+`{"text":"Is version 1.4 ready?"}`. Audio input can be sent as
+`{"audio":{"mime_type":"audio/pcm;rate=16000","data":"<base64>"}}`;
+ADK events, including streamed response parts, are returned as JSON. The Live
+service uses the existing `root_agent` and defaults to
+`gemini-3.1-flash-live-preview`.
+
 The REST server exposes ADK's streaming response endpoints and A2A endpoint.
 The container is also Cloud Run-compatible: replace the placeholders in
 `deploy/cloudrun/service.yaml`, build and push the image, create the referenced
@@ -120,7 +129,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Persistent state | `ReleaseWorkflowState` types the evidence and draft keys shared by the workflow. |
 | - [x] | Artifacts | Docker Compose configures ADK's local file artifact service under `.adk/artifacts`. |
 | - [x] | Memory service | Completed sessions are added to ADK's configured memory service; Compose enables `memory://` for local operation. |
-| - [x] | Streaming / Live API | The ADK REST server exposes streaming responses; bidirectional Live API/voice is not enabled. |
+| - [x] | Streaming / Live API | REST streaming is available through ADK API Server, and `live-api` exposes a bidirectional WebSocket for text/audio input using the existing `root_agent`. |
 | - [x] | A2A interoperability | The Compose ADK API server enables the ADK A2A endpoint for the existing root agent. |
 | - [x] | REST API server | Compose exposes the same agent through `adk api_server` on port 8002. |
 | - [x] | Callbacks | Root-agent before/after callbacks record assessment lifecycle events. |

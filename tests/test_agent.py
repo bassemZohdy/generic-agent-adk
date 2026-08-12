@@ -22,6 +22,7 @@ from basic_agent.agent import (
     root_agent,
 )
 from basic_agent.release_api import get_release_status
+from basic_agent.live_server import LIVE_MODEL, app
 
 
 def test_root_agent_is_focused_on_release_readiness():
@@ -107,3 +108,11 @@ def test_release_report_contract():
 
     assert report.recommendation == "ready_with_conditions"
     assert report.confidence == 0.8
+
+
+def test_live_api_reuses_root_agent():
+    routes = {(route.path, route.name) for route in app.routes}
+
+    assert ("/healthz", "healthz") in routes
+    assert any(getattr(route, "path", None) == "/live" for route in app.routes)
+    assert LIVE_MODEL

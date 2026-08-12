@@ -26,6 +26,18 @@ services:
       RELEASE_API_KEY: ${RELEASE_API_KEY:-}
     restart: unless-stopped
 
+  live-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uvicorn", "basic_agent.live_server:app", "--host", "0.0.0.0", "--port", "8003"]
+    ports:
+      - "${LIVE_API_PORT:-8003}:8003"
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      ADK_MODEL: ${LIVE_ADK_MODEL:-gemini-3.1-flash-live-preview}
+    restart: unless-stopped
+
   agent:
     build:
       context: .

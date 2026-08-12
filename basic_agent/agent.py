@@ -14,10 +14,25 @@ from google.adk.code_executors import BuiltInCodeExecutor
 from google.adk.tools import google_search
 from google.adk.tools.mcp_tool import McpToolset, StdioConnectionParams
 from google.adk.tools.openapi_tool import OpenAPIToolset
+from google.adk.tools.tool_context import ToolContext
+from google.adk.plugins import BasePlugin
 from mcp import StdioServerParameters
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+class ReleaseReadinessPlugin(BasePlugin):
+    """Global plugin for release-assessment observability."""
+
+    def __init__(self) -> None:
+        super().__init__(name="release_readiness_plugin")
+
+    async def before_run_callback(self, *, invocation_context):
+        logger.info("Release plugin started invocation %s", invocation_context.invocation_id)
+
+    async def after_run_callback(self, *, invocation_context) -> None:
+        logger.info("Release plugin completed invocation %s", invocation_context.invocation_id)
 
 
 class ReleaseReadinessReport(BaseModel):
@@ -51,9 +66,29 @@ def on_release_workflow_start(context: Context) -> None:
     logger.info("Starting release-readiness assessment: %s", context.invocation_id)
 
 
-def on_release_workflow_complete(context: Context) -> None:
+async def on_release_workflow_complete(context: Context) -> None:
     """Record completion of a release assessment for ADK diagnostics."""
     logger.info("Completed release-readiness assessment: %s", context.invocation_id)
+    await context.add_session_to_memory()
+
+
+def request_release_approval(
+    recommendation: str,
+    tool_context: ToolContext,
+) -> str:
+    """Request human confirmation before recording a release decision."""
+    allowed = {"ready", "ready_with_conditions", "not_ready"}
+    if recommendation not in allowed:
+        return f"Invalid recommendation. Choose one of: {', '.join(sorted(allowed))}."
+    if not tool_context.tool_confirmation:
+        tool_context.request_confirmation(
+            hint="Confirm recording this release recommendation.",
+            payload={"recommendation": recommendation},
+        )
+        return "Confirmation requested before recording the release recommendation."
+    if not tool_context.tool_confirmation.confirmed:
+        return "Release recommendation was not confirmed."
+    return f"Release recommendation recorded: {recommendation}."
 
 
 PROJECT_KNOWLEDGE = (
@@ -111,6 +146,12 @@ def get_release_metrics() -> str:
     )
 
 
+def release_api_headers(_context) -> dict[str, str]:
+    """Provide the optional API key to the OpenAPI release service."""
+    api_key = os.getenv("RELEASE_API_KEY")
+    return {"x-api-key": api_key} if api_key else {}
+
+
 MCP_SERVER_PATH = Path(__file__).with_name("mcp_server.py")
 project_mcp_toolset = McpToolset(
     connection_params=StdioConnectionParams(
@@ -151,7 +192,17 @@ release_api_toolset = OpenAPIToolset(
                 }
             }
         },
+        "components": {
+            "securitySchemes": {
+                "releaseApiKey": {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": "x-api-key",
+                }
+            }
+        },
     },
+    header_provider=release_api_headers,
     tool_name_prefix="release_api_",
 )
 
@@ -204,7 +255,7 @@ release_operations_agent = Agent(
         "Use the MCP release-status tool to check service health, deployed version, "
         "and environment. Return the observed status without guessing."
     ),
-    tools=[project_mcp_toolset],
+    tools=[project_mcp_toolset, request_release_approval],
     output_key="service_status",
 )
 

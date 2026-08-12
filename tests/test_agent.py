@@ -15,6 +15,8 @@ from basic_agent.agent import (
     release_review_loop,
     release_synthesis_agent,
     retrieve_project_knowledge,
+    request_release_approval,
+    ReleaseReadinessPlugin,
     root_agent,
 )
 from basic_agent.release_api import get_release_status
@@ -75,6 +77,14 @@ def test_release_api_returns_live_status_shape():
 
     assert status["status"] == "healthy"
     assert status["deployment"] == "docker-compose"
+
+
+def test_release_approval_rejects_invalid_recommendation():
+    assert "Invalid recommendation" in request_release_approval("maybe", object())
+
+
+def test_release_plugin_is_registered_type():
+    assert ReleaseReadinessPlugin().name == "release_readiness_plugin"
 
 
 def test_release_report_contract():

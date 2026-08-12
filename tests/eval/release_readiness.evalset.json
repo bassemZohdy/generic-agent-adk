@@ -1,0 +1,24 @@
+{
+  "eval_set_id": "release_readiness_smoke",
+  "eval_cases": [
+    {
+      "eval_id": "release_readiness_request",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Is version 1.4 ready for release? Check requirements, test metrics, and service status."
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "basic_agent",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

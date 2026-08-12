@@ -46,6 +46,8 @@ Open http://localhost:8000 and select `basic_agent`. The container points ADK
 directly at the single agent directory to avoid duplicate agent discovery. Set
 `ADK_PORT` in `.env` to change the host port. The local OpenAPI service is
 available at http://localhost:8001 and can be changed with `RELEASE_API_PORT`.
+The ADK REST API is available at http://localhost:8002 and can be changed with
+`ADK_API_PORT`.
 
 ## Unified live example: release readiness
 
@@ -106,21 +108,21 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | MCP tools | `release_operations_agent` connects to the bundled stdio MCP server through `McpToolset`. |
 | - [x] | OpenAPI tools | `release_api_agent` calls the local FastAPI release-status API through `OpenAPIToolset`. |
 | - [ ] | Application Integration tools | No Google Cloud Application Integration toolset is connected. |
-| - [ ] | Tool authentication | No OAuth/API-key tool authentication flow is configured. |
-| - [ ] | Tool confirmation / approval | No human approval callback is configured. |
+| - [x] | Tool authentication | The OpenAPI release service supports an optional `x-api-key` flow. |
+| - [x] | Tool confirmation / approval | `request_release_approval` pauses before recording a release decision until confirmed. |
 | - [x] | Sessions | Docker Compose configures a persistent SQLite session service under `.adk/sessions.db`. |
 | - [x] | Persistent state | `ReleaseWorkflowState` types the evidence and draft keys shared by the workflow. |
 | - [x] | Artifacts | Docker Compose configures ADK's local file artifact service under `.adk/artifacts`. |
-| - [ ] | Memory service | No long-term memory or memory search is configured. |
+| - [x] | Memory service | Completed sessions are added to ADK's configured memory service; Compose enables `memory://` for local operation. |
 | - [ ] | Streaming / Live API | No bidirectional streaming or voice agent is configured. |
-| - [ ] | A2A interoperability | No A2A endpoint or remote agent integration is configured. |
-| - [ ] | REST API server | Only the ADK Web UI is exposed; no dedicated API deployment is configured. |
+| - [x] | A2A interoperability | The Compose ADK API server enables the ADK A2A endpoint for the existing root agent. |
+| - [x] | REST API server | Compose exposes the same agent through `adk api_server` on port 8002. |
 | - [x] | Callbacks | Root-agent before/after callbacks record assessment lifecycle events. |
-| - [ ] | Plugins | No ADK plugin is registered. |
-| - [ ] | Evaluation datasets | No ADK evaluation set or regression cases are included. |
+| - [x] | Plugins | `ReleaseReadinessPlugin` is loaded by the ADK Web server for lifecycle logging. |
+| - [x] | Evaluation datasets | `tests/eval/release_readiness.evalset.json` provides a release-readiness smoke case. |
 | - [x] | Automated agent tests | `tests/test_agent.py` covers the unified workflow structure, tools, and response contract. |
-| - [ ] | Tracing / observability | No cloud telemetry, tracing, or dashboard integration is configured. |
-| - [ ] | Authentication / authorization | The local Web UI has no application-level user authentication. |
+| - [x] | Tracing / observability | Local lifecycle logs are emitted by the plugin; cloud export remains optional. |
+| - [x] | Authentication / authorization | The release API supports API-key authorization; the local Web UI remains unauthenticated. |
 | - [ ] | Cloud deployment | No Cloud Run, Agent Engine, GKE, or other cloud deployment configuration is included. |
 
 For the full framework reference, see the [Google ADK documentation](https://google.github.io/adk-docs/).

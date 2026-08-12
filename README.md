@@ -126,6 +126,22 @@ uv run python -m basic_agent.evaluation
 uv run pytest -q
 ```
 
+## CI/CD
+
+GitHub Actions runs on pushes to `main` and on pull requests through
+`.github/workflows/ci.yml`. The pipeline uses the locked uv environment and
+checks:
+
+- all Python tests;
+- evaluation, realm, and configuration JSON fixtures;
+- the evaluation entry point;
+- Docker Compose interpolation and service configuration; and
+- patch whitespace errors.
+
+The workflow intentionally does not call Gemini, Keycloak, or external
+providers. Network-backed evaluation and deployment should be separate
+environment-protected workflows with production credentials.
+
 ## ADK capability status
 
 | Status | Capability | Generic implementation |

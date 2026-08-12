@@ -11,7 +11,9 @@ def _env(name: str, default: str = "") -> str:
 
 
 def _roles(name: str, default: str) -> tuple[str, ...]:
-    return tuple(role for role in (_env(name, default).split(",")) if role)
+    return tuple(
+        role.strip() for role in _env(name, default).split(",") if role.strip()
+    )
 
 
 @dataclass(frozen=True)

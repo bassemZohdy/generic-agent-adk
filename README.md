@@ -49,6 +49,23 @@ available at http://localhost:8001 and can be changed with `RELEASE_API_PORT`.
 The ADK REST API is available at http://localhost:8002 and can be changed with
 `ADK_API_PORT`.
 
+Keycloak is available at http://localhost:8080. Compose imports the local
+`basic-agent` realm with the development user `demo` / `demo`. Obtain a token
+for the `basic-agent` client with:
+
+```bash
+curl -s -X POST http://localhost:8080/realms/basic-agent/protocol/openid-connect/token \
+  -d client_id=basic-agent -d username=demo -d password=demo \
+  -d grant_type=password
+```
+
+Send the returned access token as `Authorization: Bearer <token>` to the
+release API, or as `?access_token=<token>` for a browser WebSocket connection
+to `/live`. The internal release-status tool continues to use
+`RELEASE_API_KEY` for service-to-service calls. The built-in ADK Web/API
+servers remain outside this application middleware boundary and need an
+auth-aware reverse proxy to enforce Keycloak there as well.
+
 The bidirectional Live API WebSocket is available at `ws://localhost:8003/live`
 and can be changed with `LIVE_API_PORT`. Connect with optional `user_id` and
 `session_id` query parameters, then send JSON messages such as
@@ -180,7 +197,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Evaluation datasets | The checked-in dataset and `python -m basic_agent.evaluation` command run the ADK evaluator with a tool-trajectory threshold. |
 | - [x] | Automated agent tests | `tests/test_agent.py` covers the unified workflow structure, tools, and response contract. |
 | - [x] | Tracing / observability | Compose runs `grafana/otel-lgtm`; the ADK plugin exports invocation spans over OTLP and Cloud Trace remains an optional deployment target. |
-| - [ ] | Authentication / authorization | The release API supports API-key authorization, but the local Web UI and ADK API server still need an auth gateway. |
+| - [ ] | Authentication / authorization | Keycloak bearer JWTs protect the release API and Live WebSocket; the built-in ADK Web/API servers still need an auth-aware reverse proxy. |
 | - [ ] | Cloud deployment | The Cloud Run manifest is a generic template; production image, service identity, secrets, and the release API endpoint still require deployment configuration. |
 | - [x] | Stack-agnostic subsystem auto-configuration | `basic_agent.autoconfig` resolves Storage, Messaging, Caching, Search, and Logging through implicit cloud/local/in-memory fallback chains. |
 

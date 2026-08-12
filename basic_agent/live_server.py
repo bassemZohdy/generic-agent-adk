@@ -16,6 +16,7 @@ from google.genai import types
 
 from .agent import ReleaseReadinessPlugin, root_agent
 from .autoconfig import discover_capabilities
+from .auth import authenticate_websocket
 
 
 APP_NAME = "basic_agent"
@@ -83,6 +84,11 @@ async def healthz() -> dict[str, object]:
 @app.websocket("/live")
 async def live(websocket: WebSocket) -> None:
     """Handle JSON text/audio messages and stream ADK events back as JSON."""
+    try:
+        authenticate_websocket(websocket)
+    except Exception:
+        await websocket.close(code=4401)
+        return
     await websocket.accept()
     user_id = websocket.query_params.get("user_id", "live-user")
     session_id = websocket.query_params.get("session_id")

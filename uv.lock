@@ -280,6 +280,7 @@ dependencies = [
     { name = "google-adk", extra = ["a2a", "mcp"] },
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
     { name = "opentelemetry-sdk" },
+    { name = "pyjwt", extra = ["crypto"] },
 ]
 
 [package.dev-dependencies]
@@ -292,6 +293,7 @@ requires-dist = [
     { name = "google-adk", extras = ["a2a", "mcp"], specifier = ">=1.0.0" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.28.0" },
     { name = "opentelemetry-sdk", specifier = ">=1.28.0" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.8.0" },
 ]
 
 [package.metadata.requires-dev]

@@ -26,6 +26,7 @@ from basic_agent.live_server import LIVE_MODEL, app
 from basic_agent.autoconfig import ProviderConfigurationError, discover_capabilities
 from basic_agent.evaluation import EVAL_CONFIG, EVAL_SET, build_eval_command
 from basic_agent.telemetry import tracer
+from basic_agent.auth import keycloak_enabled
 
 
 def test_root_agent_is_focused_on_release_readiness():
@@ -203,3 +204,7 @@ def test_evaluation_entry_point_targets_adk_dataset_and_config():
 
 def test_local_otel_tracer_is_available_for_adk_plugin_spans():
     assert tracer is not None
+
+
+def test_keycloak_auth_is_optional_for_non_compose_local_tests():
+    assert keycloak_enabled() is False

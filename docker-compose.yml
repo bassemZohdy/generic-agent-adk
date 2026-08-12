@@ -1,0 +1,11 @@
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${ADK_PORT:-8000}:8000"
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      ADK_MODEL: ${ADK_MODEL:-gemini-3.6-flash}
+    restart: unless-stopped

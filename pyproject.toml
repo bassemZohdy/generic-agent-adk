@@ -1,0 +1,14 @@
+[project]
+name = "basic-adk-agent"
+version = "0.1.0"
+description = "A minimal Google ADK agent"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "google-adk>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]

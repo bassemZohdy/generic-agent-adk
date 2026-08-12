@@ -44,3 +44,52 @@ docker compose up --build
 Open http://localhost:8000 and select `basic_agent`. The container points ADK
 directly at the single agent directory to avoid duplicate agent discovery. Set
 `ADK_PORT` in `.env` to change the host port.
+
+## ADK feature checklist
+
+The table below tracks the major Google ADK capabilities against this starter
+repository. `Implemented` means the feature is present and usable here;
+`Partial` means ADK provides it but this project only uses the default or a
+minimal form; `Not yet` means it still needs to be added to this project.
+
+| Status | ADK capability | Current project implementation |
+| --- | --- | --- |
+| - [x] | LLM agent | `root_agent` is a Google ADK `Agent`. |
+| - [x] | Agent instructions | System behavior is defined with `instruction`. |
+| - [x] | Agent description | The agent has a human-readable `description`. |
+| - [x] | Gemini model integration | Uses configurable `gemini-3.6-flash` via `ADK_MODEL`. |
+| - [x] | Custom function tools | Includes the deterministic `get_project_info` tool. |
+| - [x] | Local ADK Web UI | Available with `adk web` or Docker Compose. |
+| - [x] | ADK CLI execution | Supports `adk run basic_agent`. |
+| - [x] | Environment configuration | `.env.example` documents API key and model settings. |
+| - [x] | Containerization | Dockerfile and Compose configuration are included. |
+| - [ ] | Structured output / response schemas | No response schema is configured. |
+| - [ ] | Multi-agent delegation | No sub-agents or agent delegation are configured. |
+| - [ ] | Sequential workflows | No `SequentialAgent` workflow is configured. |
+| - [ ] | Parallel workflows | No `ParallelAgent` workflow is configured. |
+| - [ ] | Loop workflows | No `LoopAgent` workflow is configured. |
+| - [ ] | Custom agent classes | Uses the built-in `Agent` class only. |
+| - [ ] | Built-in Google Search tool | Search grounding is not configured. |
+| - [ ] | Code execution tool | No code execution tool is enabled. |
+| - [ ] | Retrieval / RAG | No corpus, embeddings, or retriever is configured. |
+| - [ ] | MCP tools | No MCP server or MCP toolset is connected. |
+| - [ ] | OpenAPI tools | No OpenAPI specification is connected. |
+| - [ ] | Application Integration tools | No Google Cloud Application Integration toolset is connected. |
+| - [ ] | Tool authentication | No OAuth/API-key tool authentication flow is configured. |
+| - [ ] | Tool confirmation / approval | No human approval callback is configured. |
+| - [ ] | Sessions | Uses ADK defaults; no explicit persistent session service is configured. |
+| - [ ] | Persistent state | No application state schema or state-backed workflow is implemented. |
+| - [ ] | Artifacts | No artifact service or file-producing agent flow is implemented. |
+| - [ ] | Memory service | No long-term memory or memory search is configured. |
+| - [ ] | Streaming / Live API | No bidirectional streaming or voice agent is configured. |
+| - [ ] | A2A interoperability | No A2A endpoint or remote agent integration is configured. |
+| - [ ] | REST API server | Only the ADK Web UI is exposed; no dedicated API deployment is configured. |
+| - [ ] | Callbacks | No before/after agent, model, or tool callbacks are implemented. |
+| - [ ] | Plugins | No ADK plugin is registered. |
+| - [ ] | Evaluation datasets | No ADK evaluation set or regression cases are included. |
+| - [ ] | Automated agent tests | No agent behavior tests are included yet. |
+| - [ ] | Tracing / observability | No cloud telemetry, tracing, or dashboard integration is configured. |
+| - [ ] | Authentication / authorization | The local Web UI has no application-level user authentication. |
+| - [ ] | Cloud deployment | No Cloud Run, Agent Engine, GKE, or other cloud deployment configuration is included. |
+
+For the full framework reference, see the [Google ADK documentation](https://google.github.io/adk-docs/).

@@ -72,7 +72,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Built-in Google Search tool | `research_agent` uses ADK's `google_search` tool for current/external information. |
 | - [x] | Code execution tool | `analysis_agent` uses ADK's `BuiltInCodeExecutor` for calculations and data analysis. |
 | - [x] | Retrieval / RAG | `knowledge_agent` retrieves relevant passages from a local project knowledge base before answering. |
-| - [ ] | MCP tools | No MCP server or MCP toolset is connected. |
+| - [x] | MCP tools | `mcp_agent` connects to the bundled local stdio MCP server through `McpToolset`. |
 | - [ ] | OpenAPI tools | No OpenAPI specification is connected. |
 | - [ ] | Application Integration tools | No Google Cloud Application Integration toolset is connected. |
 | - [ ] | Tool authentication | No OAuth/API-key tool authentication flow is configured. |

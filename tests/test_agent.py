@@ -14,6 +14,8 @@ from basic_agent.agent import (
     research_agent,
     analysis_agent,
     knowledge_agent,
+    mcp_agent,
+    project_mcp_toolset,
     retrieve_project_knowledge,
     root_agent,
 )
@@ -69,6 +71,12 @@ def test_knowledge_agent_retrieves_relevant_passages():
     result = retrieve_project_knowledge("How do I run Docker?")
     assert "Docker deployment" in result
     assert "docker compose up --build" in result
+
+
+def test_mcp_agent_uses_local_mcp_toolset():
+    assert mcp_agent in root_agent.sub_agents
+    assert project_mcp_toolset in mcp_agent.tools
+    assert project_mcp_toolset.tool_name_prefix == "project_mcp_"
 
 
 def test_agent_response_contract():

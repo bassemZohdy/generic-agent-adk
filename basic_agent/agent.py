@@ -1,11 +1,15 @@
 """A small, runnable Google ADK agent."""
 
 import os
+from pathlib import Path
 import re
+import sys
 
 from google.adk.agents import Agent, LoopAgent, ParallelAgent, SequentialAgent
 from google.adk.code_executors import BuiltInCodeExecutor
+from google.adk.tools.mcp_tool import McpToolset, StdioConnectionParams
 from google.adk.tools import google_search
+from mcp import StdioServerParameters
 from pydantic import BaseModel, Field
 
 
@@ -60,6 +64,18 @@ PROJECT_KNOWLEDGE = (
             "ADK_PORT changes the host port."
         ),
     },
+)
+
+MCP_SERVER_PATH = Path(__file__).with_name("mcp_server.py")
+project_mcp_toolset = McpToolset(
+    connection_params=StdioConnectionParams(
+        server_params=StdioServerParameters(
+            command=sys.executable,
+            args=[str(MCP_SERVER_PATH)],
+        ),
+    ),
+    tool_filter=["get_project_status"],
+    tool_name_prefix="project_mcp_",
 )
 
 
@@ -236,6 +252,18 @@ knowledge_agent = Agent(
 )
 
 
+mcp_agent = Agent(
+    name="mcp_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Uses a local MCP server to retrieve project status.",
+    instruction=(
+        "You are an MCP integration assistant. Use the connected MCP tool when "
+        "the user asks for the project's live status or MCP integration details."
+    ),
+    tools=[project_mcp_toolset],
+)
+
+
 root_agent = Agent(
     name="basic_agent",
     model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
@@ -252,6 +280,7 @@ root_agent = Agent(
         "For calculations or data analysis, delegate to analysis_agent. "
         "For questions about documented project knowledge, delegate to "
         "knowledge_agent. "
+        "For MCP-backed project status, delegate to mcp_agent. "
         "Return only the structured response described by the response schema."
     ),
     tools=[get_project_info],
@@ -263,6 +292,7 @@ root_agent = Agent(
         research_agent,
         analysis_agent,
         knowledge_agent,
+        mcp_agent,
     ],
     output_schema=AgentResponse,
     output_key="last_response",

@@ -3,6 +3,7 @@
 import os
 
 from google.adk.agents import Agent, LoopAgent, ParallelAgent, SequentialAgent
+from google.adk.code_executors import BuiltInCodeExecutor
 from google.adk.tools import google_search
 from pydantic import BaseModel, Field
 
@@ -161,6 +162,19 @@ research_agent = Agent(
 )
 
 
+analysis_agent = Agent(
+    name="analysis_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Performs calculations and small data analyses with code execution.",
+    instruction=(
+        "You are a data analysis assistant. Use code execution for arithmetic, "
+        "data transformations, and checks that benefit from precise computation. "
+        "Explain the result briefly and do not execute destructive operations."
+    ),
+    code_executor=BuiltInCodeExecutor(),
+)
+
+
 root_agent = Agent(
     name="basic_agent",
     model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
@@ -174,6 +188,7 @@ root_agent = Agent(
         "project_parallel_workflow. "
         "For iterative review and refinement, delegate to project_review_loop. "
         "For current or external information, delegate to research_agent. "
+        "For calculations or data analysis, delegate to analysis_agent. "
         "Return only the structured response described by the response schema."
     ),
     tools=[get_project_info],
@@ -183,6 +198,7 @@ root_agent = Agent(
         project_parallel_workflow,
         project_review_loop,
         research_agent,
+        analysis_agent,
     ],
     output_schema=AgentResponse,
     output_key="last_response",

@@ -70,7 +70,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Loop workflows | `project_review_loop` runs bounded review/refinement iterations. |
 | - [ ] | Custom agent classes | Uses the built-in `Agent` class only. |
 | - [x] | Built-in Google Search tool | `research_agent` uses ADK's `google_search` tool for current/external information. |
-| - [ ] | Code execution tool | No code execution tool is enabled. |
+| - [x] | Code execution tool | `analysis_agent` uses ADK's `BuiltInCodeExecutor` for calculations and data analysis. |
 | - [ ] | Retrieval / RAG | No corpus, embeddings, or retriever is configured. |
 | - [ ] | MCP tools | No MCP server or MCP toolset is connected. |
 | - [ ] | OpenAPI tools | No OpenAPI specification is connected. |

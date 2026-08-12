@@ -12,6 +12,7 @@ from basic_agent.agent import (
     project_summary_agent,
     project_structure_agent,
     research_agent,
+    analysis_agent,
     root_agent,
 )
 
@@ -54,6 +55,11 @@ def test_project_review_loop_is_bounded():
 def test_research_agent_uses_google_search():
     assert research_agent in root_agent.sub_agents
     assert research_agent.tools[0].__class__.__name__ == "GoogleSearchTool"
+
+
+def test_analysis_agent_uses_code_execution():
+    assert analysis_agent in root_agent.sub_agents
+    assert analysis_agent.code_executor.__class__.__name__ == "BuiltInCodeExecutor"
 
 
 def test_agent_response_contract():

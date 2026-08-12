@@ -66,7 +66,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Structured output / response schemas | `AgentResponse` enforces an `answer` and `used_project_tool` response shape. |
 | - [x] | Multi-agent delegation | `root_agent` can delegate repository questions to `project_guide_agent`. |
 | - [x] | Sequential workflows | `project_overview_workflow` gathers facts and then summarizes them. |
-| - [ ] | Parallel workflows | No `ParallelAgent` workflow is configured. |
+| - [x] | Parallel workflows | `project_parallel_workflow` analyzes structure and runtime setup concurrently. |
 | - [ ] | Loop workflows | No `LoopAgent` workflow is configured. |
 | - [ ] | Custom agent classes | Uses the built-in `Agent` class only. |
 | - [ ] | Built-in Google Search tool | Search grounding is not configured. |

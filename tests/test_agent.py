@@ -4,7 +4,10 @@ from basic_agent.agent import (
     project_guide_agent,
     project_facts_agent,
     project_overview_workflow,
+    project_parallel_workflow,
+    project_runtime_agent,
     project_summary_agent,
+    project_structure_agent,
     root_agent,
 )
 
@@ -24,6 +27,14 @@ def test_project_overview_is_sequential():
     assert project_overview_workflow.sub_agents == [
         project_facts_agent,
         project_summary_agent,
+    ]
+
+
+def test_project_review_is_parallel():
+    assert project_parallel_workflow in root_agent.sub_agents
+    assert project_parallel_workflow.sub_agents == [
+        project_structure_agent,
+        project_runtime_agent,
     ]
 
 

@@ -2,7 +2,7 @@
 
 import os
 
-from google.adk.agents import Agent, SequentialAgent
+from google.adk.agents import Agent, ParallelAgent, SequentialAgent
 from pydantic import BaseModel, Field
 
 
@@ -81,6 +81,39 @@ project_overview_workflow = SequentialAgent(
 )
 
 
+project_structure_agent = Agent(
+    name="project_structure_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Describes the files and components in this starter project.",
+    instruction=(
+        "Describe the project's source layout and explain the role of the "
+        "agent module, tests, Docker files, and dependency files. Keep it "
+        "concise and factual."
+    ),
+    output_key="project_structure",
+)
+
+
+project_runtime_agent = Agent(
+    name="project_runtime_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Describes how to run this starter project locally and in Docker.",
+    instruction=(
+        "Describe the local and Docker commands for running this project, "
+        "including the web UI port and required environment configuration. "
+        "Keep it concise and factual."
+    ),
+    output_key="project_runtime",
+)
+
+
+project_parallel_workflow = ParallelAgent(
+    name="project_parallel_workflow",
+    description="Analyzes project structure and runtime setup in parallel.",
+    sub_agents=[project_structure_agent, project_runtime_agent],
+)
+
+
 root_agent = Agent(
     name="basic_agent",
     model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
@@ -90,10 +123,16 @@ root_agent = Agent(
         "Delegate repository-specific questions to project_guide_agent. "
         "For a complete project overview, delegate to "
         "project_overview_workflow. "
+        "For a detailed structure-and-runtime review, delegate to "
+        "project_parallel_workflow. "
         "Return only the structured response described by the response schema."
     ),
     tools=[get_project_info],
-    sub_agents=[project_guide_agent, project_overview_workflow],
+    sub_agents=[
+        project_guide_agent,
+        project_overview_workflow,
+        project_parallel_workflow,
+    ],
     output_schema=AgentResponse,
     output_key="last_response",
 )

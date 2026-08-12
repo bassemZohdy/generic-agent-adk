@@ -34,16 +34,31 @@ def get_project_info(topic: str) -> str:
     )
 
 
+project_guide_agent = Agent(
+    name="project_guide_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Explains how this ADK starter project is structured and run.",
+    instruction=(
+        "You are the project guide. Answer questions about this repository's "
+        "purpose, structure, setup, and Docker workflow. Keep answers concise "
+        "and factual. Return control to the parent when the question is not "
+        "about this project."
+    ),
+    tools=[get_project_info],
+)
+
+
 root_agent = Agent(
     name="basic_agent",
     model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
     description="A concise, helpful starter agent built with Google ADK.",
     instruction=(
         "You are a helpful starter agent. Answer clearly and briefly. "
-        "If the user asks about this project, use get_project_info when useful. "
+        "Delegate repository-specific questions to project_guide_agent. "
         "Return only the structured response described by the response schema."
     ),
     tools=[get_project_info],
+    sub_agents=[project_guide_agent],
     output_schema=AgentResponse,
     output_key="last_response",
 )

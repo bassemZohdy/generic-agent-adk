@@ -65,7 +65,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Containerization | Dockerfile and Compose configuration are included. |
 | - [x] | Structured output / response schemas | `AgentResponse` enforces an `answer` and `used_project_tool` response shape. |
 | - [x] | Multi-agent delegation | `root_agent` can delegate repository questions to `project_guide_agent`. |
-| - [ ] | Sequential workflows | No `SequentialAgent` workflow is configured. |
+| - [x] | Sequential workflows | `project_overview_workflow` gathers facts and then summarizes them. |
 | - [ ] | Parallel workflows | No `ParallelAgent` workflow is configured. |
 | - [ ] | Loop workflows | No `LoopAgent` workflow is configured. |
 | - [ ] | Custom agent classes | Uses the built-in `Agent` class only. |

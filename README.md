@@ -63,8 +63,9 @@ Send the returned access token as `Authorization: Bearer <token>` to the
 release API, or as `?access_token=<token>` for a browser WebSocket connection
 to `/live`. The internal release-status tool continues to use
 `RELEASE_API_KEY` for service-to-service calls. The built-in ADK Web/API
-servers remain outside this application middleware boundary and need an
-auth-aware reverse proxy to enforce Keycloak there as well.
+servers are behind the Traefik `auth-proxy`, which validates every request
+through the Keycloak-backed ForwardAuth service. The host ports remain 8000
+(Web UI) and 8002 (ADK API), but the agent containers are not directly exposed.
 
 The bidirectional Live API WebSocket is available at `ws://localhost:8003/live`
 and can be changed with `LIVE_API_PORT`. Connect with optional `user_id` and
@@ -197,7 +198,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Evaluation datasets | The checked-in dataset and `python -m basic_agent.evaluation` command run the ADK evaluator with a tool-trajectory threshold. |
 | - [x] | Automated agent tests | `tests/test_agent.py` covers the unified workflow structure, tools, and response contract. |
 | - [x] | Tracing / observability | Compose runs `grafana/otel-lgtm`; the ADK plugin exports invocation spans over OTLP and Cloud Trace remains an optional deployment target. |
-| - [ ] | Authentication / authorization | Keycloak bearer JWTs protect the release API and Live WebSocket; the built-in ADK Web/API servers still need an auth-aware reverse proxy. |
+| - [x] | Authentication / authorization | Keycloak bearer JWTs protect the release API, Live WebSocket, ADK Web UI, and ADK REST/A2A API through the Traefik ForwardAuth gateway. |
 | - [ ] | Cloud deployment | The Cloud Run manifest is a generic template; production image, service identity, secrets, and the release API endpoint still require deployment configuration. |
 | - [x] | Stack-agnostic subsystem auto-configuration | `basic_agent.autoconfig` resolves Storage, Messaging, Caching, Search, and Logging through implicit cloud/local/in-memory fallback chains. |
 

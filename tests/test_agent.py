@@ -27,6 +27,7 @@ from basic_agent.autoconfig import ProviderConfigurationError, discover_capabili
 from basic_agent.evaluation import EVAL_CONFIG, EVAL_SET, build_eval_command
 from basic_agent.telemetry import tracer
 from basic_agent.auth import keycloak_enabled
+from basic_agent.auth_gateway import app as auth_gateway_app
 
 
 def test_root_agent_is_focused_on_release_readiness():
@@ -208,3 +209,9 @@ def test_local_otel_tracer_is_available_for_adk_plugin_spans():
 
 def test_keycloak_auth_is_optional_for_non_compose_local_tests():
     assert keycloak_enabled() is False
+
+
+def test_keycloak_forward_auth_gateway_exposes_verification_and_health():
+    routes = {route.path for route in auth_gateway_app.routes}
+
+    assert routes >= {"/healthz", "/verify"}

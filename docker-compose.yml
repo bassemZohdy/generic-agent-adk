@@ -21,13 +21,48 @@ services:
       - ./keycloak:/opt/keycloak/data/import:ro
     restart: unless-stopped
 
+  auth-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uvicorn", "basic_agent.auth_gateway:app", "--host", "0.0.0.0", "--port", "8010"]
+    environment:
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+    depends_on:
+      - keycloak
+    labels:
+      traefik.enable: "true"
+      traefik.http.middlewares.keycloak-auth.forwardauth.address: http://auth-gateway:8010/verify
+      traefik.http.middlewares.keycloak-auth.forwardauth.trustForwardHeader: "false"
+      traefik.http.middlewares.keycloak-auth.forwardauth.authResponseHeaders: X-Auth-User,X-Auth-Email
+    restart: unless-stopped
+
+  auth-proxy:
+    image: traefik:v3.6.2
+    command:
+      - --entrypoints.web.address=:8000
+      - --entrypoints.adkapi.address=:8002
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --api.dashboard=false
+    ports:
+      - "${ADK_PORT:-8000}:8000"
+      - "${ADK_API_PORT:-8002}:8002"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - auth-gateway
+      - agent
+      - adk-api
+    restart: unless-stopped
+
   adk-api:
     build:
       context: .
       dockerfile: Dockerfile
     command: ["adk", "api_server", "--host", "0.0.0.0", "--port", "8002", "--auto_create_session", "--a2a", "--session_service_uri=sqlite:////app/.adk/api-sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.ReleaseReadinessPlugin", "/app/basic_agent"]
-    ports:
-      - "${ADK_API_PORT:-8002}:8002"
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       ADK_MODEL: ${ADK_MODEL:-gemini-3.6-flash}
@@ -57,6 +92,13 @@ services:
       - release-api
       - otel-lgtm
       - keycloak
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.adk-api.entrypoints: adkapi
+      traefik.http.routers.adk-api.rule: PathPrefix(`/`)
+      traefik.http.routers.adk-api.middlewares: keycloak-auth
+      traefik.http.routers.adk-api.service: adk-api
+      traefik.http.services.adk-api.loadbalancer.server.port: "8002"
     restart: unless-stopped
 
   release-api:
@@ -115,8 +157,6 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["adk", "web", "--host", "0.0.0.0", "--port", "8000", "--session_service_uri=sqlite:////app/.adk/sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.ReleaseReadinessPlugin", "/app/basic_agent"]
-    ports:
-      - "${ADK_PORT:-8000}:8000"
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       ADK_MODEL: ${ADK_MODEL:-gemini-3.6-flash}
@@ -142,6 +182,13 @@ services:
     depends_on:
       - release-api
       - keycloak
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.adk-web.entrypoints: web
+      traefik.http.routers.adk-web.rule: PathPrefix(`/`)
+      traefik.http.routers.adk-web.middlewares: keycloak-auth
+      traefik.http.routers.adk-web.service: adk-web
+      traefik.http.services.adk-web.loadbalancer.server.port: "8000"
     restart: unless-stopped
 
 volumes:

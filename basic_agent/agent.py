@@ -206,6 +206,24 @@ release_api_toolset = OpenAPIToolset(
     tool_name_prefix="release_api_",
 )
 
+application_integration_toolset = None
+if os.getenv("GCP_INTEGRATION") and os.getenv("GOOGLE_CLOUD_PROJECT"):
+    from google.adk.tools.application_integration_tool import (
+        ApplicationIntegrationToolset,
+    )
+
+    application_integration_toolset = ApplicationIntegrationToolset(
+        project=os.environ["GOOGLE_CLOUD_PROJECT"],
+        location=os.getenv("GCP_LOCATION", "us-central1"),
+        integration=os.environ["GCP_INTEGRATION"],
+        triggers=os.getenv("GCP_INTEGRATION_TRIGGERS", "").split(",") or None,
+        tool_name_prefix="release_integration_",
+        tool_instructions=(
+            "Use this integration only for release operations explicitly "
+            "requested by the user."
+        ),
+    )
+
 
 release_knowledge_agent = Agent(
     name="release_knowledge_agent",
@@ -255,7 +273,11 @@ release_operations_agent = Agent(
         "Use the MCP release-status tool to check service health, deployed version, "
         "and environment. Return the observed status without guessing."
     ),
-    tools=[project_mcp_toolset, request_release_approval],
+    tools=[
+        project_mcp_toolset,
+        request_release_approval,
+        *([application_integration_toolset] if application_integration_toolset else []),
+    ],
     output_key="service_status",
 )
 

@@ -17,6 +17,7 @@ from basic_agent.agent import (
     retrieve_project_knowledge,
     request_release_approval,
     ReleaseReadinessPlugin,
+    application_integration_toolset,
     root_agent,
 )
 from basic_agent.release_api import get_release_status
@@ -85,6 +86,10 @@ def test_release_approval_rejects_invalid_recommendation():
 
 def test_release_plugin_is_registered_type():
     assert ReleaseReadinessPlugin().name == "release_readiness_plugin"
+
+
+def test_application_integration_is_optional_for_local_runs():
+    assert application_integration_toolset is None
 
 
 def test_release_report_contract():

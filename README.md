@@ -113,7 +113,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Retrieval / RAG | `release_knowledge_agent` retrieves release criteria and runbook passages. |
 | - [x] | MCP tools | `release_operations_agent` connects to the bundled stdio MCP server through `McpToolset`. |
 | - [x] | OpenAPI tools | `release_api_agent` calls the local FastAPI release-status API through `OpenAPIToolset`. |
-| - [ ] | Application Integration tools | No Google Cloud Application Integration toolset is connected. |
+| - [x] | Application Integration tools | `release_operations_agent` optionally loads `ApplicationIntegrationToolset` when GCP integration variables are configured. |
 | - [x] | Tool authentication | The OpenAPI release service supports an optional `x-api-key` flow. |
 | - [x] | Tool confirmation / approval | `request_release_approval` pauses before recording a release decision until confirmed. |
 | - [x] | Sessions | Docker Compose configures a persistent SQLite session service under `.adk/sessions.db`. |

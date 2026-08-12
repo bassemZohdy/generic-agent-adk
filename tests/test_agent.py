@@ -25,6 +25,7 @@ from basic_agent.release_api import get_release_status
 from basic_agent.live_server import LIVE_MODEL, app
 from basic_agent.autoconfig import ProviderConfigurationError, discover_capabilities
 from basic_agent.evaluation import EVAL_CONFIG, EVAL_SET, build_eval_command
+from basic_agent.telemetry import tracer
 
 
 def test_root_agent_is_focused_on_release_readiness():
@@ -198,3 +199,7 @@ def test_evaluation_entry_point_targets_adk_dataset_and_config():
     assert str(EVAL_SET) in command
     assert any(str(EVAL_CONFIG) in argument for argument in command)
     assert "--print_detailed_results" in command
+
+
+def test_local_otel_tracer_is_available_for_adk_plugin_spans():
+    assert tracer is not None

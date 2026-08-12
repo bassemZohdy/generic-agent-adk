@@ -1,4 +1,14 @@
 services:
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.28.0
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+      - "${OTLP_GRPC_PORT:-4317}:4317"
+      - "${OTLP_HTTP_PORT:-4318}:4318"
+    volumes:
+      - otel-lgtm-data:/data
+    restart: unless-stopped
+
   adk-api:
     build:
       context: .
@@ -25,8 +35,12 @@ services:
       LOG_ENDPOINT: ${LOG_ENDPOINT:-}
       LOG_API_KEY: ${LOG_API_KEY:-}
       LOG_FILE: ${LOG_FILE:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4317}
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: basic-adk-api
     depends_on:
       - release-api
+      - otel-lgtm
     restart: unless-stopped
 
   release-api:
@@ -64,7 +78,12 @@ services:
       LOG_ENDPOINT: ${LOG_ENDPOINT:-}
       LOG_API_KEY: ${LOG_API_KEY:-}
       LOG_FILE: ${LOG_FILE:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4317}
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: basic-adk-live-api
     restart: unless-stopped
+    depends_on:
+      - otel-lgtm
 
   agent:
     build:
@@ -90,8 +109,14 @@ services:
       LOG_ENDPOINT: ${LOG_ENDPOINT:-}
       LOG_API_KEY: ${LOG_API_KEY:-}
       LOG_FILE: ${LOG_FILE:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4317}
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: basic-adk-web
       RELEASE_API_URL: http://release-api:8001
       RELEASE_API_KEY: ${RELEASE_API_KEY:-}
     depends_on:
       - release-api
     restart: unless-stopped
+
+volumes:
+  otel-lgtm-data:

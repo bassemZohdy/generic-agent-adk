@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "google-adk[a2a,mcp]>=1.0.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.28.0",
+    "opentelemetry-sdk>=1.28.0",
 ]
 
 [project.scripts]

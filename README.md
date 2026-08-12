@@ -64,6 +64,27 @@ The container is also Cloud Run-compatible: replace the placeholders in
 Secret Manager secret, then deploy the manifest with `gcloud run services
 replace`.
 
+## Auto-configuration fallback chain
+
+At startup, the application discovers each subsystem independently and selects
+the first provider whose prerequisites are satisfied. It does not require a
+provider type flag or enum:
+
+| Capability | Priority order | In-memory fallback |
+| --- | --- | --- |
+| Storage | `STORAGE_BUCKET` → `DATABASE_URL` → `STORAGE_PATH` | yes |
+| Messaging | `MESSAGING_URL` → `BROKER_URL` | yes |
+| Caching | `CACHE_URL`/`REDIS_URL` → `CACHE_PATH` | yes |
+| Search | `SEARCH_URL` + `SEARCH_API_KEY` → `SEARCH_INDEX_PATH` | yes |
+| Logging | `LOG_ENDPOINT` + `LOG_API_KEY` → `LOG_FILE` | yes |
+
+The selected strategy is exposed in the Live API health response and logged by
+the ADK plugin. A provider is considered detected as soon as any of its
+identifying values are present. If detected configuration is incomplete or
+malformed, startup raises `ProviderConfigurationError` instead of silently
+downgrading to a weaker strategy. If no provider is detected, the capability
+uses the in-memory implementation.
+
 ## Unified live example: release readiness
 
 The main use case is a release-readiness assessment. Ask the agent:
@@ -139,5 +160,6 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Tracing / observability | Local lifecycle logs are emitted by the plugin; cloud export remains optional. |
 | - [x] | Authentication / authorization | The release API supports API-key authorization; the local Web UI remains unauthenticated. |
 | - [x] | Cloud deployment | `deploy/cloudrun/service.yaml` provides a generic Cloud Run deployment manifest. |
+| - [x] | Stack-agnostic subsystem auto-configuration | `basic_agent.autoconfig` resolves Storage, Messaging, Caching, Search, and Logging through implicit cloud/local/in-memory fallback chains. |
 
 For the full framework reference, see the [Google ADK documentation](https://google.github.io/adk-docs/).

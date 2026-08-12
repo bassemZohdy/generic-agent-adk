@@ -19,6 +19,8 @@ from google.adk.plugins import BasePlugin
 from mcp import StdioServerParameters
 from pydantic import BaseModel, Field
 
+from .autoconfig import CapabilityProvider, discover_capabilities
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,8 +29,11 @@ class ReleaseReadinessPlugin(BasePlugin):
 
     def __init__(self) -> None:
         super().__init__(name="release_readiness_plugin")
+        self.capabilities: dict[str, CapabilityProvider] = discover_capabilities()
 
     async def before_run_callback(self, *, invocation_context):
+        if not self.capabilities:
+            self.capabilities = discover_capabilities()
         logger.info("Release plugin started invocation %s", invocation_context.invocation_id)
 
     async def after_run_callback(self, *, invocation_context) -> None:

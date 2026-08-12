@@ -23,6 +23,7 @@ from basic_agent.agent import (
 )
 from basic_agent.release_api import get_release_status
 from basic_agent.live_server import LIVE_MODEL, app
+from basic_agent.autoconfig import ProviderConfigurationError, discover_capabilities
 
 
 def test_root_agent_is_focused_on_release_readiness():
@@ -116,3 +117,74 @@ def test_live_api_reuses_root_agent():
     assert ("/healthz", "healthz") in routes
     assert any(getattr(route, "path", None) == "/live" for route in app.routes)
     assert LIVE_MODEL
+
+
+def test_capabilities_fall_back_to_in_memory_without_configuration():
+    capabilities = discover_capabilities({})
+
+    assert {name: provider.strategy for name, provider in capabilities.items()} == {
+        "storage": "in_memory",
+        "messaging": "in_memory",
+        "caching": "in_memory",
+        "search": "in_memory",
+        "logging": "in_memory",
+    }
+
+
+def test_capabilities_choose_cloud_over_local_without_type_flags():
+    capabilities = discover_capabilities(
+        {
+            "STORAGE_BUCKET": "release-artifacts",
+            "STORAGE_PATH": "./artifacts",
+            "MESSAGING_URL": "amqp://cloud.example/messages",
+            "BROKER_URL": "amqp://localhost/messages",
+            "CACHE_URL": "redis://cache.example:6379/0",
+            "CACHE_PATH": "./cache",
+            "SEARCH_URL": "https://search.example",
+            "SEARCH_API_KEY": "secret",
+            "SEARCH_INDEX_PATH": "./index",
+            "LOG_ENDPOINT": "https://logs.example/ingest",
+            "LOG_API_KEY": "secret",
+            "LOG_FILE": "./agent.log",
+        }
+    )
+
+    assert {name: provider.strategy for name, provider in capabilities.items()} == {
+        "storage": "cloud",
+        "messaging": "cloud",
+        "caching": "cloud",
+        "search": "cloud",
+        "logging": "cloud",
+    }
+
+
+def test_capabilities_choose_database_and_local_strategies_when_cloud_is_absent():
+    capabilities = discover_capabilities(
+        {
+            "DATABASE_URL": "postgresql://db.example/releases",
+            "STORAGE_PATH": "./artifacts",
+            "BROKER_URL": "amqp://localhost/messages",
+            "CACHE_PATH": "./cache",
+            "SEARCH_INDEX_PATH": "./index",
+            "LOG_FILE": "./agent.log",
+        }
+    )
+
+    assert {name: provider.strategy for name, provider in capabilities.items()} == {
+        "storage": "database",
+        "messaging": "local_broker",
+        "caching": "local_disk",
+        "search": "local_index",
+        "logging": "local_file",
+    }
+
+
+def test_detected_malformed_provider_fails_without_silent_fallback():
+    try:
+        discover_capabilities(
+            {"MESSAGING_URL": "not-a-url", "BROKER_URL": "amqp://localhost"}
+        )
+    except ProviderConfigurationError as error:
+        assert "messaging" in str(error)
+    else:
+        raise AssertionError("Malformed detected messaging configuration was accepted")

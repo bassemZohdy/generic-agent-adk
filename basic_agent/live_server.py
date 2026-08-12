@@ -15,6 +15,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from .agent import ReleaseReadinessPlugin, root_agent
+from .autoconfig import discover_capabilities
 
 
 APP_NAME = "basic_agent"
@@ -27,6 +28,7 @@ app = FastAPI(
 )
 session_service = InMemorySessionService()
 memory_service = InMemoryMemoryService()
+capabilities = discover_capabilities()
 
 
 async def _session(user_id: str, session_id: str | None):
@@ -68,8 +70,14 @@ async def _forward_events(
 
 
 @app.get("/healthz")
-async def healthz() -> dict[str, str]:
-    return {"status": "ok", "model": LIVE_MODEL}
+async def healthz() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "model": LIVE_MODEL,
+        "capabilities": {
+            name: provider.strategy for name, provider in capabilities.items()
+        },
+    }
 
 
 @app.websocket("/live")

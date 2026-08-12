@@ -24,6 +24,7 @@ from basic_agent.agent import (
 from basic_agent.release_api import get_release_status
 from basic_agent.live_server import LIVE_MODEL, app
 from basic_agent.autoconfig import ProviderConfigurationError, discover_capabilities
+from basic_agent.evaluation import EVAL_CONFIG, EVAL_SET, build_eval_command
 
 
 def test_root_agent_is_focused_on_release_readiness():
@@ -188,3 +189,12 @@ def test_detected_malformed_provider_fails_without_silent_fallback():
         assert "messaging" in str(error)
     else:
         raise AssertionError("Malformed detected messaging configuration was accepted")
+
+
+def test_evaluation_entry_point_targets_adk_dataset_and_config():
+    command = build_eval_command(detailed=True)
+
+    assert command[1:2] == ["eval"]
+    assert str(EVAL_SET) in command
+    assert any(str(EVAL_CONFIG) in argument for argument in command)
+    assert "--print_detailed_results" in command

@@ -85,6 +85,19 @@ malformed, startup raises `ProviderConfigurationError` instead of silently
 downgrading to a weaker strategy. If no provider is detected, the capability
 uses the in-memory implementation.
 
+## Evaluation
+
+Run the checked-in ADK evaluation set with configured Gemini credentials:
+
+```bash
+uv run python -m basic_agent.evaluation
+uv run python -m basic_agent.evaluation --detailed
+```
+
+The entry point invokes the installed ADK evaluator with
+`tests/eval/release_readiness.evalset.json` and its explicit metric
+configuration in `tests/eval/eval_config.json`.
+
 ## Unified live example: release readiness
 
 The main use case is a release-readiness assessment. Ask the agent:
@@ -155,11 +168,11 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | REST API server | Compose exposes the same agent through `adk api_server` on port 8002. |
 | - [x] | Callbacks | Root-agent before/after callbacks record assessment lifecycle events. |
 | - [x] | Plugins | `ReleaseReadinessPlugin` is loaded by the ADK Web server for lifecycle logging. |
-| - [x] | Evaluation datasets | `tests/eval/release_readiness.evalset.json` provides a release-readiness smoke case. |
+| - [x] | Evaluation datasets | The checked-in dataset and `python -m basic_agent.evaluation` command run the ADK evaluator with a tool-trajectory threshold. |
 | - [x] | Automated agent tests | `tests/test_agent.py` covers the unified workflow structure, tools, and response contract. |
-| - [x] | Tracing / observability | Local lifecycle logs are emitted by the plugin; cloud export remains optional. |
-| - [x] | Authentication / authorization | The release API supports API-key authorization; the local Web UI remains unauthenticated. |
-| - [x] | Cloud deployment | `deploy/cloudrun/service.yaml` provides a generic Cloud Run deployment manifest. |
+| - [ ] | Tracing / observability | Local lifecycle logs are implemented; Cloud Trace/OTel export still requires deployment-time `--otel_to_cloud` and Google Cloud configuration. |
+| - [ ] | Authentication / authorization | The release API supports API-key authorization, but the local Web UI and ADK API server still need an auth gateway. |
+| - [ ] | Cloud deployment | The Cloud Run manifest is a generic template; production image, service identity, secrets, and the release API endpoint still require deployment configuration. |
 | - [x] | Stack-agnostic subsystem auto-configuration | `basic_agent.autoconfig` resolves Storage, Messaging, Caching, Search, and Logging through implicit cloud/local/in-memory fallback chains. |
 
 For the full framework reference, see the [Google ADK documentation](https://google.github.io/adk-docs/).

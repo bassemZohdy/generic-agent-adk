@@ -5,6 +5,9 @@ from basic_agent.agent import (
     project_facts_agent,
     project_overview_workflow,
     project_parallel_workflow,
+    project_refinement_agent,
+    project_review_agent,
+    project_review_loop,
     project_runtime_agent,
     project_summary_agent,
     project_structure_agent,
@@ -35,6 +38,15 @@ def test_project_review_is_parallel():
     assert project_parallel_workflow.sub_agents == [
         project_structure_agent,
         project_runtime_agent,
+    ]
+
+
+def test_project_review_loop_is_bounded():
+    assert project_review_loop in root_agent.sub_agents
+    assert project_review_loop.max_iterations == 2
+    assert project_review_loop.sub_agents == [
+        project_review_agent,
+        project_refinement_agent,
     ]
 
 

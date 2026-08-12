@@ -67,7 +67,7 @@ minimal form; `Not yet` means it still needs to be added to this project.
 | - [x] | Multi-agent delegation | `root_agent` can delegate repository questions to `project_guide_agent`. |
 | - [x] | Sequential workflows | `project_overview_workflow` gathers facts and then summarizes them. |
 | - [x] | Parallel workflows | `project_parallel_workflow` analyzes structure and runtime setup concurrently. |
-| - [ ] | Loop workflows | No `LoopAgent` workflow is configured. |
+| - [x] | Loop workflows | `project_review_loop` runs bounded review/refinement iterations. |
 | - [ ] | Custom agent classes | Uses the built-in `Agent` class only. |
 | - [ ] | Built-in Google Search tool | Search grounding is not configured. |
 | - [ ] | Code execution tool | No code execution tool is enabled. |

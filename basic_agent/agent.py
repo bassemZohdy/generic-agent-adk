@@ -2,7 +2,7 @@
 
 import os
 
-from google.adk.agents import Agent, ParallelAgent, SequentialAgent
+from google.adk.agents import Agent, LoopAgent, ParallelAgent, SequentialAgent
 from pydantic import BaseModel, Field
 
 
@@ -114,6 +114,38 @@ project_parallel_workflow = ParallelAgent(
 )
 
 
+project_review_agent = Agent(
+    name="project_review_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Reviews the starter project for clarity and completeness.",
+    instruction=(
+        "Review the user's project question and identify the most important "
+        "facts or gaps to address. Keep the review concise."
+    ),
+    output_key="project_review",
+)
+
+
+project_refinement_agent = Agent(
+    name="project_refinement_agent",
+    model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
+    description="Refines a project review into actionable guidance.",
+    instruction=(
+        "Use the current review in {project_review} to produce a clearer, "
+        "more actionable version. Preserve factual accuracy and keep it concise."
+    ),
+    output_key="project_refined_review",
+)
+
+
+project_review_loop = LoopAgent(
+    name="project_review_loop",
+    description="Iteratively reviews and refines project guidance.",
+    sub_agents=[project_review_agent, project_refinement_agent],
+    max_iterations=2,
+)
+
+
 root_agent = Agent(
     name="basic_agent",
     model=os.getenv("ADK_MODEL", "gemini-3.6-flash"),
@@ -125,6 +157,7 @@ root_agent = Agent(
         "project_overview_workflow. "
         "For a detailed structure-and-runtime review, delegate to "
         "project_parallel_workflow. "
+        "For iterative review and refinement, delegate to project_review_loop. "
         "Return only the structured response described by the response schema."
     ),
     tools=[get_project_info],
@@ -132,6 +165,7 @@ root_agent = Agent(
         project_guide_agent,
         project_overview_workflow,
         project_parallel_workflow,
+        project_review_loop,
     ],
     output_schema=AgentResponse,
     output_key="last_response",

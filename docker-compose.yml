@@ -1,3 +1,9 @@
+x-app-image: &app-image
+  image: ${APP_IMAGE:-basic-adk-agent:local}
+  build:
+    context: .
+    dockerfile: Dockerfile
+
 services:
   otel-lgtm:
     image: grafana/otel-lgtm:0.28.0
@@ -22,9 +28,7 @@ services:
     restart: unless-stopped
 
   auth-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app-image
     command: ["uvicorn", "basic_agent.auth_gateway:app", "--host", "0.0.0.0", "--port", "8010"]
     environment:
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
@@ -59,9 +63,7 @@ services:
     restart: unless-stopped
 
   adk-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app-image
     command: ["adk", "api_server", "--host", "0.0.0.0", "--port", "8002", "--auto_create_session", "--a2a", "--session_service_uri=sqlite:////app/.adk/api-sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.ReleaseReadinessPlugin", "/app/basic_agent"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
@@ -102,9 +104,7 @@ services:
     restart: unless-stopped
 
   release-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app-image
     command: ["uvicorn", "basic_agent.release_api:app", "--host", "0.0.0.0", "--port", "8001"]
     ports:
       - "${RELEASE_API_PORT:-8001}:8001"
@@ -118,9 +118,7 @@ services:
       - keycloak
 
   live-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app-image
     command: ["uvicorn", "basic_agent.live_server:app", "--host", "0.0.0.0", "--port", "8003"]
     ports:
       - "${LIVE_API_PORT:-8003}:8003"
@@ -153,9 +151,7 @@ services:
       - keycloak
 
   agent:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app-image
     command: ["adk", "web", "--host", "0.0.0.0", "--port", "8000", "--session_service_uri=sqlite:////app/.adk/sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.ReleaseReadinessPlugin", "/app/basic_agent"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}

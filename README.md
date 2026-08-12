@@ -42,6 +42,19 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Compose builds one named application image, `${APP_IMAGE}` (default:
+`basic-adk-agent:local`), and reuses it for the ADK Web, ADK REST/A2A, Live,
+release API, and authentication-gateway containers. Their commands and
+environment are externalized per service, so the containers remain isolated
+without duplicating application images. Keycloak, Traefik, and the LGTM
+observability stack continue to use their own infrastructure images.
+
+One image does not mean one process: the Web UI and REST/A2A server both load
+the same `root_agent`, but run as separate services because they have different
+ports, protocols, and lifecycle requirements. This is why the Compose file can
+still contain several `/app/basic_agent` references while Docker maintains one
+application image.
+
 Open http://localhost:8000 and select `basic_agent`. The container points ADK
 directly at the single agent directory to avoid duplicate agent discovery. Set
 `ADK_PORT` in `.env` to change the host port. The local OpenAPI service is

@@ -10,7 +10,6 @@ import logging
 from typing import Any
 
 from google.adk.agents import Agent
-from google.adk.agents.context import Context
 from google.adk.code_executors import BuiltInCodeExecutor
 from google.adk.plugins import BasePlugin
 from google.adk.tools import google_search
@@ -211,3 +210,11 @@ root_agent = GenericAgent(
     output_schema=GenericAgentResponse if settings.enable_structured_output else None,
     output_key="last_response",
 )
+
+# Pattern modules import the shared tools above, so selection occurs only after
+# the generic agent and tool graph have been constructed.
+generic_root_agent = root_agent
+from .patterns import selected_pattern_agent  # noqa: E402
+
+if selected_pattern_agent is not None:
+    root_agent = selected_pattern_agent

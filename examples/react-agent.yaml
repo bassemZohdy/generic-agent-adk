@@ -1,0 +1,44 @@
+# REACT Agent Configuration
+# Agent with iterative tool use and reasoning loops
+# Run with: docker run -v ./react-agent.yaml:/app/config/agent.yaml generic-adk-agent-runtime
+
+agent:
+  type: REACT
+  name: react_agent
+  description: >
+    An agent that reasons about requests and iteratively uses tools
+    to gather information and provide comprehensive answers.
+
+model:
+  provider: google
+  name: "${ADK_MODEL:gemini-2.0-flash}"
+  api_key: "${GOOGLE_API_KEY}"
+
+instructions:
+  value: >
+    Answer the user's request thoroughly by using available tools.
+    Think step-by-step. Use tools to gather information, verify facts, and solve problems.
+    Explain your reasoning and cite evidence from tool results.
+
+tools:
+  enabled:
+    - knowledge
+    - search
+    - code_execution
+    - mcp
+    - structured_output
+
+mcp:
+  enabled: true
+  tools:
+    - get_service_status
+
+execution:
+  max_iterations: 5
+
+output:
+  schema: GenericAgentResponse
+  key: last_response
+
+state:
+  enabled: true

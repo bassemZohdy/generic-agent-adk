@@ -1,7 +1,7 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: release-readiness-agent
+  name: basic-adk-agent
 spec:
   template:
     metadata:
@@ -9,10 +9,14 @@ spec:
         run.googleapis.com/execution-environment: gen2
     spec:
       containers:
-        - image: REGION-docker.pkg.dev/PROJECT_ID/REPOSITORY/release-readiness-agent:TAG
+        - image: REGION-docker.pkg.dev/PROJECT_ID/REPOSITORY/basic-adk-agent:TAG
           ports:
-            - containerPort: 8000
+            - containerPort: 8002
           env:
+            - name: APP_NAME
+              value: basic_agent
+            - name: DEPLOYMENT_ENV
+              value: cloud-run
             - name: ADK_MODEL
               value: gemini-3.6-flash
             - name: GOOGLE_API_KEY

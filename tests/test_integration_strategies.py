@@ -1,0 +1,330 @@
+"""Integration tests for strategy registry and configuration loader."""
+
+import tempfile
+from pathlib import Path
+
+from google.adk.agents import (
+    Agent,
+    LlmAgent,
+    LoopAgent,
+    ParallelAgent,
+    SequentialAgent,
+)
+
+from basic_agent.config_loader import load_config_from_yaml
+from basic_agent.strategies.base import RuntimeContext, AgentStrategyContext
+from basic_agent.strategies.registry import get_default_registry
+
+
+def test_registry_integration_with_config_loader():
+    """End-to-end: YAML config -> AgentConfig -> Strategy -> Agent."""
+    registry = get_default_registry()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = Path(tmpdir) / "agent.yaml"
+        config_file.write_text("""
+agent:
+  type: DIRECT
+  description: Direct test agent
+
+model:
+  provider: google
+  name: gemini-2.0-flash
+
+instructions:
+  value: "Test instruction"
+
+tools:
+  enabled:
+    - knowledge
+
+state:
+  enabled: true
+""")
+
+        config = load_config_from_yaml(config_file)
+
+        # Resolve strategy
+        strategy = registry.get(config.type)
+        assert strategy is not None
+        assert strategy.agent_type == "DIRECT"
+
+        # Build runtime context
+        runtime = RuntimeContext(
+            model=config.model.name,
+            instruction=config.instructions.value,
+            tools=[],
+            description=config.description,
+        )
+
+        # Build agent via strategy
+        context = AgentStrategyContext(agent_type=config.type, runtime=runtime)
+        agent = strategy.build(context)
+
+        assert isinstance(agent, Agent)
+        assert agent.model == "gemini-2.0-flash"
+        assert agent.instruction == "Test instruction"
+
+
+def test_registry_all_strategies_buildable():
+    """Verify all registered strategies can build agents without errors."""
+    registry = get_default_registry()
+
+    runtime = RuntimeContext(
+        model="test-model",
+        instruction="Test",
+        tools=[],
+        description="Test agent",
+        max_iterations=3,
+        specialists=("research", "solution"),
+    )
+
+    for agent_type in registry.list_types():
+        strategy = registry.get(agent_type)
+        context = AgentStrategyContext(agent_type=agent_type, runtime=runtime)
+
+        try:
+            agent = strategy.build(context)
+            assert agent is not None
+            assert agent.name  # Should have a name
+        except ValueError as e:
+            # Some strategies have mandatory config
+            # (e.g., ROUTER requires specialists, HUMAN_IN_LOOP requires approval)
+            # This is expected for missing config
+            if "required" in str(e).lower() or "require" in str(e).lower():
+                continue
+            raise
+
+
+def test_sequential_strategy_with_config():
+    """Test SEQUENTIAL strategy with configuration."""
+    registry = get_default_registry()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = Path(tmpdir) / "agent.yaml"
+        config_file.write_text("""
+agent:
+  type: SEQUENTIAL
+  description: Sequential pipeline
+
+model:
+  provider: google
+  name: gemini-2.0-flash
+
+instructions:
+  value: "Process step by step"
+
+tools:
+  enabled: []
+
+execution:
+  steps: 3
+
+state:
+  enabled: true
+""")
+
+        config = load_config_from_yaml(config_file)
+        strategy = registry.get(config.type)
+
+        runtime = RuntimeContext(
+            model=config.model.name,
+            instruction=config.instructions.value,
+            tools=[],
+            description=config.description,
+        )
+
+        context = AgentStrategyContext(
+            agent_type=config.type,
+            runtime=runtime,
+            extra_config={"steps": 3},
+        )
+        agent = strategy.build(context)
+
+        assert isinstance(agent, SequentialAgent)
+        assert len(agent.sub_agents) == 3
+
+
+def test_parallel_strategy_with_config():
+    """Test PARALLEL strategy with configuration."""
+    registry = get_default_registry()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = Path(tmpdir) / "agent.yaml"
+        config_file.write_text("""
+agent:
+  type: PARALLEL
+  description: Parallel workers
+
+model:
+  provider: google
+  name: gemini-2.0-flash
+
+instructions:
+  value: "Work in parallel"
+
+tools:
+  enabled: []
+
+execution:
+  workers: 4
+
+state:
+  enabled: true
+""")
+
+        config = load_config_from_yaml(config_file)
+        strategy = registry.get(config.type)
+
+        runtime = RuntimeContext(
+            model=config.model.name,
+            instruction=config.instructions.value,
+            tools=[],
+            description=config.description,
+        )
+
+        context = AgentStrategyContext(
+            agent_type=config.type,
+            runtime=runtime,
+            extra_config={"workers": 4},
+        )
+        agent = strategy.build(context)
+
+        assert isinstance(agent, ParallelAgent)
+        assert len(agent.sub_agents) == 4
+
+
+def test_router_strategy_with_specialists():
+    """Test ROUTER strategy with specialist configuration."""
+    registry = get_default_registry()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = Path(tmpdir) / "agent.yaml"
+        config_file.write_text("""
+agent:
+  type: ROUTER
+  description: Router with specialists
+
+model:
+  provider: google
+  name: gemini-2.0-flash
+
+instructions:
+  value: "Route to specialist"
+
+tools:
+  enabled: []
+
+execution:
+  specialists:
+    - research
+    - implementation
+    - security
+
+state:
+  enabled: true
+""")
+
+        config = load_config_from_yaml(config_file)
+        strategy = registry.get(config.type)
+
+        runtime = RuntimeContext(
+            model=config.model.name,
+            instruction=config.instructions.value,
+            tools=[],
+            description=config.description,
+            specialists=tuple(config.execution.specialists),
+        )
+
+        context = AgentStrategyContext(agent_type=config.type, runtime=runtime)
+        agent = strategy.build(context)
+
+        assert isinstance(agent, LlmAgent)
+        assert len(agent.sub_agents) == 3
+
+
+def test_loop_strategy_respects_max_iterations():
+    """Test LOOP strategy with iteration limits."""
+    registry = get_default_registry()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config_file = Path(tmpdir) / "agent.yaml"
+        config_file.write_text("""
+agent:
+  type: LOOP
+  description: Loop with limit
+
+model:
+  provider: google
+  name: gemini-2.0-flash
+
+instructions:
+  value: "Iterate"
+
+tools:
+  enabled: []
+
+execution:
+  max_iterations: 10
+
+state:
+  enabled: true
+""")
+
+        config = load_config_from_yaml(config_file)
+        strategy = registry.get(config.type)
+
+        runtime = RuntimeContext(
+            model=config.model.name,
+            instruction=config.instructions.value,
+            tools=[],
+            description=config.description,
+            max_iterations=10,
+        )
+
+        context = AgentStrategyContext(agent_type=config.type, runtime=runtime)
+        agent = strategy.build(context)
+
+        assert isinstance(agent, LoopAgent)
+        assert agent.max_iterations == 10
+
+
+def test_all_examples_are_loadable():
+    """Verify all example YAML files are loadable and valid."""
+    examples_dir = Path(__file__).parent.parent / "examples"
+
+    if not examples_dir.exists():
+        # Examples don't exist yet, skip
+        return
+
+    for yaml_file in examples_dir.glob("*.yaml"):
+        config = load_config_from_yaml(yaml_file)
+        assert config.type  # Should have a type
+        assert config.model  # Should have model config
+        config.validate()  # Should validate without errors
+
+
+def test_strategy_builder_pattern_composability():
+    """Verify strategy pattern allows composition and extension."""
+    registry = get_default_registry()
+
+    # Retrieve different strategies
+    direct = registry.get("DIRECT")
+    react = registry.get("REACT")
+    sequential = registry.get("SEQUENTIAL")
+
+    # All should be buildable
+    runtime = RuntimeContext(
+        model="test",
+        instruction="Test",
+        tools=[],
+        description="Test",
+    )
+
+    for strategy in [direct, react, sequential]:
+        context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
+        agent = strategy.build(context)
+        assert agent is not None
+
+    # Demonstrates new strategies can be added without modifying test
+    # or core runtime

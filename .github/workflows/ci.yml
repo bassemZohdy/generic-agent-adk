@@ -1,12 +1,18 @@
-name: CI
+name: CI/CD
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 permissions:
   contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   test:
@@ -35,7 +41,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest tests/ -v --tb=short
 
       - name: Validate JSON fixtures
         run: |
@@ -52,10 +58,13 @@ jobs:
       - name: Check patch formatting
         run: git diff --check
 
-  container:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: test
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -63,5 +72,61 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose config >/dev/null
 
-      - name: Build shared application image
-        run: docker build --tag basic-adk-agent:ci .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  verify-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and verify image
+        run: |
+          IMAGE_TAG="${{ needs.build.outputs.image-tag }}"
+          IMAGE_TAG="${IMAGE_TAG%%$'\n'*}"
+          echo "Verifying image: $IMAGE_TAG"
+          docker pull "$IMAGE_TAG"
+          docker image inspect "$IMAGE_TAG"
+          docker run --rm "$IMAGE_TAG" --help 2>&1 | head -20

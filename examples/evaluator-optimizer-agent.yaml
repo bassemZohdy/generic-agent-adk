@@ -1,0 +1,39 @@
+# Evaluator-Optimizer Agent Configuration
+# Generate, evaluate, and iteratively improve solutions
+# Run with: docker run -v ./evaluator-optimizer-agent.yaml:/app/config/agent.yaml generic-adk-agent-runtime
+
+agent:
+  type: EVALUATOR_OPTIMIZER
+  name: evaluator_optimizer_agent
+  description: >
+    Generate a solution, critically evaluate it, and iteratively improve it.
+    Excellent for optimization and quality-focused tasks.
+
+model:
+  provider: google
+  name: "${ADK_MODEL:gemini-2.0-flash}"
+  api_key: "${GOOGLE_API_KEY}"
+
+instructions:
+  value: >
+    Generate an initial solution.
+    Critically evaluate your solution for strengths and weaknesses.
+    Iteratively refine and improve.
+    Clearly explain each iteration.
+
+tools:
+  enabled:
+    - knowledge
+    - search
+    - code_execution
+    - structured_output
+
+execution:
+  max_iterations: 5
+
+output:
+  schema: GenericAgentResponse
+  key: last_response
+
+state:
+  enabled: true

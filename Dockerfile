@@ -13,6 +13,6 @@ RUN pip install --upgrade pip \
     && pip install . \
     && mkdir -p /app/.adk/artifacts
 
-EXPOSE 8000
+EXPOSE 8002
 
-CMD ["sh", "-c", "adk web --host 0.0.0.0 --port ${PORT:-8000} /app/basic_agent"]
+CMD ["sh", "-c", "adk api_server --host 0.0.0.0 --port ${PORT:-8002} /app/basic_agent"]

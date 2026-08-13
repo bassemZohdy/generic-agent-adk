@@ -16,8 +16,8 @@
       "publicClient": true,
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
-      "redirectUris": ["http://localhost:8000/*", "http://localhost:8003/*"],
-      "webOrigins": ["http://localhost:8000", "http://localhost:8003"]
+      "redirectUris": ["http://localhost:8003/*"],
+      "webOrigins": ["http://localhost:8003"]
     }
   ],
   "users": [

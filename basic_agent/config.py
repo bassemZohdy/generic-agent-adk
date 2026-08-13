@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import os
 
 
@@ -16,12 +17,26 @@ def _roles(name: str, default: str) -> tuple[str, ...]:
     )
 
 
+class AgentPattern(str, Enum):
+    """Externally selectable orchestration pattern for the root ADK agent."""
+
+    GENERIC = "generic"
+    SEQUENTIAL = "sequential"
+    PARALLEL = "parallel"
+    LOOP = "loop"
+    ROUTER = "router"
+    PLANNER_EXECUTOR = "planner_executor"
+    EVALUATOR_OPTIMIZER = "evaluator_optimizer"
+    HUMAN_IN_LOOP = "human_in_loop"
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str
     app_version: str
     deployment: str
     model: str
+    agent_pattern: AgentPattern
     live_model: str
     service_api_url: str
     service_api_key: str
@@ -45,6 +60,9 @@ class Settings:
     enable_structured_output: bool
     knowledge_file: str
     knowledge_result_limit: int
+    pattern_max_iterations: int
+    pattern_require_approval: bool
+    pattern_specialists: tuple[str, ...]
     mcp_tools: tuple[str, ...]
     mcp_tool_prefix: str
     openapi_url: str
@@ -66,11 +84,26 @@ def load_settings() -> Settings:
         "AGENT_TOOLS",
         "knowledge,search,code_execution,mcp,openapi,approval,runtime,structured_output",
     )
+    pattern_value = _env("AGENT_PATTERN", AgentPattern.GENERIC.value).lower()
+    try:
+        agent_pattern = AgentPattern(pattern_value)
+    except ValueError as error:
+        supported = ", ".join(pattern.value for pattern in AgentPattern)
+        raise ValueError(
+            f"Invalid AGENT_PATTERN {pattern_value!r}; choose from {supported}"
+        ) from error
+    max_iterations = int(_env("AGENT_PATTERN_MAX_ITERATIONS", "3"))
+    if max_iterations < 1:
+        raise ValueError("AGENT_PATTERN_MAX_ITERATIONS must be at least 1")
+    require_approval = _env("AGENT_PATTERN_REQUIRE_APPROVAL", "false").lower()
+    if require_approval not in {"true", "false"}:
+        raise ValueError("AGENT_PATTERN_REQUIRE_APPROVAL must be true or false")
     return Settings(
         app_name=app_name,
         app_version=_env("APP_VERSION", "0.1.0"),
         deployment=_env("DEPLOYMENT_ENV", "docker-compose"),
         model=_env("ADK_MODEL", "gemini-3.6-flash"),
+        agent_pattern=agent_pattern,
         live_model=_env("LIVE_ADK_MODEL", "gemini-3.1-flash-live-preview"),
         service_api_url=_env("AGENT_SERVICE_API_URL", "http://127.0.0.1:8001"),
         service_api_key=_env("AGENT_SERVICE_API_KEY"),
@@ -104,6 +137,11 @@ def load_settings() -> Settings:
         enable_structured_output="structured_output" in enabled_tools,
         knowledge_file=_env("AGENT_KNOWLEDGE_FILE"),
         knowledge_result_limit=int(_env("AGENT_KNOWLEDGE_RESULT_LIMIT", "3")),
+        pattern_max_iterations=max_iterations,
+        pattern_require_approval=require_approval == "true",
+        pattern_specialists=_roles(
+            "AGENT_PATTERN_SPECIALISTS", "research,solution,risk"
+        ),
         mcp_tools=_roles("AGENT_MCP_TOOLS", "get_service_status"),
         mcp_tool_prefix=_env("AGENT_MCP_TOOL_PREFIX", "mcp_"),
         openapi_url=_env("AGENT_OPENAPI_URL", "http://127.0.0.1:8001"),

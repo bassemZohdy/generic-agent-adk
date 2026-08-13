@@ -15,8 +15,18 @@ from basic_agent.autoconfig import ProviderConfigurationError, discover_capabili
 from basic_agent.config import load_settings
 from basic_agent.evaluation import EVAL_CONFIG, EVAL_SET, build_eval_command
 from basic_agent.live_server import LIVE_MODEL, app
+from basic_agent.config import AgentPattern
+from basic_agent.patterns import (
+    PATTERN_AGENTS,
+    get_pattern_agent,
+    loop_agent,
+    parallel_agent,
+    router_agent,
+    sequential_agent,
+)
 from basic_agent.service_api import get_service_status
 from basic_agent.telemetry import tracer
+from google.adk.agents import LlmAgent, LoopAgent, ParallelAgent, SequentialAgent
 import pytest
 from starlette.requests import Request
 
@@ -29,6 +39,52 @@ def test_root_agent_is_generic_and_configuration_driven():
     assert root_agent.sub_agents == []
     assert root_agent.before_agent_callback is not None
     assert root_agent.after_agent_callback is not None
+
+
+def test_design_patterns_are_separate_native_adk_agents():
+    assert isinstance(sequential_agent, SequentialAgent)
+    assert isinstance(parallel_agent, ParallelAgent)
+    assert isinstance(loop_agent, LoopAgent)
+    assert isinstance(router_agent, LlmAgent)
+    assert set(PATTERN_AGENTS) == {
+        AgentPattern.SEQUENTIAL,
+        AgentPattern.PARALLEL,
+        AgentPattern.LOOP,
+        AgentPattern.ROUTER,
+        AgentPattern.PLANNER_EXECUTOR,
+        AgentPattern.EVALUATOR_OPTIMIZER,
+        AgentPattern.HUMAN_IN_LOOP,
+    }
+    assert len({agent.name for agent in PATTERN_AGENTS.values()}) == len(PATTERN_AGENTS)
+
+
+def test_pattern_agent_lookup_is_explicit():
+    assert get_pattern_agent(AgentPattern.PARALLEL) is parallel_agent
+    assert get_pattern_agent("parallel") is parallel_agent
+    with pytest.raises(ValueError, match="'missing_pattern'"):
+        get_pattern_agent("missing_pattern")
+
+
+def test_agent_pattern_is_externalized_and_validated(monkeypatch):
+    monkeypatch.setenv("AGENT_PATTERN", "parallel")
+    assert load_settings().agent_pattern is AgentPattern.PARALLEL
+    monkeypatch.setenv("AGENT_PATTERN", "unknown")
+    with pytest.raises(ValueError, match="Invalid AGENT_PATTERN"):
+        load_settings()
+
+
+def test_pattern_runtime_configuration_is_validated(monkeypatch):
+    monkeypatch.setenv("AGENT_PATTERN_MAX_ITERATIONS", "5")
+    monkeypatch.setenv("AGENT_PATTERN_REQUIRE_APPROVAL", "true")
+    monkeypatch.setenv("AGENT_PATTERN_SPECIALISTS", "research, solution")
+    configured = load_settings()
+    assert configured.pattern_max_iterations == 5
+    assert configured.pattern_require_approval is True
+    assert configured.pattern_specialists == ("research", "solution")
+
+    monkeypatch.setenv("AGENT_PATTERN_MAX_ITERATIONS", "0")
+    with pytest.raises(ValueError, match="MAX_ITERATIONS"):
+        load_settings()
 
 
 def test_generic_plugin_and_runtime_contracts():

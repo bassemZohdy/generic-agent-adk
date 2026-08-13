@@ -1,0 +1,40 @@
+# Router Agent Configuration
+# Routes requests to specialist agents based on content
+# Run with: docker run -v ./router-agent.yaml:/app/config/agent.yaml generic-adk-agent-runtime
+
+agent:
+  type: ROUTER
+  name: router_agent
+  description: >
+    Intelligently route user requests to the most appropriate specialist.
+    Each specialist focuses on their area of expertise.
+
+model:
+  provider: google
+  name: "${ADK_MODEL:gemini-2.0-flash}"
+  api_key: "${GOOGLE_API_KEY}"
+
+instructions:
+  value: >
+    Analyze the user's request and route it to the most suitable specialist.
+    Available specialists: research, solution, risk
+
+tools:
+  enabled:
+    - knowledge
+    - search
+    - structured_output
+
+execution:
+  max_iterations: 3
+  specialists:
+    - research
+    - solution
+    - risk
+
+output:
+  schema: GenericAgentResponse
+  key: last_response
+
+state:
+  enabled: true

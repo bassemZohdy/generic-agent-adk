@@ -1,0 +1,37 @@
+# Planner-Executor Agent Configuration
+# Plan a solution then execute it step-by-step
+# Run with: docker run -v ./planner-executor-agent.yaml:/app/config/agent.yaml generic-adk-agent-runtime
+
+agent:
+  type: PLAN_EXECUTE
+  name: planner_executor_agent
+  description: >
+    Creates a detailed plan for the request, then executes it step-by-step.
+    Useful for complex tasks requiring structured approach.
+
+model:
+  provider: google
+  name: "${ADK_MODEL:gemini-2.0-flash}"
+  api_key: "${GOOGLE_API_KEY}"
+
+instructions:
+  value: >
+    Work systematically: first create a detailed plan, then execute it.
+    Be explicit about steps and expected outcomes.
+
+tools:
+  enabled:
+    - knowledge
+    - search
+    - code_execution
+    - structured_output
+
+execution:
+  max_iterations: 3
+
+output:
+  schema: GenericAgentResponse
+  key: last_response
+
+state:
+  enabled: true

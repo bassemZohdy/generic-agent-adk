@@ -1,0 +1,39 @@
+# Human-in-the-Loop Agent Configuration
+# Propose actions and require human approval before executing them
+# Run with: docker run -v ./human-in-loop-agent.yaml:/app/config/agent.yaml generic-adk-agent-runtime
+
+agent:
+  type: HUMAN_IN_LOOP
+  name: human_in_loop_agent
+  description: >
+    Proposes actions and requires human approval before execution.
+    Ideal for sensitive operations or decisions requiring human oversight.
+
+model:
+  provider: google
+  name: "${ADK_MODEL:gemini-2.0-flash}"
+  api_key: "${GOOGLE_API_KEY}"
+
+instructions:
+  value: >
+    Propose a clear, actionable solution to the user's request.
+    Explain the proposed action and its implications.
+    Wait for approval before completing the action.
+
+tools:
+  enabled:
+    - knowledge
+    - search
+    - approval
+    - structured_output
+
+execution:
+  max_iterations: 3
+  require_approval: true
+
+output:
+  schema: GenericAgentResponse
+  key: last_response
+
+state:
+  enabled: true

@@ -1,0 +1,38 @@
+# Loop Agent Configuration
+# Agent that iterates until condition is met or max iterations reached
+# Run with: docker run -v ./loop-agent.yaml:/app/config/agent.yaml generic-adk-agent-runtime
+
+agent:
+  type: LOOP
+  name: loop_agent
+  description: >
+    Iteratively refine solutions. Useful for tasks requiring repeated
+    attempts to reach a satisfactory result.
+
+model:
+  provider: google
+  name: "${ADK_MODEL:gemini-2.0-flash}"
+  api_key: "${GOOGLE_API_KEY}"
+
+instructions:
+  value: >
+    Work on the request iteratively.
+    On each iteration, refine your previous attempt.
+    Continue until you're satisfied with the result or reach the iteration limit.
+
+tools:
+  enabled:
+    - knowledge
+    - search
+    - code_execution
+    - structured_output
+
+execution:
+  max_iterations: 5
+
+output:
+  schema: GenericAgentResponse
+  key: last_response
+
+state:
+  enabled: true

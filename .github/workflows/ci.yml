@@ -44,13 +44,7 @@ jobs:
         run: uv run pytest tests/ -v --tb=short
 
       - name: Validate JSON fixtures
-        run: |
-          uv run python -m json.tool tests/eval/eval_config.json >/dev/null
-          uv run python -m json.tool tests/eval/generic_agent.evalset.json >/dev/null
-          uv run python -m json.tool keycloak/realm-basic-agent.json >/dev/null
-
-      - name: Validate evaluation command
-        run: uv run python -m basic_agent.evaluation --help
+        run: uv run python -m json.tool keycloak/realm-basic-agent.json >/dev/null
 
       - name: Validate Compose configuration
         run: docker compose config >/dev/null

@@ -13,7 +13,6 @@ from basic_agent.auth import require_roles
 from basic_agent.auth_gateway import app as auth_gateway_app
 from basic_agent.autoconfig import ProviderConfigurationError, discover_capabilities
 from basic_agent.config import load_settings
-from basic_agent.evaluation import EVAL_CONFIG, EVAL_SET, build_eval_command
 from basic_agent.live_server import LIVE_MODEL, app
 from basic_agent.config import AgentPattern
 from basic_agent.patterns import (
@@ -296,11 +295,3 @@ def test_service_status_payload_uses_external_identity():
 
     assert set(status) == {"service", "environment", "status", "version"}
     assert status["service"]
-
-
-def test_evaluation_entry_point_targets_dataset_and_config():
-    command = build_eval_command(detailed=True)
-    assert command[1:2] == ["eval"]
-    assert str(EVAL_SET) in command
-    assert any(str(EVAL_CONFIG) in argument for argument in command)
-    assert "--print_detailed_results" in command

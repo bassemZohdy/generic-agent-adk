@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml README.md ./
-COPY basic_agent ./basic_agent
+COPY src ./src
 
 RUN pip install --upgrade pip \
     && pip install . \
@@ -15,4 +15,4 @@ RUN pip install --upgrade pip \
 
 EXPOSE 8002
 
-CMD ["sh", "-c", "adk api_server --host 0.0.0.0 --port ${PORT:-8002} /app/basic_agent"]
+CMD ["sh", "-c", "adk api_server --host 0.0.0.0 --port ${PORT:-8002} /app/src/basic_agent"]

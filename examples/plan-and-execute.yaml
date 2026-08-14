@@ -1,0 +1,20 @@
+# Plan and Execute — You want an agent that makes a plan first, then executes it.
+# The planner produces explicit steps; the executor carries them out one by one.
+# Run: docker run -v ./plan-and-execute.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
+
+agent:
+  use_case: plan_and_execute
+  description: Plans the task first, then executes the plan.
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+instructions:
+  value: >
+    First produce an explicit plan of numbered steps for the task, then
+    execute the steps in order, adapting only if a step fails.
+
+tools:
+  enabled:
+    - search
+    - code_execution

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — **partially superseded by [ADR-002](./ADR-002-use-case-taxonomy.md)** (2026-08-14): the strategy/registry core survives, but the `basic_agent/patterns/` parallel system described here was deleted, and the public selection surface is now use cases (`AGENT_USE_CASE` / `agent.use_case`), not patterns (`AGENT_PATTERN` / `agent.type`). Read this ADR for historical context only.
 
 ## Context
 

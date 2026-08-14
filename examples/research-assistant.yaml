@@ -1,0 +1,22 @@
+# Research Assistant — You want an agent that searches and investigates using tools.
+# It reasons step-by-step, calls search/knowledge/code tools as needed, and cites what it found.
+# Run: docker run -v ./research-assistant.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
+
+agent:
+  use_case: research_assistant
+  description: Investigates questions with search and tool use.
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+instructions:
+  value: >
+    Research the user's request thoroughly. Think step-by-step, use the
+    available tools to gather and verify information, run code when a
+    calculation helps, and answer with evidence from tool results.
+
+tools:
+  enabled:
+    - knowledge
+    - search
+    - code_execution

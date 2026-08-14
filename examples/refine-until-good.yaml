@@ -1,0 +1,22 @@
+# Refine Until Good — You want an agent that keeps improving output until it's good enough.
+# An evaluator scores each draft; the agent iterates up to max_iterations until quality bar is met.
+# Run: docker run -v ./refine-until-good.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
+
+agent:
+  use_case: refine_until_good
+  description: Iteratively improves its output until it passes evaluation.
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+instructions:
+  value: >
+    Produce the best possible answer: generate a draft, evaluate it against
+    the user's requirements, and refine it until the quality bar is met.
+
+tools:
+  enabled:
+    - search
+
+execution:
+  max_iterations: 5

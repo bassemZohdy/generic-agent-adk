@@ -14,6 +14,13 @@ dependencies = [
 [project.scripts]
 generic-agent-eval = "basic_agent.evaluation:main"
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
@@ -21,4 +28,4 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["src"]

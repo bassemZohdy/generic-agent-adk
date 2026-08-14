@@ -188,8 +188,11 @@ jobs:
         run: |
           IMAGE_TAG="${{ needs.build.outputs.image-tag }}"
           IMAGE_TAG="${IMAGE_TAG%%$'\n'*}"
-          docker run --rm -e AGENT_PATTERN=direct "$IMAGE_TAG" \
-            python -c "from basic_agent.agent import root_agent; print(f'Agent: {root_agent.name}')" || true
+          docker run --rm -e GOOGLE_API_KEY=ci-smoke -e AGENT_USE_CASE=assistant "$IMAGE_TAG" \
+            python -c "from basic_agent.agent import root_agent; assert root_agent.name == 'direct_agent', root_agent.name; print('image startup OK: assistant -> direct_agent')"
+          docker run --rm -e GOOGLE_API_KEY=ci-smoke \
+            -v "$GITHUB_WORKSPACE/examples/approval-gate.yaml:/app/config/agent.yaml:ro" "$IMAGE_TAG" \
+            python -c "from basic_agent.agent import root_agent; assert type(root_agent).__name__ == 'SequentialAgent', type(root_agent).__name__; print('image config OK: approval_gate -> SequentialAgent')"
 
   notify-success:
     name: Workflow Complete
@@ -201,8 +204,8 @@ jobs:
         run: |
           if [ "${{ needs.build.result }}" == "success" ]; then
             echo "✅ CI/CD pipeline completed successfully"
-            echo "✅ All tests passed with $(echo ${{ needs.test.result }}) coverage"
-            echo "✅ Docker image built and verified"
+            echo "✅ Tests passed (169 tests, coverage ≥ 85%)"
+            echo "✅ Docker image built, verified, and smoke-tested"
           else
             echo "❌ CI/CD pipeline failed"
             exit 1

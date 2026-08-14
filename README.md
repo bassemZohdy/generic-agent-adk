@@ -1,32 +1,143 @@
 # Generic Agent Runtime (ADK)
 
-Production-grade Google Agent Development Kit (ADK) runtime with 10 execution strategies, YAML configuration, comprehensive testing, and complete CI/CD integration.
+One Docker image, nine generic use cases. Pick what you want the agent to do, configure it with environment variables or YAML, run it.
 
-[![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)](./TEST-COVERAGE-REPORT.md)
-[![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)](./TEST-COVERAGE-REPORT.md)
+[![Tests](https://img.shields.io/badge/tests-169%20passing-brightgreen)](./tests/)
+[![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](./tests/)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-production%20ready-green)](.)
 
-## Overview
+## What do you want to build?
 
-A fully-featured, configuration-driven ADK agent runtime supporting 10 execution patterns:
+Start from what you need, not from architecture names:
 
-- **DIRECT** - Single agent, one-shot execution
-- **REACT** - Iterative reasoning with tool use
-- **SEQUENTIAL** - Ordered pipeline of agents
-- **PARALLEL** - Concurrent independent agents
-- **LOOP** - Iterative refinement with max iterations
-- **ROUTER** - Intelligent specialist routing
-- **SUPERVISOR** - Coordinated multi-worker execution
-- **PLANNER_EXECUTOR** - Plan then execute pattern
-- **EVALUATOR_OPTIMIZER** - Generate, evaluate, improve loop
-- **HUMAN_IN_LOOP** - Proposal with approval gate
+| I want an agent that… | Use case | Example config |
+|---|---|---|
+| Answers questions directly, in one shot | `assistant` | [`examples/assistant.yaml`](./examples/assistant.yaml) |
+| Searches and investigates using tools | `research_assistant` | [`examples/research-assistant.yaml`](./examples/research-assistant.yaml) |
+| Runs fixed steps in order (fetch → analyze → summarize) | `pipeline` | [`examples/pipeline.yaml`](./examples/pipeline.yaml) |
+| Gets several independent takes and aggregates them | `multi_perspective` | [`examples/multi-perspective.yaml`](./examples/multi-perspective.yaml) |
+| Keeps improving its output until it's good enough | `refine_until_good` | [`examples/refine-until-good.yaml`](./examples/refine-until-good.yaml) |
+| Sends each question to the right specialist | `expert_dispatch` | [`examples/expert-dispatch.yaml`](./examples/expert-dispatch.yaml) |
+| Coordinates a team of workers on complex work | `team_coordinator` | [`examples/team-coordinator.yaml`](./examples/team-coordinator.yaml) |
+| Makes a plan first, then executes it | `plan_and_execute` | [`examples/plan-and-execute.yaml`](./examples/plan-and-execute.yaml) |
+| Proposes actions and waits for my approval | `approval_gate` | [`examples/approval-gate.yaml`](./examples/approval-gate.yaml) |
 
-**One Docker image, multiple configurations** - Agent behavior determined entirely by YAML config, not code changes.
+### Run with environment variables only (minimal)
 
-## Quick Start
+```bash
+docker run \
+  -e GOOGLE_API_KEY=your-key \
+  -e AGENT_USE_CASE=research_assistant \
+  ghcr.io/your-org/adk:latest
+```
 
-### Local Development
+That's it — every use case runs with sane defaults from two environment variables.
+
+### Run with a YAML config (full control)
+
+```bash
+docker run \
+  -v ./examples/expert-dispatch.yaml:/app/config/agent.yaml \
+  -e GOOGLE_API_KEY=your-key \
+  ghcr.io/your-org/adk:latest
+```
+
+A config file mounted at `/app/config/agent.yaml` is auto-detected (or set `AGENT_CONFIG_FILE`). YAML unlocks per-role instructions, models, and tools via the `roles:` section — see [`examples/expert-dispatch.yaml`](./examples/expert-dispatch.yaml).
+
+## Configuration
+
+### Minimal environment variables
+
+| Variable | Required | Default | Applies to |
+|---|---|---|---|
+| `GOOGLE_API_KEY` | ✅ | — | all use cases |
+| `AGENT_USE_CASE` | — | `assistant` | all |
+| `ADK_MODEL` | — | `gemini-3.6-flash` | all |
+| `AGENT_INSTRUCTION` | — | built-in generic prompt | all |
+| `AGENT_TOOLS` | — | all tools | all |
+| `AGENT_MAX_ITERATIONS` | — | `3` | `refine_until_good`, `plan_and_execute` |
+| `AGENT_SPECIALISTS` | — | `research,solution,risk` | `expert_dispatch` |
+
+Advanced variables (auth, MCP, OpenAPI, knowledge, telemetry) are listed in [.env.example](.env.example).
+
+### How YAML and env vars merge
+
+1. The YAML file (auto-detected `/app/config/agent.yaml`, or `AGENT_CONFIG_FILE`) is the base. `${VAR:default}` substitution runs inside it.
+2. Then the **7 documented env vars above** override — but only the ones explicitly set. Env always wins for these keys.
+3. No file → env-only configuration.
+4. Startup logs one provenance line: `config: yaml=/app/config/agent.yaml, use_case=expert_dispatch, env overrides: ADK_MODEL`.
+
+### YAML reference
+
+```yaml
+agent:
+  use_case: expert_dispatch        # a key from the table above
+  description: "Customer support dispatcher"
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+roles:                              # per-role overrides (YAML only)
+  billing:
+    instruction: "You answer billing and invoice questions precisely."
+  technical:
+    instruction: "You answer technical troubleshooting questions."
+    model: "${ADK_MODEL:gemini-3.6-flash}"
+
+tools:
+  enabled: [knowledge, search]
+
+execution:
+  max_iterations: 5                # refine_until_good, plan_and_execute
+```
+
+### Deprecated names (still work, will be removed)
+
+| Old | New |
+|---|---|
+| `AGENT_PATTERN` | `AGENT_USE_CASE` |
+| `AGENT_PATTERN_MAX_ITERATIONS` | `AGENT_MAX_ITERATIONS` |
+| `AGENT_PATTERN_SPECIALISTS` | `AGENT_SPECIALISTS` |
+| `AGENT_PATTERN_REQUIRE_APPROVAL` | `AGENT_USE_CASE=approval_gate` |
+| `agent.type` in YAML | `agent.use_case` |
+| pattern names (`sequential`, `router`, `planner_executor`, …) | use-case keys (see table above) |
+
+## Extending: custom use cases
+
+Technical users can add use cases without forking the runtime:
+
+1. Subclass `BaseUseCaseAgent` ([`src/basic_agent/use_cases/base.py`](./src/basic_agent/use_cases/base.py)), set its metadata and underlying strategy, and optionally override runtime hooks: `before_run`, `after_run`, `before_tool`, `after_tool` — wired automatically as ADK callbacks on the composed agent tree.
+2. Point `AGENT_USE_CASE_MODULE=/path/to/your_module.py` at your module; `BaseUseCaseAgent` subclasses found in it register automatically.
+
+## Architecture
+
+Two layers, one dependency direction — `use_cases` → `strategies`, never reverse:
+
+```
+YAML / env vars
+      │
+      ▼
+use_cases (public)          what the user picks + runtime behavior
+  • one class per use case    (metadata, defaults, before/after hooks)
+  • registry + alias catalog
+      │
+      ▼
+strategies (internal)       how the ADK agent tree is shaped
+  • pluggable builders        (LlmAgent / SequentialAgent /
+  • shared llm() builder       ParallelAgent / LoopAgent)
+  • per-role config
+      │
+      ▼
+Google ADK agent tree
+```
+
+- **`use_cases/`** — the public surface. Metadata (key, title, when-to-use, defaults, aliases) lives only here; the registry catalog drives config validation errors and the decision table above.
+- **`strategies/`** — internal composition. Registry pattern, no hard-coded conditionals; shared builders keep the 10 strategy files small.
+
+Design records: [ADR-001](./docs/ADR-001-generic-runtime-architecture.md) · [ADR-002 use-case taxonomy](./docs/ADR-002-use-case-taxonomy.md)
+
+## Local development
 
 ```bash
 # Setup
@@ -34,445 +145,67 @@ uv sync
 cp .env.example .env
 export GOOGLE_API_KEY=your-key
 
-# Run REST API
-uv run adk api_server basic_agent
+# Run
+uv run adk api_server src/basic_agent    # REST API at http://localhost:8002/docs
+uv run adk web src/basic_agent           # Web UI
 
-# In another terminal, test it
-curl http://localhost:8002/docs
+# Test
+uv run pytest tests/ -v
 ```
 
-### Docker Compose
+## Docker
 
 ```bash
+# Build locally
+docker build -t adk:local .
+docker run -p 8002:8002 -e GOOGLE_API_KEY=... adk:local
+
+# Full stack (api, live, status, auth-gateway, keycloak, grafana)
 cp .env.example .env
 docker compose up --build
 ```
 
-Services:
-- REST API: http://localhost:8002/docs
-- Live WebSocket: ws://localhost:8003/live
-- Status API: http://localhost:8001/status
-- Grafana: http://localhost:3000
-- Keycloak: http://localhost:8080
-
-### Change Execution Strategy
-
-No code changes needed - just change the config:
-
-```bash
-# Run with REACT strategy (iterative tools)
-docker run \
-  -v ./examples/react-agent.yaml:/app/config/agent.yaml \
-  -e GOOGLE_API_KEY=... \
-  ghcr.io/your-org/adk:latest
-
-# Same image, different behavior via YAML
-```
-
-## Configuration
-
-### Environment Variables (for Runtime Settings)
-
-```bash
-# Core Configuration
-APP_NAME=my-agent                    # Agent name
-APP_VERSION=1.0.0                    # Version
-AGENT_PATTERN=sequential             # Execution pattern (8 options)
-ADK_MODEL=gemini-2.0-flash          # LLM model
-AGENT_INSTRUCTION="Your prompt here" # System instruction
-AGENT_TOOLS=knowledge,search,mcp    # Comma-separated tools
-
-# Pattern-Specific
-AGENT_PATTERN_MAX_ITERATIONS=5       # For LOOP, EVALUATOR_OPTIMIZER
-AGENT_PATTERN_REQUIRE_APPROVAL=true  # For HUMAN_IN_LOOP
-AGENT_PATTERN_SPECIALISTS=a,b,c     # For ROUTER
-
-# Knowledge Source
-AGENT_KNOWLEDGE_FILE=./knowledge.json
-
-# Authentication
-KEYCLOAK_ISSUER=https://keycloak/realms/agent
-KEYCLOAK_ROLE_CLAIM=realm_access.roles
-KEYCLOAK_REQUIRED_ROLES=agent-user
-
-# External Services
-AGENT_MCP_TOOLS=                     # MCP tool list
-AGENT_OPENAPI_URL=https://api.example/openapi.json
-```
-
-See [.env.example](.env.example) for complete configuration.
-
-### YAML Configuration (for Agent Behavior)
-
-Deploy different configurations to the same Docker image:
-
-```yaml
-# examples/sequential-agent.yaml
-agent:
-  pattern: sequential
-  description: "Research and analysis pipeline"
-
-model:
-  provider: google
-  name: "${ADK_MODEL:gemini-2.0-flash}"
-
-instructions:
-  value: "You are part of a research pipeline..."
-
-tools:
-  enabled:
-    - knowledge
-    - search
-    - code_execution
-
-execution:
-  steps: 3
-
-output:
-  schema: GenericAgentResponse
-```
-
-Configuration examples for all 10 patterns are in `examples/`:
-- `direct-agent.yaml`, `react-agent.yaml`, `sequential-agent.yaml`, etc.
-
-## Architecture
-
-### Strategy + Registry Pattern
-
-Each execution pattern is a pluggable **Strategy** registered in a **StrategyRegistry**. No hard-coded conditionals - dynamic strategy selection based on configuration.
-
-```python
-# Load config
-config = load_config_from_yaml("examples/react-agent.yaml")
-
-# Get strategy from registry
-registry = get_default_registry()
-strategy = registry.get(config.agent_type)
-
-# Build agent
-context = AgentStrategyContext(agent_type=config.agent_type, runtime=runtime)
-agent = strategy.build(context)
-```
-
-**Benefits:**
-- ✅ One Docker image, multiple behaviors
-- ✅ No conditionals in core code
-- ✅ Extensible - add new strategies easily
-- ✅ Testable - each strategy has isolated tests
-- ✅ Framework-agnostic configuration model
-
-### Implementation Files
-
-**Strategy Implementations** (10 files):
-- `basic_agent/strategies/direct.py`
-- `basic_agent/strategies/react.py`
-- `basic_agent/strategies/sequential.py`
-- `basic_agent/strategies/parallel.py`
-- `basic_agent/strategies/loop.py`
-- `basic_agent/strategies/router.py`
-- `basic_agent/strategies/supervisor.py`
-- `basic_agent/strategies/planner_executor.py`
-- `basic_agent/strategies/evaluator_optimizer.py`
-- `basic_agent/strategies/human_in_loop.py`
-
-**Configuration & Registry**:
-- `basic_agent/config.py` - Settings dataclass, AgentPattern enum
-- `basic_agent/config_loader.py` - YAML loading with env var substitution
-- `basic_agent/strategies/registry.py` - StrategyRegistry with lazy init
-
-**Core Runtime**:
-- `basic_agent/agent.py` - Root agent with strategy support
-- `basic_agent/auth.py` - Keycloak/OIDC authentication
-- `basic_agent/telemetry.py` - OpenTelemetry observability
-- `basic_agent/service_api.py` - Status API
-
-## Patterns Explained
-
-### Pattern Characteristics
-
-| Pattern | Workers | System Prompt | LLM | Consolidation |
-|---------|---------|---------------|-----|---|
-| DIRECT | 1 | SHARED | SHARED | One-shot |
-| REACT | 1 | SHARED | SHARED | Iterative tools |
-| SEQUENTIAL | N | SHARED | SHARED | Pipeline |
-| PARALLEL | N | SHARED | SHARED | Aggregation |
-| LOOP | 1 | SHARED | SHARED | Self-refinement |
-| ROUTER | N+1 | DIFFERENT | SHARED | LLM routing |
-| SUPERVISOR | N+1 | SHARED | SHARED | LLM synthesis |
-| PLANNER_EXECUTOR | 2 | DIFFERENT | SHARED | Sequential |
-| EVALUATOR_OPTIMIZER | 1 | SPECIAL | SHARED | Self-improve |
-| HUMAN_IN_LOOP | 2 | DIFFERENT | SHARED | Approval gate |
-
-**For detailed explanations** → See [AGENT-PATTERNS-ARCHITECTURE.md](./AGENT-PATTERNS-ARCHITECTURE.md)
-
-## Testing
-
-**Test Suite: 99 tests, 85% coverage**
-
-```bash
-# Run all tests
-uv run pytest tests/ -v
-
-# With coverage
-uv run pytest tests/ --cov=basic_agent --cov-report=html
-
-# Specific test file
-uv run pytest tests/test_strategies.py -v
-```
-
-**Test Categories:**
-- Unit tests (43) - Individual functions and classes
-- Integration tests (8) - Component interactions
-- Configuration tests (24) - YAML loading and validation
-- Coverage improvement tests (26) - Edge cases
-- Authentication tests (9) - Keycloak flows
-
-**Coverage by Module:**
-- Strategies: 93-100% ✅
-- Configuration: 96-100% ✅
-- Core agent: 85% ✅
-- Patterns: 100% ✅
-
-See [TEST-COVERAGE-REPORT.md](./TEST-COVERAGE-REPORT.md) for detailed analysis.
-
-## CI/CD
-
-GitHub Actions pipeline with:
-- ✅ Multi-Python testing (3.10-3.13)
-- ✅ Coverage reporting (85% threshold)
-- ✅ Docker image building
-- ✅ GHCR publishing
-- ✅ Image verification
-
-**Pipeline:**
-1. **Lint** (5 min) - Code formatting, config validation
-2. **Test** (15 min) - 99 tests, coverage reporting
-3. **Build** (20 min) - Docker Buildx, push to GHCR
-4. **Verify** (10 min) - Image verification
-5. **Notify** (1 min) - Status notification
-
-**Image Tagging:**
-- `ghcr.io/your-org/adk:main` - Latest main branch
-- `ghcr.io/your-org/adk:v1.0.0` - Version tags
-- `ghcr.io/your-org/adk:latest` - Overall latest
-
-See [.github/CI-CD-INTEGRATION.md](./.github/CI-CD-INTEGRATION.md) for complete guide.
-
-## Docker Deployment
-
-### Build Locally
-
-```bash
-docker build -t adk:local .
-docker run -it \
-  -v ./examples/react-agent.yaml:/app/config/agent.yaml \
-  -e GOOGLE_API_KEY=... \
-  adk:local
-```
-
-### Use Published Images
-
-```bash
-# Pull from GHCR
-docker pull ghcr.io/your-org/adk:latest
-
-# Run with custom config
-docker run -it \
-  -v ./examples/sequential-agent.yaml:/app/config/agent.yaml \
-  -e GOOGLE_API_KEY=... \
-  ghcr.io/your-org/adk:latest
-```
-
-### Docker Compose Services
-
-- **api** - REST/A2A API (port 8002)
-- **live** - WebSocket Live API (port 8003)
-- **status** - Status API (port 8001)
-- **auth-gateway** - Forward auth proxy
-- **keycloak** - Identity provider (port 8080)
-- **grafana** - Observability (port 3000)
-
-All services reuse the same application image with different configurations.
+Services: REST API `:8002/docs` · Live WebSocket `:8003/live` · Status `:8001/status` · Grafana `:3000` · Keycloak `:8080`
 
 ## Authentication
 
-Keycloak (OpenID Connect) authentication with configurable role-based access control.
+Keycloak (OIDC) with role-based access control. Dev credentials: `demo` / `demo`.
 
-**Development Credentials:**
-- Username: `demo`
-- Password: `demo`
-
-**Get Token:**
 ```bash
+# Get a token
 curl -X POST http://localhost:8080/realms/basic-agent/protocol/openid-connect/token \
-  -d client_id=basic-agent \
-  -d username=demo \
-  -d password=demo \
-  -d grant_type=password
-```
+  -d client_id=basic-agent -d username=demo -d password=demo -d grant_type=password
 
-**Use Token:**
-```bash
+# Use it
 curl -H "Authorization: Bearer <token>" http://localhost:8002/status
 ```
 
-**Roles:**
-- `agent-user` - API access (default required)
-- `agent-operator` - Operator access (for approvals)
-
-Override with `KEYCLOAK_REQUIRED_ROLES`, `AGENT_SERVICE_API_ROLES`, `LIVE_API_ROLES`.
+Roles: `agent-user` (API access, default required), `agent-operator` (approvals). Override with `KEYCLOAK_REQUIRED_ROLES`, `AGENT_SERVICE_API_ROLES`, `LIVE_API_ROLES`.
 
 ## Observability
 
-**OpenTelemetry Integration:**
-- OTLP/gRPC export to collector
-- Grafana Loki (logs), Tempo (traces), Prometheus (metrics)
-- Span attributes include strategy type, pattern, configuration
-
-**Local Stack:**
-```bash
-docker compose up  # Includes grafana/otel-lgtm
-```
-
-Visit http://localhost:3000 (Grafana) for traces and metrics.
-
-## Features
-
-| Feature | Status | Implementation |
-|---------|--------|-----------------|
-| 10 execution strategies | ✅ | Fully implemented |
-| YAML configuration | ✅ | config_loader.py |
-| Environment variables | ✅ | Externalized settings |
-| Strategy registry | ✅ | Pluggable patterns |
-| Lazy initialization | ✅ | On-demand loading |
-| Configuration validation | ✅ | Type-safe dataclasses |
-| Tool management | ✅ | knowledge, search, mcp, etc. |
-| State/output schemas | ✅ | GenericAgentResponse |
-| Keycloak/OIDC | ✅ | JWT validation, roles |
-| OpenTelemetry | ✅ | OTEL/gRPC export |
-| Docker containerization | ✅ | Multi-stage, Buildx |
-| GHCR publishing | ✅ | Automated CI/CD |
-| Comprehensive testing | ✅ | 99 tests, 85% coverage |
-| Multi-Python support | ✅ | 3.10, 3.11, 3.12, 3.13 |
+OpenTelemetry (OTLP/gRPC) → Grafana stack (Loki logs, Tempo traces, Prometheus metrics). Span attributes include the resolved use case and configuration. Included in `docker compose up` — visit Grafana at `http://localhost:3000`.
 
 ## Documentation
 
-Complete documentation available:
-
-**Architecture & Design:**
-- [AGENT-PATTERNS-ARCHITECTURE.md](./AGENT-PATTERNS-ARCHITECTURE.md) - Detailed pattern guide (1085 lines)
-- [docs/ADR-001-generic-runtime-architecture.md](./docs/ADR-001-generic-runtime-architecture.md) - Architecture decisions
-
-**Implementation & Deployment:**
-- [.github/CI-CD-INTEGRATION.md](./.github/CI-CD-INTEGRATION.md) - CI/CD pipeline guide
-- [.github/PUBLISHING.md](./.github/PUBLISHING.md) - Docker publishing guide
-- [IMPLEMENTATION-COMPLETENESS-AUDIT.md](./IMPLEMENTATION-COMPLETENESS-AUDIT.md) - Completeness verification
-
-**Testing & Analysis:**
-- [TEST-COVERAGE-REPORT.md](./TEST-COVERAGE-REPORT.md) - Coverage analysis
-- [docs/FEATURES-AND-TESTS.md](./docs/FEATURES-AND-TESTS.md) - Feature inventory
-
-**Status Reports:**
-- [FINAL-CICD-INTEGRATION-SUMMARY.md](./FINAL-CICD-INTEGRATION-SUMMARY.md) - Integration summary
-- [CI-CD-INTEGRATION-REPORT.md](./CI-CD-INTEGRATION-REPORT.md) - Integration completion
-
-## Development
-
-### Setup
-
-```bash
-uv sync
-cp .env.example .env
-export GOOGLE_API_KEY=your-key
-```
-
-### Run
-
-```bash
-# API server
-uv run adk api_server basic_agent
-
-# Direct run
-uv run adk run basic_agent
-
-# Web UI
-uv run adk web basic_agent
-```
-
-### Test
-
-```bash
-# Run all tests
-uv run pytest tests/ -v
-
-# Specific pattern
-uv run pytest tests/test_strategies.py::TestSequentialStrategy -v
-
-# With coverage
-uv run pytest tests/ --cov=basic_agent
-```
-
-### Build Docker
-
-```bash
-docker build -t adk:dev .
-docker run adk:dev
-```
+- [ADR-001 — Generic runtime architecture](./docs/ADR-001-generic-runtime-architecture.md)
+- [ADR-002 — Use-case taxonomy & consolidation](./docs/ADR-002-use-case-taxonomy.md)
+- [Feature & test inventory](./docs/FEATURES-AND-TESTS.md)
+- [CI/CD guide](./.github/CI-CD-INTEGRATION.md) · [Publishing guide](./.github/PUBLISHING.md)
+- Historical reports (pre-refactor) live in [docs/archive/](./docs/archive/)
 
 ## Troubleshooting
 
-**Tests fail with import errors:**
-```bash
-uv sync --upgrade
-```
+- **Import errors in tests** → `uv sync --upgrade`
+- **Docker build fails** → check `.dockerignore`, `docker build --progress=plain .`
+- **Keycloak won't start** → ensure port 8080 free, wait 30s, `docker compose logs keycloak`
+- **Wrong agent behavior** → check the startup provenance log line for which config source and use case resolved
 
-**Coverage below threshold:**
-- Run `uv run pytest tests/ --cov=basic_agent --cov-report=html`
-- View `htmlcov/index.html` for detailed coverage
-- Add tests for uncovered code
+## Production checklist
 
-**Docker build fails:**
-- Check `.dockerignore` excludes large files
-- Ensure base image available: `docker pull python:3.13-slim`
-- View build logs: `docker build --progress=plain .`
+1. Replace Keycloak with a managed identity provider
+2. Set production secrets via environment
+3. Configure external storage and monitoring
+4. Enable image scanning in CI/CD
 
-**Keycloak won't start:**
-- Ensure port 8080 is free
-- Check logs: `docker compose logs keycloak`
-- Wait 30 seconds for startup
-
-## Production Deployment
-
-For production deployment:
-
-1. **Replace Keycloak** with managed identity provider
-2. **Set production secrets** in environment
-3. **Configure external storage** (database, cloud buckets)
-4. **Enable image scanning** in CI/CD
-5. **Set up monitoring** (Prometheus, custom dashboards)
-6. **Configure rate limiting** as needed
-7. **Use managed observability** (Cloud Trace, etc.)
-
-See `deploy/cloudrun/service.yaml` for Cloud Run starter manifest.
-
-## License
-
-See LICENSE file.
-
-## Support
-
-**Documentation:**
-- Architecture guide: [AGENT-PATTERNS-ARCHITECTURE.md](./AGENT-PATTERNS-ARCHITECTURE.md)
-- CI/CD guide: [.github/CI-CD-INTEGRATION.md](./.github/CI-CD-INTEGRATION.md)
-- Test report: [TEST-COVERAGE-REPORT.md](./TEST-COVERAGE-REPORT.md)
-
-**Issues & Questions:**
-- Check documentation first
-- Review test examples in `tests/`
-- Examine example configurations in `examples/`
-
----
-
-**Status: ✅ Production Ready**
-
-All 10 strategies implemented, tested (99 tests, 85% coverage), documented, and integrated with CI/CD. Ready for deployment.
+See `deploy/cloudrun/service.yaml` for a Cloud Run starter manifest.

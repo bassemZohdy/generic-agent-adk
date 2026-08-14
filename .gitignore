@@ -5,3 +5,8 @@ __pycache__/
 .env
 .adk/
 *.egg-info/
+
+# Coverage artifacts
+.coverage
+coverage.xml
+htmlcov/

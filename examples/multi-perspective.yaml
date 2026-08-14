@@ -1,0 +1,20 @@
+# Multi-Perspective — You want an agent that gets several independent takes and aggregates them.
+# Independent workers answer in parallel; the aggregate step merges them into one response.
+# Run: docker run -v ./multi-perspective.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
+
+agent:
+  use_case: multi_perspective
+  description: Several independent takes on a question, aggregated.
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+instructions:
+  value: >
+    Consider the question from multiple independent perspectives, then
+    aggregate the takes into a single balanced answer that notes where
+    the perspectives agree or differ.
+
+tools:
+  enabled:
+    - search

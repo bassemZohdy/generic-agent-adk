@@ -1,0 +1,23 @@
+# Approval Gate — You want an agent that proposes actions and waits for approval before irreversible steps.
+# The agent drafts a proposal, then a gate step requires your sign-off before anything risky runs.
+# Run: docker run -v ./approval-gate.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
+
+agent:
+  use_case: approval_gate
+  description: Proposes actions and waits for approval before executing them.
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+instructions:
+  value: >
+    Propose the action you intend to take and wait for explicit approval
+    before executing anything irreversible.
+
+tools:
+  enabled:
+    - knowledge
+    - approval
+
+execution:
+  require_approval: true

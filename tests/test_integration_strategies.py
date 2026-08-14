@@ -11,9 +11,12 @@ from google.adk.agents import (
     SequentialAgent,
 )
 
+import pytest
+
 from basic_agent.config_loader import load_config_from_yaml
 from basic_agent.strategies.base import RuntimeContext, AgentStrategyContext
 from basic_agent.strategies.registry import get_default_registry
+from basic_agent.use_cases.registry import get_default_registry as get_use_case_registry
 
 
 def test_registry_integration_with_config_loader():
@@ -302,6 +305,45 @@ def test_all_examples_are_loadable():
         assert config.type  # Should have a type
         assert config.model  # Should have model config
         config.validate()  # Should validate without errors
+
+
+EXAMPLE_USE_CASES = [
+    ("assistant.yaml", "assistant", LlmAgent),
+    ("research-assistant.yaml", "research_assistant", LlmAgent),
+    ("pipeline.yaml", "pipeline", SequentialAgent),
+    ("multi-perspective.yaml", "multi_perspective", ParallelAgent),
+    ("refine-until-good.yaml", "refine_until_good", LoopAgent),
+    ("expert-dispatch.yaml", "expert_dispatch", LlmAgent),
+    ("team-coordinator.yaml", "team_coordinator", LlmAgent),
+    ("plan-and-execute.yaml", "plan_and_execute", SequentialAgent),
+    ("approval-gate.yaml", "approval_gate", SequentialAgent),
+]
+
+
+@pytest.mark.parametrize("filename,use_case,root_type", EXAMPLE_USE_CASES)
+def test_example_yaml_loads_and_builds(filename, use_case, root_type):
+    """Every example file loads via load_config_from_yaml and builds via the registry."""
+    path = Path(__file__).parent.parent / "examples" / filename
+
+    config = load_config_from_yaml(path)
+    assert config.use_case == use_case
+
+    runtime = RuntimeContext(
+        model=config.model.name if config.model else "test",
+        instruction=config.instructions.value if config.instructions else "test",
+        tools=[],
+        description=config.description or "test",
+        max_iterations=config.execution.max_iterations if config.execution else 3,
+        require_approval=(
+            config.execution.require_approval if config.execution else False
+        ),
+        specialists=tuple(config.execution.specialists) if config.execution else (),
+        roles=dict(config.roles),
+    )
+
+    agent = get_use_case_registry().resolve(config.use_case)[1].build(runtime)
+    assert agent is not None
+    assert isinstance(agent, root_type)
 
 
 def test_strategy_builder_pattern_composability():

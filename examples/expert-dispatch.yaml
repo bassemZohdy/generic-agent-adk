@@ -1,0 +1,34 @@
+# Expert Dispatch — You want an agent that sends each question to the right specialist.
+# Roles showcase: each role below carries its own instruction; `technical` also overrides the model.
+# Run: docker run -v ./expert-dispatch.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
+
+agent:
+  use_case: expert_dispatch
+  description: Routes each question to the matching specialist.
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+instructions:
+  value: >
+    Understand each incoming question and hand it to the specialist
+    best suited to answer it.
+
+tools:
+  enabled:
+    - knowledge
+
+execution:
+  specialists:
+    - billing
+    - technical
+    - general
+
+roles:
+  billing:
+    instruction: You are the billing specialist; answer questions about invoices, payments, and subscriptions.
+  technical:
+    model: "${ADK_MODEL:gemini-3.6-flash}"
+    instruction: You are the technical specialist; debug issues and explain how the product works.
+  general:
+    instruction: You are the generalist; handle anything that is neither billing nor technical.

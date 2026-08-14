@@ -1,0 +1,22 @@
+# Team Coordinator — You want an agent that coordinates a team of workers on complex work.
+# The supervisor breaks work down, delegates to workers, and combines their results.
+# Run: docker run -v ./team-coordinator.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
+
+agent:
+  use_case: team_coordinator
+  description: Coordinates worker agents on complex tasks.
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+instructions:
+  value: >
+    Break complex work into subtasks, delegate each subtask to a worker
+    agent, and combine their results into a coherent final answer.
+
+tools:
+  enabled:
+    - search
+
+execution:
+  workers: 3

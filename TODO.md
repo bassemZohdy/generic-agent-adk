@@ -161,6 +161,91 @@ Remaining housekeeping: commits A–D (see sequencing); working tree also holds 
   container-verified `AGENT_PATTERN=react → assistant`.
 - [x] Gate: 182 passed; docker rebuilt; smokes green. ADR-002 addendum records all three.
 
+## Improvement round 3 — 2026-08-15 (project review: security / correctness / hardening)
+
+Source: full code-review + security audit (182 tests green at time of review). Priority order = recommended attack order.
+
+### P0 — Critical (close pre-auth paths first)
+
+- [ ] **R1. Remove Keycloak realm backdoor** — `keycloak/realm-basic-agent.json:25-35`: `demo`/`demo`
+  user with `agent-operator` role, public client + `directAccessGrantsEnabled`, Keycloak admin
+  password defaulting to `admin` (`docker-compose.yml:21-25`). Gate demo user behind a dev profile
+  (`DEMO_MODE`), disable direct grants outside dev, require `KEYCLOAK_ADMIN_PASSWORD` (no default),
+  enable `bruteForceProtected`.
+- [ ] **R2. Fail-closed auth** — `src/basic_agent/auth.py:63-64, 81-82`: unset `KEYCLOAK_ISSUER`
+  silently disables all auth; `deploy/cloudrun/service.yaml` omits it entirely. Require explicit
+  `AUTH_DISABLED=true` opt-in; fail startup in prod `DEPLOYMENT_ENV`; add Cloud Run ingress
+  annotation + IAM.
+- [ ] **R3. Bind user identity to token subject (IDOR)** — `src/basic_agent/live_server.py:88-95`:
+  JWT claims discarded, `user_id`/`session_id` from query params → cross-user session access. Same
+  pattern via `adk api_server --auto_create_session` accepting arbitrary `user_id` in body. Derive
+  `user_id` from `claims["sub"]`; bind session ownership; middleware for REST layer.
+- [ ] **R4. Locked Docker builds** — `Dockerfile:12-13` uses `pip install .`, ignores `uv.lock`,
+  floor-only `>=` constraints → non-reproducible images (A05 supply chain). Switch to
+  `COPY uv.lock` + `uv sync --frozen --no-dev`; add CI check that image deps match lock; add
+  `pip-audit`/trivy scan.
+- [ ] **R5. Remove broken entry point** — `pyproject.toml:16` `generic-agent-eval` references
+  nonexistent `basic_agent.evaluation` module. Create the module or delete the script entry.
+
+### P1 — High
+
+- [ ] **R6. ADK Workflow migration spike** — strategies build on deprecated `SequentialAgent` /
+  `ParallelAgent` / `LoopAgent` (deprecation warnings across `strategies/`); plan migration before
+  upstream removal.
+- [ ] **R7. Kill import-time side effects** — `agent.py:311-312` (config resolution + agent build at
+  import) and `agent.py:154-161` (MCP/OpenAPI toolsets constructed unconditionally). Lazy
+  factories/guarded build.
+- [ ] **R8. Service API-key path** — `auth.py:70-71`: documented default `local-service-key`
+  bypasses `require_roles`; non-constant-time `==` compare. No default (fail closed),
+  `secrets.compare_digest`, apply role checks to this path.
+- [ ] **R9. WS token out of query string** — `auth.py:86` `access_token` query param leaks into
+  proxy/access logs; use subprotocol or first-message auth.
+- [ ] **R10. Audience verification on by default** — `auth.py:32` `verify_aud` only when
+  `KEYCLOAK_AUDIENCE` set (empty default); any realm client's token accepted. Default to client id.
+- [ ] **R11. Cache JWKS client** — `auth.py:24` new `PyJWKClient` per request → per-request
+  Keycloak fetch (latency + DoS amplifier). Module-level instance + fetch timeout.
+- [ ] **R12. `execution.steps`/`workers` wired** — parsed in `config_loader.py:509-515` but never
+  forwarded to strategies (`agent.py:278-298`); sequential/parallel always build 2. Forward via
+  `extra_config`; add int validation in strategies.
+
+### P2 — Medium
+
+- [ ] **R13. Prompt-injection hardening** — wrap retrieved knowledge/search content
+  (`agent.py:105-121, 184-191`) in untrusted-data framing; drop `code_execution` from default
+  `AGENT_TOOLS`; scope OpenAPI toolset off the service credential; require approval for any
+  state-mutating tool.
+- [ ] **R14. Rate limits + WS payload caps** — `live_server.py:116-130` unbounded `receive_json` /
+  base64 audio, each message = LLM call; add max size + msg/sec budget, Traefik rate-limit
+  middleware, per-token spend quotas.
+- [ ] **R15. Container hardening** — non-root `USER`, resource limits in compose,
+  uvicorn `--limit-concurrency`; socket-proxy for Traefik's docker.sock; bind Grafana/OTLP to
+  `127.0.0.1`, override default creds; disable FastAPI `/docs` in prod.
+- [ ] **R16. Audit logging** — record `sub` + roles per request (`service_api.py:29`,
+  `live_server.py:88` currently discard claims); log every tool invocation (identity + outcome).
+- [ ] **R17. Config error UX** — friendly `ValueError` for non-int `AGENT_MAX_ITERATIONS`
+  (`config.py:103`, `config_loader.py:509-511`, `AGENT_KNOWLEDGE_RESULT_LIMIT`); allow subset
+  specialists or document set-equality (`config_loader.py:418`); refuse unresolved `${VAR}` in
+  YAML; gitleaks pre-commit.
+- [ ] **R18. Settings test seam** — replace ~15 `object.__setattr__(settings, …)` hacks on frozen
+  dataclass with snapshot/restore autouse fixture or `reload_settings()`.
+- [ ] **R19. Auth-path cleanup** — remove redundant double check `service_api.py:32`; include
+  error reason in WS close `live_server.py:87-91`; handle multi-audience tokens (`auth.py:32`);
+  drop `X-Auth-Email` response header (`auth_gateway.py:32-33`).
+- [ ] **R20. Misc code health** — relative import in `mcp_server.py:8`; share Runner across WS
+  connections (`live_server.py:97-102`); log swallowed exceptions in `multi_perspective.py:31` /
+  `approval_gate.py:38`; mtime-cache knowledge file reads (`agent.py:93-102`); UUID module names
+  in custom registry (`use_cases/registry.py:152`); docs/API key allowlisting for
+  `AGENT_USE_CASE_MODULE`.
+
+### Tests to add alongside
+
+- [ ] **R-T1.** Auth regression: HS256-confusion token → 401; wrong-issuer token → 401; API-key
+  path enforces roles; issuer unset + prod env → startup failure (after R2).
+- [ ] **R-T2.** IDOR: subject A resuming subject B's `user_id`/`session_id` → rejected (after R3).
+- [ ] **R-T3.** Supply chain: CI asserts `pip freeze` in built image matches `uv.lock` (after R4).
+- [ ] **R-T4.** Prompt-injection corpus in knowledge file asserting no openapi/mcp tool calls from
+  injected instructions (after R13); WS oversized-frame fuzz (after R14).
+
 ## Commit / rollback sequencing
 
 | Commit | Contents | Reverts |

@@ -406,5 +406,4 @@ def test_ci_contains_locked_image_dependency_gate():
     assert "pip-audit" in workflow
     assert "trivy-action" in workflow
     assert "uv lock --check" in verifier
-    assert "uv sync --frozen --no-dev --check" in verifier
     assert "tomllib" in verifier

@@ -12,6 +12,6 @@ class RefineUntilGoodAgent(BaseUseCaseAgent):
     use_case = "refine_until_good"
     title = "Refine Until Good"
     when_to_use = "You want the agent to critique and improve its own output until it meets a quality bar."
-    aliases = ("loop", "evaluator_optimizer")
+    aliases = ()
     defaults = {"max_iterations": 5}
     strategy = EvaluatorOptimizerStrategy()

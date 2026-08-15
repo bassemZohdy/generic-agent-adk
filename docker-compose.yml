@@ -4,42 +4,75 @@ x-app-image: &app-image
     context: .
     dockerfile: Dockerfile
 
+x-resource-limits: &resource-limits
+  deploy:
+    resources:
+      limits:
+        cpus: "1.0"
+        memory: 1G
+
 services:
   otel-lgtm:
+    <<: *resource-limits
     image: grafana/otel-lgtm:0.28.0
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-      - "${OTLP_GRPC_PORT:-4317}:4317"
-      - "${OTLP_HTTP_PORT:-4318}:4318"
+      - "${GRAFANA_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
+      - "${OTLP_BIND_ADDRESS:-127.0.0.1}:${OTLP_GRPC_PORT:-4317}:4317"
+      - "${OTLP_BIND_ADDRESS:-127.0.0.1}:${OTLP_HTTP_PORT:-4318}:4318"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
     volumes:
       - otel-lgtm-data:/data
     restart: unless-stopped
 
   keycloak:
+    <<: *resource-limits
     image: quay.io/keycloak/keycloak:26.7.0
-    command: ["start-dev", "--import-realm"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        set -eu;
+        if [ "$${DEMO_MODE:-false}" = "true" ] &&
+           [ "$${DEPLOYMENT_ENV:-docker-compose}" != "docker-compose" ] &&
+           [ "$${DEPLOYMENT_ENV:-docker-compose}" != "development" ] &&
+           [ "$${DEPLOYMENT_ENV:-docker-compose}" != "dev" ]; then
+          echo "DEMO_MODE is allowed only for a development deployment" >&2;
+          exit 1;
+        fi;
+        if [ "$${DEMO_MODE:-false}" = "true" ]; then
+          realm_file=/opt/keycloak/data/import/realm-basic-agent-dev.json;
+        else
+          realm_file=/opt/keycloak/data/import/realm-basic-agent.json;
+        fi;
+        /opt/keycloak/bin/kc.sh import --file "$${realm_file}" --override false;
+        exec /opt/keycloak/bin/kc.sh start-dev
     ports:
       - "${KEYCLOAK_PORT:-8080}:8080"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD must be set}
+      DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
+      DEMO_MODE: ${DEMO_MODE:-false}
     volumes:
-      - ./keycloak:/opt/keycloak/data/import:ro
+      - ./keycloak/realm-basic-agent.json:/opt/keycloak/data/import/realm-basic-agent.json:ro
+      - ./keycloak/realm-basic-agent-dev.json:/opt/keycloak/data/import/realm-basic-agent-dev.json:ro
     restart: unless-stopped
 
   auth-gateway:
-    <<: *app-image
+    <<: [*app-image, *resource-limits]
     command: ["uvicorn", "basic_agent.auth_gateway:app", "--host", "0.0.0.0", "--port", "8010"]
     environment:
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
       AGENT_USE_CASE: ${AGENT_USE_CASE:-assistant}
       AGENT_MAX_ITERATIONS: ${AGENT_MAX_ITERATIONS:-3}
       AGENT_SPECIALISTS: ${AGENT_SPECIALISTS:-research,solution,risk}
       AGENT_DESCRIPTION: ${AGENT_DESCRIPTION:-A general-purpose, configuration-driven ADK agent.}
       AGENT_INSTRUCTION: ${AGENT_INSTRUCTION:-Answer the user's request helpfully and accurately.}
-      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,code_execution,mcp,openapi,approval,runtime,structured_output}
+      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,mcp,openapi,approval,runtime,structured_output}
       AGENT_KNOWLEDGE_FILE: ${AGENT_KNOWLEDGE_FILE:-}
       AGENT_KNOWLEDGE_RESULT_LIMIT: ${AGENT_KNOWLEDGE_RESULT_LIMIT:-3}
       AGENT_MCP_TOOLS: ${AGENT_MCP_TOOLS:-get_service_status}
@@ -50,7 +83,7 @@ services:
       AGENT_OPENAPI_TOOL_PREFIX: ${AGENT_OPENAPI_TOOL_PREFIX:-api_}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
-      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-basic-agent}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
       KEYCLOAK_REQUIRED_ROLES: ${KEYCLOAK_REQUIRED_ROLES:-agent-user}
     depends_on:
@@ -59,39 +92,45 @@ services:
       traefik.enable: "true"
       traefik.http.middlewares.keycloak-auth.forwardauth.address: http://auth-gateway:8010/verify
       traefik.http.middlewares.keycloak-auth.forwardauth.trustForwardHeader: "false"
-      traefik.http.middlewares.keycloak-auth.forwardauth.authResponseHeaders: X-Auth-User,X-Auth-Email
+      traefik.http.middlewares.keycloak-auth.forwardauth.authRequestHeaders: Authorization
+      traefik.http.middlewares.keycloak-auth.forwardauth.authResponseHeaders: X-Auth-User
     restart: unless-stopped
 
   api-proxy:
+    <<: *resource-limits
     image: traefik:v3.6.2
     command:
       - --entrypoints.adkapi.address=:8002
+      - --entrypoints.live.address=:8003
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --api.dashboard=false
     ports:
       - "${ADK_API_PORT:-8002}:8002"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - "${LIVE_API_PORT:-8003}:8003"
+    environment:
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
     depends_on:
       - auth-gateway
       - adk-api
+      - docker-socket-proxy
     restart: unless-stopped
 
   adk-api:
-    <<: *app-image
-    command: ["adk", "api_server", "--host", "0.0.0.0", "--port", "8002", "--auto_create_session", "--a2a", "--session_service_uri=sqlite:////app/.adk/api-sessions.db", "--artifact_service_uri=file:///app/.adk/artifacts", "--memory_service_uri=memory://", "--extra_plugins=basic_agent.agent.GenericAgentPlugin", "/app/src/basic_agent"]
+    <<: [*app-image, *resource-limits]
+    command: ["uvicorn", "basic_agent.api_server:app", "--host", "0.0.0.0", "--port", "8002", "--limit-concurrency", "100"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
       AGENT_USE_CASE: ${AGENT_USE_CASE:-assistant}
       AGENT_MAX_ITERATIONS: ${AGENT_MAX_ITERATIONS:-3}
       AGENT_SPECIALISTS: ${AGENT_SPECIALISTS:-research,solution,risk}
       AGENT_DESCRIPTION: ${AGENT_DESCRIPTION:-A general-purpose, configuration-driven ADK agent.}
       AGENT_INSTRUCTION: ${AGENT_INSTRUCTION:-Answer the user's request helpfully and accurately.}
-      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,code_execution,mcp,openapi,approval,runtime,structured_output}
+      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,mcp,openapi,approval,runtime,structured_output}
       AGENT_KNOWLEDGE_FILE: ${AGENT_KNOWLEDGE_FILE:-}
       AGENT_KNOWLEDGE_RESULT_LIMIT: ${AGENT_KNOWLEDGE_RESULT_LIMIT:-3}
       AGENT_MCP_TOOLS: ${AGENT_MCP_TOOLS:-get_service_status}
@@ -100,10 +139,10 @@ services:
       AGENT_OPENAPI_TITLE: ${AGENT_OPENAPI_TITLE:-Configured Service API}
       ADK_MODEL: ${ADK_MODEL:-gemini-3.6-flash}
       AGENT_SERVICE_API_URL: http://service-api:8001
-      AGENT_SERVICE_API_KEY: ${AGENT_SERVICE_API_KEY:-local-service-key}
+      AGENT_SERVICE_API_KEY: ${AGENT_SERVICE_API_KEY:-}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
-      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-basic-agent}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
       AGENT_SERVICE_API_ROLES: ${AGENT_SERVICE_API_ROLES:-agent-user}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-}
@@ -137,26 +176,27 @@ services:
     restart: unless-stopped
 
   service-api:
-    <<: *app-image
-    command: ["uvicorn", "basic_agent.service_api:app", "--host", "0.0.0.0", "--port", "8001"]
+    <<: [*app-image, *resource-limits]
+    command: ["uvicorn", "basic_agent.service_api:app", "--host", "0.0.0.0", "--port", "8001", "--limit-concurrency", "50"]
     ports:
       - "${AGENT_SERVICE_API_PORT:-8001}:8001"
     environment:
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
       AGENT_USE_CASE: ${AGENT_USE_CASE:-assistant}
       AGENT_MAX_ITERATIONS: ${AGENT_MAX_ITERATIONS:-3}
       AGENT_SPECIALISTS: ${AGENT_SPECIALISTS:-research,solution,risk}
       AGENT_DESCRIPTION: ${AGENT_DESCRIPTION:-A general-purpose, configuration-driven ADK agent.}
       AGENT_INSTRUCTION: ${AGENT_INSTRUCTION:-Answer the user's request helpfully and accurately.}
-      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,code_execution,mcp,openapi,approval,runtime,structured_output}
+      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,mcp,openapi,approval,runtime,structured_output}
       AGENT_OPENAPI_URL: http://service-api:8001
       AGENT_OPENAPI_PATH: ${AGENT_OPENAPI_PATH:-/status}
-      AGENT_SERVICE_API_KEY: ${AGENT_SERVICE_API_KEY:-local-service-key}
+      AGENT_SERVICE_API_KEY: ${AGENT_SERVICE_API_KEY:-}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
-      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-basic-agent}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
       AGENT_SERVICE_API_ROLES: ${AGENT_SERVICE_API_ROLES:-agent-user}
     restart: unless-stopped
@@ -164,23 +204,25 @@ services:
       - keycloak
 
   live-api:
-    <<: *app-image
-    command: ["uvicorn", "basic_agent.live_server:app", "--host", "0.0.0.0", "--port", "8003"]
-    ports:
-      - "${LIVE_API_PORT:-8003}:8003"
+    <<: [*app-image, *resource-limits]
+    command: ["uvicorn", "basic_agent.live_server:app", "--host", "0.0.0.0", "--port", "8003", "--limit-concurrency", "50"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
       AGENT_USE_CASE: ${AGENT_USE_CASE:-assistant}
       AGENT_MAX_ITERATIONS: ${AGENT_MAX_ITERATIONS:-3}
       AGENT_SPECIALISTS: ${AGENT_SPECIALISTS:-research,solution,risk}
       AGENT_DESCRIPTION: ${AGENT_DESCRIPTION:-A general-purpose, configuration-driven ADK agent.}
       AGENT_INSTRUCTION: ${AGENT_INSTRUCTION:-Answer the user's request helpfully and accurately.}
-      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,code_execution,mcp,openapi,approval,runtime,structured_output}
+      AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,mcp,openapi,approval,runtime,structured_output}
       ADK_MODEL: ${LIVE_ADK_MODEL:-gemini-3.1-flash-live-preview}
       LIVE_ADK_MODEL: ${LIVE_ADK_MODEL:-gemini-3.1-flash-live-preview}
+      LIVE_MAX_MESSAGE_BYTES: ${LIVE_MAX_MESSAGE_BYTES:-1048576}
+      LIVE_MAX_AUDIO_BYTES: ${LIVE_MAX_AUDIO_BYTES:-786432}
+      LIVE_MAX_MESSAGES_PER_MINUTE: ${LIVE_MAX_MESSAGES_PER_MINUTE:-60}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-}
       DATABASE_URL: ${DATABASE_URL:-}
       STORAGE_PATH: ${STORAGE_PATH:-}
@@ -200,13 +242,40 @@ services:
       OTEL_SERVICE_NAME: basic-adk-live-api
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
-      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-basic-agent}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
       LIVE_API_ROLES: ${LIVE_API_ROLES:-agent-user}
     restart: unless-stopped
     depends_on:
       - otel-lgtm
       - keycloak
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.live-api.entrypoints: live
+      traefik.http.routers.live-api.rule: PathPrefix(`/live`)
+      traefik.http.routers.live-api.middlewares: keycloak-auth,live-rate-limit
+      traefik.http.routers.live-api.service: live-api
+      traefik.http.services.live-api.loadbalancer.server.port: "8003"
+      traefik.http.middlewares.live-rate-limit.ratelimit.average: "30"
+      traefik.http.middlewares.live-rate-limit.ratelimit.period: 1s
+      traefik.http.middlewares.live-rate-limit.ratelimit.burst: "10"
+
+  docker-socket-proxy:
+    <<: *resource-limits
+    image: tecnativa/docker-socket-proxy:0.3.0
+    environment:
+      CONTAINERS: "1"
+      EVENTS: "1"
+      INFO: "1"
+      IMAGES: "1"
+      NETWORKS: "1"
+      PING: "1"
+      SERVICES: "1"
+      POST: "0"
+      VERSION: "1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
 
 
 volumes:

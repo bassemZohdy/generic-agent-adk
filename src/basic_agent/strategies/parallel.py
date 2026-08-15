@@ -24,11 +24,9 @@ class ParallelAgentStrategy(AgentStrategy):
         Returns:
             A ParallelAgent running multiple workers concurrently.
         """
+        self.validate(context)
         rt = context.runtime
-
-        num_workers = 2  # Default
-        if context.extra_config and "workers" in context.extra_config:
-            num_workers = context.extra_config["workers"]
+        num_workers = self.positive_count(context, "workers", 2)
 
         workers = [
             self.llm(rt, name=f"parallel_worker_{i}", description=f"Parallel worker {i}")
@@ -40,3 +38,6 @@ class ParallelAgentStrategy(AgentStrategy):
             description=rt.description,
             sub_agents=workers,
         )
+
+    def validate(self, context: AgentStrategyContext) -> None:
+        self.positive_count(context, "workers", 2)

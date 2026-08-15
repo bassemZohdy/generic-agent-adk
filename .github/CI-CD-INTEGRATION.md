@@ -295,7 +295,7 @@ docker pull ghcr.io/user/adk:main
 
 # Run with configuration
 docker run -it \
-  -v ./examples/research-assistant.yaml:/app/config/agent.yaml \
+  -v ./examples/assistant.yaml:/app/config/agent.yaml \
   -e GOOGLE_API_KEY=your-key \
   ghcr.io/user/adk:latest
 ```
@@ -586,7 +586,7 @@ The CI/CD pipeline provides:
 
 ✅ **Comprehensive Testing**
 - Python 3.10-3.13 coverage
-- 169 tests with 88% code coverage
+- 199 tests with 88%+ code coverage
 - Automated coverage reporting
 
 ✅ **Continuous Integration**

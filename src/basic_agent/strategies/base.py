@@ -39,6 +39,9 @@ class RuntimeContext:
     require_approval: bool = False
     specialists: tuple[str, ...] = ()
     roles: dict[str, RoleConfig] = field(default_factory=dict)
+    before_tool_callback: Any = None
+    after_tool_callback: Any = None
+    extra_config: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -83,6 +86,7 @@ class AgentStrategy(ABC):
         name: str,
         role: RoleConfig | None = None,
         description: str | None = None,
+        sub_agents: list[Agent] | None = None,
     ) -> LlmAgent:
         """Build an LlmAgent from runtime config with optional role overrides.
 
@@ -108,6 +112,9 @@ class AgentStrategy(ABC):
             output_key=rt.output_key,
             before_agent_callback=rt.before_agent_callback,
             after_agent_callback=rt.after_agent_callback,
+            before_tool_callback=rt.before_tool_callback,
+            after_tool_callback=rt.after_tool_callback,
+            sub_agents=sub_agents or [],
         )
 
     def validate(self, context: AgentStrategyContext) -> None:
@@ -122,3 +129,13 @@ class AgentStrategy(ABC):
         Raises:
             ValueError: If required configuration is missing or invalid.
         """
+
+    @staticmethod
+    def positive_count(context: AgentStrategyContext, key: str, default: int) -> int:
+        """Read a positive integer strategy option with a clear error."""
+        value = (context.extra_config or {}).get(key, default)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(
+                f"{context.agent_type} strategy option {key!r} must be an integer >= 1"
+            )
+        return value

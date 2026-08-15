@@ -12,5 +12,5 @@ class TeamCoordinatorAgent(BaseUseCaseAgent):
     use_case = "team_coordinator"
     title = "Team Coordinator"
     when_to_use = "You want complex work decomposed and delegated to worker agents by a coordinator."
-    aliases = ("supervisor",)
+    aliases = ()
     strategy = SupervisorStrategy()

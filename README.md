@@ -1,8 +1,8 @@
 # Generic Agent Runtime (ADK)
 
-One Docker image, nine generic use cases. Pick what you want the agent to do, configure it with environment variables or YAML, run it.
+One Docker image, eight generic use cases. Pick what you want the agent to do, configure it with environment variables or YAML, run it.
 
-[![Tests](https://img.shields.io/badge/tests-169%20passing-brightgreen)](./tests/)
+[![Tests](https://img.shields.io/badge/tests-199%20passing-brightgreen)](./tests/)
 [![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](./tests/)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-production%20ready-green)](.)
@@ -13,7 +13,7 @@ Start from what you need, not from architecture names:
 
 | I want an agent that… | Use case | Example config |
 |---|---|---|
-| Answers questions directly; investigates with tools when enabled | `assistant` | [`examples/assistant.yaml`](./examples/assistant.yaml) · tools-forward: [`research-assistant.yaml`](./examples/research-assistant.yaml) |
+| Answers questions directly; investigates when tools are enabled | `assistant` | [`examples/assistant.yaml`](./examples/assistant.yaml) |
 | Runs fixed steps in order (fetch → analyze → summarize) | `pipeline` | [`examples/pipeline.yaml`](./examples/pipeline.yaml) |
 | Gets several independent takes and aggregates them | `multi_perspective` | [`examples/multi-perspective.yaml`](./examples/multi-perspective.yaml) |
 | Keeps improving its output until it's good enough | `refine_until_good` | [`examples/refine-until-good.yaml`](./examples/refine-until-good.yaml) |
@@ -22,7 +22,7 @@ Start from what you need, not from architecture names:
 | Makes a plan first, then executes it | `plan_and_execute` | [`examples/plan-and-execute.yaml`](./examples/plan-and-execute.yaml) |
 | Proposes actions and waits for my approval | `approval_gate` | [`examples/approval-gate.yaml`](./examples/approval-gate.yaml) |
 
-With no tools enabled, `assistant` answers in one shot; with tools (search, knowledge, code) it iterates over them — one use case, two behaviors, driven purely by tool config. (`research_assistant` remains a working alias.)
+With no tools enabled, `assistant` answers in one shot; with tools (search, knowledge, code) it iterates over them — one use case, two behaviors, driven purely by tool config.
 
 ### Run with environment variables only (minimal)
 
@@ -34,7 +34,9 @@ docker run \
   ghcr.io/your-org/adk:latest
 ```
 
-That's it — every use case runs with sane defaults from two environment variables.
+That's it for agent construction — every use case runs with sane defaults. HTTP
+access still requires Keycloak, or the explicit local-only opt-out:
+`AUTH_DISABLED=true`.
 
 ### Run with a YAML config (full control)
 
@@ -58,7 +60,7 @@ A config file mounted at `/app/config/agent.yaml` is auto-detected (or set `AGEN
 | `AGENT_USE_CASE` | — | `assistant` | all |
 | `ADK_MODEL` | — | `gemini-3.6-flash` | all; accepts `provider/model` prefixes |
 | `AGENT_INSTRUCTION` | — | built-in generic prompt | all |
-| `AGENT_TOOLS` | — | all tools | all |
+| `AGENT_TOOLS` | — | `knowledge,search,mcp,openapi,approval,runtime,structured_output` | all; code execution is opt-in |
 | `AGENT_MAX_ITERATIONS` | — | `3` | `refine_until_good`, `plan_and_execute` |
 | `AGENT_SPECIALISTS` | — | `research,solution,risk` | `expert_dispatch` |
 
@@ -129,23 +131,12 @@ execution:
   max_iterations: 5                # refine_until_good, plan_and_execute
 ```
 
-### Deprecated names (still work, will be removed)
-
-| Old | New |
-|---|---|
-| `AGENT_PATTERN` | `AGENT_USE_CASE` |
-| `AGENT_PATTERN_MAX_ITERATIONS` | `AGENT_MAX_ITERATIONS` |
-| `AGENT_PATTERN_SPECIALISTS` | `AGENT_SPECIALISTS` |
-| `AGENT_PATTERN_REQUIRE_APPROVAL` | `AGENT_USE_CASE=approval_gate` |
-| `agent.type` in YAML | `agent.use_case` |
-| pattern names (`sequential`, `router`, `planner_executor`, …) | use-case keys (see table above) |
-
 ## Extending: custom use cases
 
 Technical users can add use cases without forking the runtime:
 
 1. Subclass `BaseUseCaseAgent` ([`src/basic_agent/use_cases/base.py`](./src/basic_agent/use_cases/base.py)), set its metadata and underlying strategy, and optionally override runtime hooks: `before_run`, `after_run`, `before_tool`, `after_tool` — wired automatically as ADK callbacks on the composed agent tree.
-2. Point `AGENT_USE_CASE_MODULE=/path/to/your_module.py` at your module; `BaseUseCaseAgent` subclasses found in it register automatically.
+2. Point `AGENT_USE_CASE_MODULE=/path/to/your_module.py` at your module; `BaseUseCaseAgent` subclasses found in it register automatically. In production, also set `AGENT_USE_CASE_MODULE_ALLOWLIST` to one or more approved directories (separated by the platform path separator).
 
 ## Architecture
 
@@ -199,6 +190,7 @@ docker run -p 8002:8002 -e GOOGLE_API_KEY=... adk:local
 
 # Full stack (api, live, status, auth-gateway, keycloak, grafana)
 cp .env.example .env
+# Set non-empty KEYCLOAK_ADMIN_PASSWORD and GRAFANA_ADMIN_PASSWORD in .env.
 docker compose up --build
 ```
 
@@ -206,7 +198,10 @@ Services: REST API `:8002/docs` · Live WebSocket `:8003/live` · Status `:8001/
 
 ## Authentication
 
-Keycloak (OIDC) with role-based access control. Dev credentials: `demo` / `demo`.
+Keycloak (OIDC) with role-based access control. The imported production-safe
+realm has no demo user and disables password grants. For local development only,
+set `DEMO_MODE=true` in `.env` to import the separate dev realm, then use
+`demo` / `demo`. Never enable that mode outside a disposable development stack.
 
 ```bash
 # Get a token
@@ -217,7 +212,14 @@ curl -X POST http://localhost:8080/realms/basic-agent/protocol/openid-connect/to
 curl -H "Authorization: Bearer <token>" http://localhost:8002/status
 ```
 
-Roles: `agent-user` (API access, default required), `agent-operator` (approvals). Override with `KEYCLOAK_REQUIRED_ROLES`, `AGENT_SERVICE_API_ROLES`, `LIVE_API_ROLES`.
+Roles: `agent-user` (API access, default required), `agent-operator` (approvals). Override with `KEYCLOAK_REQUIRED_ROLES`, `AGENT_SERVICE_API_ROLES`, `LIVE_API_ROLES`. `KEYCLOAK_AUDIENCE` defaults to `basic-agent` and is always verified. Service API keys have no default and are granted only the configured `AGENT_SERVICE_API_ROLES`.
+
+The REST and Live adapters bind session identity to the validated token subject;
+client-supplied `user_id` values cannot select another user's session. Live
+authentication uses the Authorization header, a WebSocket subprotocol, or the
+first `auth` message—never an `access_token` query parameter. Live frames are
+size- and rate-limited. Omit `session_id` for a new Live session and reuse only
+the server-issued ID returned in the first session message.
 
 ## Observability
 
@@ -227,9 +229,9 @@ OpenTelemetry (OTLP/gRPC) → Grafana stack (Loki logs, Tempo traces, Prometheus
 
 - [ADR-001 — Generic runtime architecture](./docs/ADR-001-generic-runtime-architecture.md)
 - [ADR-002 — Use-case taxonomy & consolidation](./docs/ADR-002-use-case-taxonomy.md)
-- [Feature & test inventory](./docs/FEATURES-AND-TESTS.md)
+- [ADR-003 — ADK Workflow migration spike](./docs/ADR-003-adk-workflow-migration.md)
+- [Security hardening completion record](./docs/SECURITY-HARDENING-2026-08-15.md)
 - [CI/CD guide](./.github/CI-CD-INTEGRATION.md) · [Publishing guide](./.github/PUBLISHING.md)
-- Historical reports (pre-refactor) live in [docs/archive/](./docs/archive/)
 
 ## Troubleshooting
 
@@ -240,9 +242,10 @@ OpenTelemetry (OTLP/gRPC) → Grafana stack (Loki logs, Tempo traces, Prometheus
 
 ## Production checklist
 
-1. Replace Keycloak with a managed identity provider
-2. Set production secrets via environment
-3. Configure external storage and monitoring
-4. Enable image scanning in CI/CD
+1. Replace the local Keycloak starter with a managed identity provider
+2. Set `KEYCLOAK_ISSUER`, `KEYCLOAK_AUDIENCE`, and production secrets via the deployment secret manager
+3. Keep `AUTH_DISABLED=false`, `DEMO_MODE=false`, and configure Cloud Run IAM/ingress
+4. Configure external storage and monitoring
+5. Keep the locked dependency, pip-audit, gitleaks, and Trivy CI gates enabled
 
 See `deploy/cloudrun/service.yaml` for a Cloud Run starter manifest.

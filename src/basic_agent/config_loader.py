@@ -94,7 +94,7 @@ class StateConfig:
 class AgentConfig:
     """Complete agent configuration."""
 
-    type: str
+    use_case: str
     name: str = ""
     description: str = ""
     model: ModelConfig | None = None
@@ -103,20 +103,25 @@ class AgentConfig:
     execution: ExecutionConfig | None = None
     output: OutputConfig | None = None
     state: StateConfig | None = None
-    use_case: str = ""
     roles: dict[str, RoleConfig] = field(default_factory=dict)
 
     def validate(self) -> None:
         """Validate structural configuration requirements.
 
-        Type-specific constraints (e.g., ROUTER needs specialists) are owned
-        by the corresponding strategy's validate().
+        Type-specific constraints (e.g., expert_dispatch needs specialists) are
+        owned by the corresponding strategy's validate().
 
         Raises:
             ValueError: If configuration is invalid.
         """
-        if not self.type:
-            raise ValueError("agent.type is required")
+        if not self.use_case:
+            raise ValueError("agent.use_case is required")
+        if self.execution:
+            _positive_int(self.execution.max_iterations, "execution.max_iterations")
+            for key in ("steps", "workers"):
+                value = getattr(self.execution, key)
+                if value is not None:
+                    _positive_int(value, f"execution.{key}")
 
 
 def _split_names(raw: str) -> list[str]:
@@ -124,22 +129,36 @@ def _split_names(raw: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
-def _resolve_use_case_key(raw: str) -> tuple[str, str]:
-    """Resolve a use-case key or legacy alias to ``(canonical, type_echo)``.
+def _positive_int(value: Any, name: str) -> int:
+    """Validate a positive integer from YAML or environment input."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} must be an integer >= 1; got {value!r}")
+    if value < 1:
+        raise ValueError(f"{name} must be an integer >= 1; got {value!r}")
+    return value
 
-    ``type_echo`` is the resolved use case's strategy agent_type (e.g.
-    "SEQUENTIAL" for pipeline); it keeps ``AgentConfig.type`` a coherent,
-    strategy-agnostic echo for backward compatibility. Unresolvable values
-    pass through so the use-case registry raises the authoritative error at
-    build time.
+
+def _env_positive_int(raw: str, name: str) -> int:
+    try:
+        value = int(raw.strip())
+    except ValueError as error:
+        raise ValueError(f"{name} must be an integer >= 1; got {raw!r}") from error
+    return _positive_int(value, name)
+
+
+def _resolve_use_case_key(raw: str) -> str:
+    """Resolve a use-case key to its canonical form.
+
+    Unresolvable values pass through so the use-case registry raises the
+    authoritative error at build time.
     """
     from .use_cases.registry import get_default_registry
 
     registry = get_default_registry()
     if registry.has(raw):
-        canonical, instance = registry.resolve(raw)
-        return canonical, instance.strategy.agent_type
-    return raw.strip().lower(), raw.strip().upper()
+        canonical, _ = registry.resolve(raw)
+        return canonical
+    return raw.strip().lower()
 
 
 def _substitute_env_vars(value: str) -> str:
@@ -191,6 +210,23 @@ def _process_dict_substitutions(obj: Any) -> Any:
     return obj
 
 
+def _unresolved_substitution_paths(obj: Any, path: str = "") -> list[str]:
+    """Return YAML field paths that still contain an unresolved placeholder."""
+    if isinstance(obj, dict):
+        paths: list[str] = []
+        for key, value in obj.items():
+            paths.extend(_unresolved_substitution_paths(value, f"{path}.{key}" if path else str(key)))
+        return paths
+    if isinstance(obj, list):
+        paths = []
+        for index, value in enumerate(obj):
+            paths.extend(_unresolved_substitution_paths(value, f"{path}[{index}]"))
+        return paths
+    if isinstance(obj, str) and "${" in obj:
+        return [path]
+    return []
+
+
 def load_config_from_yaml(path: str | Path) -> AgentConfig:
     """Load agent configuration from a YAML file.
 
@@ -220,22 +256,26 @@ def load_config_from_yaml(path: str | Path) -> AgentConfig:
 
     # Apply environment variable substitutions
     raw_data = _process_dict_substitutions(raw_data)
+    unresolved = _unresolved_substitution_paths(raw_data)
+    if unresolved:
+        raise ValueError(
+            "Unresolved environment substitution(s) in YAML: "
+            + ", ".join(unresolved)
+        )
 
     # Parse into dataclasses
     config = _parse_agent_config(raw_data)
     config.validate()
 
-    logger.info("Configuration loaded: agent_type=%s", config.type)
+    logger.info("Configuration loaded: use_case=%s", config.use_case)
     return config
 
 
 def load_config_from_env() -> AgentConfig:
     """Load agent configuration from environment variables (no config file).
 
-    ``AGENT_USE_CASE`` is primary; deprecated ``AGENT_PATTERN``-era variables
-    resolve with a logged warning. Env vars are read at call time; ``settings``
-    supplies the defaults. The returned AgentConfig has the same shape as the
-    YAML path.
+    Env vars are read at call time; ``settings`` supplies the defaults. The
+    returned AgentConfig has the same shape as the YAML path.
 
     Returns:
         AgentConfig populated from environment.
@@ -243,46 +283,21 @@ def load_config_from_env() -> AgentConfig:
     from .config import settings
 
     use_case_raw = os.environ.get("AGENT_USE_CASE", "").strip()
-    if not use_case_raw and os.environ.get("AGENT_PATTERN") is not None:
-        logger.warning(
-            "AGENT_PATTERN is deprecated; set AGENT_USE_CASE instead "
-            "(from deprecated AGENT_PATTERN)"
-        )
-        use_case_raw = os.environ.get("AGENT_PATTERN", "").strip()
     if not use_case_raw:
         use_case_raw = "assistant"
-    use_case, type_echo = _resolve_use_case_key(use_case_raw)
+    use_case = _resolve_use_case_key(use_case_raw)
 
     max_iterations_raw = os.environ.get("AGENT_MAX_ITERATIONS")
-    if max_iterations_raw is None and os.environ.get("AGENT_PATTERN_MAX_ITERATIONS") is not None:
-        logger.warning(
-            "AGENT_PATTERN_MAX_ITERATIONS is deprecated; set AGENT_MAX_ITERATIONS instead"
-        )
-        max_iterations_raw = os.environ.get("AGENT_PATTERN_MAX_ITERATIONS")
     max_iterations = (
-        int(max_iterations_raw) if max_iterations_raw else settings.pattern_max_iterations
+        _env_positive_int(max_iterations_raw, "AGENT_MAX_ITERATIONS")
+        if max_iterations_raw
+        else settings.max_iterations
     )
-
-    require_approval = False
-    if os.environ.get("AGENT_PATTERN_REQUIRE_APPROVAL") is not None:
-        logger.warning("AGENT_PATTERN_REQUIRE_APPROVAL is deprecated")
-        require_approval = (
-            os.environ.get("AGENT_PATTERN_REQUIRE_APPROVAL", "").strip().lower()
-            in ("1", "true", "yes")
-        )
 
     specialists_raw = os.environ.get("AGENT_SPECIALISTS")
-    if specialists_raw is None and os.environ.get("AGENT_PATTERN_SPECIALISTS") is not None:
-        logger.warning(
-            "AGENT_PATTERN_SPECIALISTS is deprecated; set AGENT_SPECIALISTS instead"
-        )
-        specialists_raw = os.environ.get("AGENT_PATTERN_SPECIALISTS")
-    specialists = _split_names(specialists_raw) if specialists_raw else list(
-        settings.pattern_specialists
-    )
+    specialists = _split_names(specialists_raw) if specialists_raw else list(settings.specialists)
 
     config = AgentConfig(
-        type=type_echo,
         use_case=use_case,
         name=settings.app_name,
         description=settings.agent_description,
@@ -300,8 +315,7 @@ def load_config_from_env() -> AgentConfig:
             ),
         ),
         execution=ExecutionConfig(
-            max_iterations=max_iterations,
-            require_approval=require_approval,
+            max_iterations=_positive_int(max_iterations, "execution.max_iterations"),
             specialists=specialists,
         ),
         output=OutputConfig(
@@ -334,9 +348,8 @@ def apply_env_overrides(
 ) -> AgentConfig:
     """Apply the documented env vars onto a YAML-loaded config.
 
-    Only explicitly set, non-empty values apply. Deprecated ``AGENT_PATTERN*``
-    fallbacks apply only when the corresponding primary var is unset (with a
-    logged warning). Returns a new AgentConfig; nothing shared is mutated.
+    Only explicitly set, non-empty values apply. Returns a new AgentConfig;
+    nothing shared is mutated.
 
     Args:
         config: The YAML-loaded configuration.
@@ -351,18 +364,10 @@ def apply_env_overrides(
     overridden: list[str] = []
 
     use_case_raw = os.environ.get("AGENT_USE_CASE")
-    use_case_key = "AGENT_USE_CASE"
-    if use_case_raw is None and os.environ.get("AGENT_PATTERN") is not None:
-        logger.warning(
-            "AGENT_PATTERN is deprecated; set AGENT_USE_CASE instead "
-            "(from deprecated AGENT_PATTERN)"
-        )
-        use_case_raw = os.environ.get("AGENT_PATTERN")
-        use_case_key = "AGENT_PATTERN"
     if use_case_raw and use_case_raw.strip():
-        canonical, type_echo = _resolve_use_case_key(use_case_raw)
-        config = dataclasses.replace(config, use_case=canonical, type=type_echo)
-        overridden.append(use_case_key)
+        canonical = _resolve_use_case_key(use_case_raw)
+        config = dataclasses.replace(config, use_case=canonical)
+        overridden.append("AGENT_USE_CASE")
 
     model_name = os.environ.get("ADK_MODEL")
     if model_name and model_name.strip():
@@ -390,42 +395,35 @@ def apply_env_overrides(
         overridden.append("AGENT_TOOLS")
 
     max_iterations_raw = os.environ.get("AGENT_MAX_ITERATIONS")
-    iterations_key = "AGENT_MAX_ITERATIONS"
-    if max_iterations_raw is None and os.environ.get("AGENT_PATTERN_MAX_ITERATIONS") is not None:
-        logger.warning(
-            "AGENT_PATTERN_MAX_ITERATIONS is deprecated; set AGENT_MAX_ITERATIONS instead"
-        )
-        max_iterations_raw = os.environ.get("AGENT_PATTERN_MAX_ITERATIONS")
-        iterations_key = "AGENT_PATTERN_MAX_ITERATIONS"
     if max_iterations_raw and max_iterations_raw.strip():
         execution = config.execution or ExecutionConfig()
         config = dataclasses.replace(
             config,
-            execution=dataclasses.replace(execution, max_iterations=int(max_iterations_raw)),
+            execution=dataclasses.replace(
+                execution,
+                max_iterations=_env_positive_int(
+                    max_iterations_raw, "AGENT_MAX_ITERATIONS"
+                ),
+            ),
         )
-        overridden.append(iterations_key)
+        overridden.append("AGENT_MAX_ITERATIONS")
 
     specialists_raw = os.environ.get("AGENT_SPECIALISTS")
-    specialists_key = "AGENT_SPECIALISTS"
-    if specialists_raw is None and os.environ.get("AGENT_PATTERN_SPECIALISTS") is not None:
-        logger.warning(
-            "AGENT_PATTERN_SPECIALISTS is deprecated; set AGENT_SPECIALISTS instead"
-        )
-        specialists_raw = os.environ.get("AGENT_PATTERN_SPECIALISTS")
-        specialists_key = "AGENT_PATTERN_SPECIALISTS"
     if specialists_raw and specialists_raw.strip():
         names = _split_names(specialists_raw)
-        if config.roles and set(names) != set(config.roles):
+        if config.roles and not set(names).issubset(config.roles):
             raise ValueError(
-                f"{specialists_key} names {sorted(names)} must match roles keys "
-                f"{sorted(config.roles)} exactly"
+                f"AGENT_SPECIALISTS contains unknown role(s) "
+                f"{sorted(set(names) - set(config.roles))}; available roles: "
+                f"{sorted(config.roles)}"
             )
         execution = config.execution or ExecutionConfig()
         config = dataclasses.replace(
             config, execution=dataclasses.replace(execution, specialists=names)
         )
-        overridden.append(specialists_key)
+        overridden.append("AGENT_SPECIALISTS")
 
+    config.validate()
     log_config_provenance(config_path, overridden, config.use_case or "assistant")
     return config
 
@@ -447,14 +445,9 @@ def _parse_agent_config(data: dict) -> AgentConfig:
         raise ValueError("agent must be a mapping")
 
     use_case_raw = str(agent_data.get("use_case") or "").strip()
-    legacy_raw = str(agent_data.get("type") or agent_data.get("pattern") or "").strip()
-    if legacy_raw:
-        logger.warning(
-            "agent.%s is deprecated; set agent.use_case instead",
-            "type" if agent_data.get("type") else "pattern",
-        )
-    resolved_raw = use_case_raw or legacy_raw or "assistant"
-    use_case, type_echo = _resolve_use_case_key(resolved_raw)
+    if not use_case_raw:
+        raise ValueError("agent.use_case is required")
+    use_case = _resolve_use_case_key(use_case_raw)
 
     model_data = data.get("model", {})
     model_config = None
@@ -507,10 +500,21 @@ def _parse_agent_config(data: dict) -> AgentConfig:
     execution_config = None
     if execution_data:
         execution_config = ExecutionConfig(
-            max_iterations=execution_data.get("max_iterations", 3),
+            max_iterations=_positive_int(
+                execution_data.get("max_iterations", 3),
+                "execution.max_iterations",
+            ),
             require_approval=execution_data.get("require_approval", False),
-            steps=execution_data.get("steps"),
-            workers=execution_data.get("workers"),
+            steps=(
+                _positive_int(execution_data["steps"], "execution.steps")
+                if execution_data.get("steps") is not None
+                else None
+            ),
+            workers=(
+                _positive_int(execution_data["workers"], "execution.workers")
+                if execution_data.get("workers") is not None
+                else None
+            ),
             specialists=execution_data.get("specialists", []),
         )
 
@@ -539,7 +543,6 @@ def _parse_agent_config(data: dict) -> AgentConfig:
     }
 
     return AgentConfig(
-        type=type_echo,
         use_case=use_case,
         name=agent_data.get("name", ""),
         description=agent_data.get("description", ""),

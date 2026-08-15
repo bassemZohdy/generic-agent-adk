@@ -7,6 +7,8 @@ spec:
     metadata:
       annotations:
         run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/ingress: internal-and-cloud-load-balancing
+        run.googleapis.com/invoker-iam-disabled: "false"
     spec:
       containers:
         - image: REGION-docker.pkg.dev/PROJECT_ID/REPOSITORY/basic-adk-agent:TAG
@@ -16,7 +18,17 @@ spec:
             - name: APP_NAME
               value: basic_agent
             - name: DEPLOYMENT_ENV
-              value: cloud-run
+              value: production
+            - name: AUTH_DISABLED
+              value: "false"
+            - name: KEYCLOAK_ISSUER
+              value: https://KEYCLOAK_HOST/realms/basic-agent
+            - name: KEYCLOAK_JWKS_URL
+              value: https://KEYCLOAK_HOST/realms/basic-agent/protocol/openid-connect/certs
+            - name: KEYCLOAK_AUDIENCE
+              value: basic-agent
+            - name: KEYCLOAK_REQUIRED_ROLES
+              value: agent-user
             - name: ADK_MODEL
               value: gemini-3.6-flash
             - name: GOOGLE_API_KEY

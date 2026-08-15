@@ -24,22 +24,21 @@ class SupervisorStrategy(AgentStrategy):
         Returns:
             An LlmAgent supervising multiple sub-agents.
         """
+        self.validate(context)
         rt = context.runtime
-
-        num_workers = 2  # Default
-        if context.extra_config and "workers" in context.extra_config:
-            num_workers = context.extra_config["workers"]
+        num_workers = self.positive_count(context, "workers", 2)
 
         workers = [
             self.llm(rt, name=f"supervisor_worker_{i}", description=f"Worker {i}")
             for i in range(num_workers)
         ]
 
-        return LlmAgent(
+        return self.llm(
+            rt,
             name=f"{context.agent_type.lower()}_agent",
-            model=rt.model,
             description=rt.description,
-            instruction=rt.instruction,
-            tools=rt.tools or [],
             sub_agents=workers,
         )
+
+    def validate(self, context: AgentStrategyContext) -> None:
+        self.positive_count(context, "workers", 2)

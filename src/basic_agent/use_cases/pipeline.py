@@ -12,5 +12,5 @@ class PipelineAgent(BaseUseCaseAgent):
     use_case = "pipeline"
     title = "Pipeline"
     when_to_use = "You want fixed steps always executed in the same order, like fetch, analyze, summarize."
-    aliases = ("sequential",)
+    aliases = ()
     strategy = SequentialAgentStrategy()

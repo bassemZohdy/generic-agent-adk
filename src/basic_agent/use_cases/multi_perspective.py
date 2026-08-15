@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from .base import BaseUseCaseAgent
 from ..strategies import ParallelAgentStrategy
+
+
+logger = logging.getLogger(__name__)
 
 
 class MultiPerspectiveAgent(BaseUseCaseAgent):
@@ -12,7 +17,7 @@ class MultiPerspectiveAgent(BaseUseCaseAgent):
     use_case = "multi_perspective"
     title = "Multi-Perspective"
     when_to_use = "You want several independent takes on the same question compared or combined."
-    aliases = ("parallel",)
+    aliases = ()
     strategy = ParallelAgentStrategy()
 
     def after_run(self, callback_context) -> None:
@@ -29,4 +34,4 @@ class MultiPerspectiveAgent(BaseUseCaseAgent):
             ]
             state["aggregated_perspectives"] = values
         except Exception:  # noqa: BLE001 - tolerate fake/simple contexts
-            pass
+            logger.debug("Unable to aggregate multi-perspective state", exc_info=True)

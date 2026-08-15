@@ -1,4 +1,4 @@
-"""Tests for the public use-case layer (Phase 2: T2.1–T2.4)."""
+"""Tests for the public use-case layer."""
 
 from __future__ import annotations
 
@@ -34,9 +34,6 @@ ALL_KEYS = [
     "approval_gate",
 ]
 
-# Merged/legacy keys that must still resolve (alias surface).
-ALIAS_KEYS = ["research_assistant", "react", "generic", "direct"]
-
 
 def walk(root):
     """Yield every agent in the tree, root first."""
@@ -53,14 +50,6 @@ def test_all_builtins_build(key):
     agent = get_default_registry().get(key).build(MINIMAL_RUNTIME)
     assert agent is not None
     assert list(walk(agent))
-
-
-@pytest.mark.parametrize("key", ALIAS_KEYS)
-def test_merged_aliases_resolve_to_assistant(key):
-    """research_assistant/react merged into assistant; aliases keep resolving."""
-    canonical, instance = get_default_registry().resolve(key)
-    assert canonical == "assistant"
-    assert instance.build(MINIMAL_RUNTIME) is not None
 
 
 # --- T2.1: defaults application ---
@@ -203,15 +192,15 @@ def test_aggregation_ignores_non_matching_keys():
 # --- T2.3: registry ---
 
 
-def test_alias_resolution():
+def test_canonical_key_resolution():
     registry = get_default_registry()
-    assert registry.get("router").use_case == "expert_dispatch"
-    assert registry.get("HUMAN_IN_LOOP").use_case == "approval_gate"
-    assert registry.get("Plan_Execute").use_case == "plan_and_execute"
+    assert registry.get("expert_dispatch").use_case == "expert_dispatch"
+    assert registry.get("approval_gate").use_case == "approval_gate"
+    assert registry.get("plan_and_execute").use_case == "plan_and_execute"
 
 
 def test_resolve_returns_canonical_key():
-    canonical, instance = get_default_registry().resolve("router")
+    canonical, instance = get_default_registry().resolve("expert_dispatch")
     assert canonical == "expert_dispatch"
     assert instance.use_case == canonical
 
@@ -235,6 +224,7 @@ def test_list_use_cases_catalog():
         assert entry["title"]
         assert entry["when_to_use"]
         assert isinstance(entry["aliases"], list)
+        assert entry["aliases"] == []
         assert {"rest", "web", "cli"} <= set(entry["interfaces"])
     by_key = {e["key"]: e for e in entries}
     assert "live" in by_key["assistant"]["interfaces"]
@@ -244,8 +234,7 @@ def test_list_use_cases_catalog():
 def test_registry_has():
     registry = get_default_registry()
     assert registry.has("assistant")
-    assert registry.has("generic")
-    assert registry.has("GENERIC")
+    assert registry.has("ASSISTANT")
     assert not registry.has("nope")
 
 
@@ -263,7 +252,7 @@ class SnarkyAgent(BaseUseCaseAgent):
     use_case = "snarky"
     title = "Snarky"
     when_to_use = "Test-only use case."
-    aliases = ("snark",)
+    aliases = ()
     strategy = DirectStrategy()
 
 
@@ -282,7 +271,6 @@ def test_load_custom_use_cases(tmp_path):
 
     registry = get_default_registry()
     assert registry.has("snarky")
-    assert registry.get("snark").use_case == "snarky"
     built = registry.get("snarky").build(MINIMAL_RUNTIME)
     assert built is not None
 

@@ -19,15 +19,19 @@ from basic_agent.strategies.registry import get_default_registry
 from basic_agent.use_cases.registry import get_default_registry as get_use_case_registry
 
 
+def _strategy_for_use_case(use_case: str):
+    """Return the strategy instance behind a canonical use-case key."""
+    return get_use_case_registry().resolve(use_case)[1].strategy
+
+
 def test_registry_integration_with_config_loader():
     """End-to-end: YAML config -> AgentConfig -> Strategy -> Agent."""
-    registry = get_default_registry()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "agent.yaml"
         config_file.write_text("""
 agent:
-  type: DIRECT
+  use_case: assistant
   description: Direct test agent
 
 model:
@@ -47,9 +51,8 @@ state:
 
         config = load_config_from_yaml(config_file)
 
-        # Resolve strategy
-        strategy = registry.get(config.type)
-        assert strategy is not None
+        # Resolve strategy via the use-case facade
+        strategy = _strategy_for_use_case(config.use_case)
         assert strategy.agent_type == "DIRECT"
 
         # Build runtime context
@@ -61,7 +64,7 @@ state:
         )
 
         # Build agent via strategy
-        context = AgentStrategyContext(agent_type=config.type, runtime=runtime)
+        context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
         agent = strategy.build(context)
 
         assert isinstance(agent, Agent)
@@ -107,7 +110,7 @@ def test_sequential_strategy_with_config():
         config_file = Path(tmpdir) / "agent.yaml"
         config_file.write_text("""
 agent:
-  type: SEQUENTIAL
+  use_case: pipeline
   description: Sequential pipeline
 
 model:
@@ -128,7 +131,8 @@ state:
 """)
 
         config = load_config_from_yaml(config_file)
-        strategy = registry.get(config.type)
+        strategy = _strategy_for_use_case(config.use_case)
+        assert strategy.agent_type == "SEQUENTIAL"
 
         runtime = RuntimeContext(
             model=config.model.name,
@@ -138,7 +142,7 @@ state:
         )
 
         context = AgentStrategyContext(
-            agent_type=config.type,
+            agent_type=strategy.agent_type,
             runtime=runtime,
             extra_config={"steps": 3},
         )
@@ -156,7 +160,7 @@ def test_parallel_strategy_with_config():
         config_file = Path(tmpdir) / "agent.yaml"
         config_file.write_text("""
 agent:
-  type: PARALLEL
+  use_case: multi_perspective
   description: Parallel workers
 
 model:
@@ -177,7 +181,8 @@ state:
 """)
 
         config = load_config_from_yaml(config_file)
-        strategy = registry.get(config.type)
+        strategy = _strategy_for_use_case(config.use_case)
+        assert strategy.agent_type == "PARALLEL"
 
         runtime = RuntimeContext(
             model=config.model.name,
@@ -187,7 +192,7 @@ state:
         )
 
         context = AgentStrategyContext(
-            agent_type=config.type,
+            agent_type=strategy.agent_type,
             runtime=runtime,
             extra_config={"workers": 4},
         )
@@ -199,13 +204,12 @@ state:
 
 def test_router_strategy_with_specialists():
     """Test ROUTER strategy with specialist configuration."""
-    registry = get_default_registry()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "agent.yaml"
         config_file.write_text("""
 agent:
-  type: ROUTER
+  use_case: expert_dispatch
   description: Router with specialists
 
 model:
@@ -229,7 +233,8 @@ state:
 """)
 
         config = load_config_from_yaml(config_file)
-        strategy = registry.get(config.type)
+        strategy = _strategy_for_use_case(config.use_case)
+        assert strategy.agent_type == "ROUTER"
 
         runtime = RuntimeContext(
             model=config.model.name,
@@ -239,7 +244,7 @@ state:
             specialists=tuple(config.execution.specialists),
         )
 
-        context = AgentStrategyContext(agent_type=config.type, runtime=runtime)
+        context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
         agent = strategy.build(context)
 
         assert isinstance(agent, LlmAgent)
@@ -248,13 +253,12 @@ state:
 
 def test_loop_strategy_respects_max_iterations():
     """Test LOOP strategy with iteration limits."""
-    registry = get_default_registry()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "agent.yaml"
         config_file.write_text("""
 agent:
-  type: LOOP
+  use_case: refine_until_good
   description: Loop with limit
 
 model:
@@ -275,7 +279,8 @@ state:
 """)
 
         config = load_config_from_yaml(config_file)
-        strategy = registry.get(config.type)
+        strategy = _strategy_for_use_case(config.use_case)
+        assert strategy.agent_type == "EVALUATOR_OPTIMIZER"
 
         runtime = RuntimeContext(
             model=config.model.name,
@@ -285,7 +290,7 @@ state:
             max_iterations=10,
         )
 
-        context = AgentStrategyContext(agent_type=config.type, runtime=runtime)
+        context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
         agent = strategy.build(context)
 
         assert isinstance(agent, LoopAgent)
@@ -302,15 +307,13 @@ def test_all_examples_are_loadable():
 
     for yaml_file in examples_dir.glob("*.yaml"):
         config = load_config_from_yaml(yaml_file)
-        assert config.type  # Should have a type
+        assert config.use_case  # Should have a use case
         assert config.model  # Should have model config
         config.validate()  # Should validate without errors
 
 
 EXAMPLE_USE_CASES = [
     ("assistant.yaml", "assistant", LlmAgent),
-    # research-assistant.yaml uses the merged alias; loader canonicalizes to assistant.
-    ("research-assistant.yaml", "assistant", LlmAgent),
     ("pipeline.yaml", "pipeline", SequentialAgent),
     ("multi-perspective.yaml", "multi_perspective", ParallelAgent),
     ("refine-until-good.yaml", "refine_until_good", LoopAgent),

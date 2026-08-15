@@ -12,9 +12,6 @@ dependencies = [
     "PyJWT[crypto]>=2.8.0",
 ]
 
-[project.scripts]
-generic-agent-eval = "basic_agent.evaluation:main"
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

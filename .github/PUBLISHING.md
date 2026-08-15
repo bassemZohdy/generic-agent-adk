@@ -83,7 +83,7 @@ docker pull ghcr.io/your-org/adk:main-abc123def456
 
 ```bash
 docker run -it \
-  -v ./examples/research-assistant.yaml:/app/config/agent.yaml \
+  -v ./examples/assistant.yaml:/app/config/agent.yaml \
   -e GOOGLE_API_KEY=your-api-key \
   ghcr.io/your-org/adk:latest
 ```
@@ -212,7 +212,7 @@ grype ghcr.io/your-org/adk:latest
 docker pull ghcr.io/your-org/adk:latest
 docker run -d \
   -p 8002:8002 \
-  -v ./examples/research-assistant.yaml:/app/config/agent.yaml \
+  -v ./examples/assistant.yaml:/app/config/agent.yaml \
   -e GOOGLE_API_KEY=your-api-key \
   ghcr.io/your-org/adk:latest
 ```
@@ -224,7 +224,7 @@ docker pull ghcr.io/your-org/adk:v1.0.0
 docker tag ghcr.io/your-org/adk:v1.0.0 my-adk:production
 docker run -d \
   -p 8002:8002 \
-  -v ./examples/research-assistant.yaml:/app/config/agent.yaml \
+  -v ./examples/assistant.yaml:/app/config/agent.yaml \
   -e GOOGLE_API_KEY=your-api-key \
   my-adk:production
 ```
@@ -240,10 +240,10 @@ services:
       - "8002:8002"
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      AGENT_USE_CASE: research_assistant
+      AGENT_USE_CASE: assistant
       ADK_MODEL: gemini-2.0-flash
     volumes:
-      - ./examples/research-assistant.yaml:/app/config/agent.yaml
+      - ./examples/assistant.yaml:/app/config/agent.yaml
 ```
 
 ## CI/CD Workflow File

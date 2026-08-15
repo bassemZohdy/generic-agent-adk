@@ -22,7 +22,7 @@ from basic_agent.telemetry import invocation_attributes
 class TestRetrieveKnowledge:
     """Test knowledge retrieval with various configurations."""
 
-    def test_retrieve_knowledge_with_no_query_matches(self, tmp_path):
+    def test_retrieve_knowledge_with_no_query_matches(self, tmp_path, settings_patch):
         """Test knowledge retrieval when query doesn't match any entries."""
         knowledge_file = tmp_path / "knowledge.json"
         knowledge_file.write_text(
@@ -32,30 +32,22 @@ class TestRetrieveKnowledge:
 
         from basic_agent import agent
 
-        old_file = agent.settings.knowledge_file
-        object.__setattr__(agent.settings, "knowledge_file", str(knowledge_file))
-        try:
-            result = retrieve_knowledge("Java programming")
-            assert "Python" in result
-        finally:
-            object.__setattr__(agent.settings, "knowledge_file", old_file)
+        settings_patch(agent, knowledge_file=str(knowledge_file))
+        result = retrieve_knowledge("Java programming")
+        assert "Python" in result
 
-    def test_retrieve_knowledge_with_text_file(self, tmp_path):
+    def test_retrieve_knowledge_with_text_file(self, tmp_path, settings_patch):
         """Test knowledge retrieval from a plain text file."""
         knowledge_file = tmp_path / "knowledge.txt"
         knowledge_file.write_text("This is knowledge content", encoding="utf-8")
 
         from basic_agent import agent
 
-        old_file = agent.settings.knowledge_file
-        object.__setattr__(agent.settings, "knowledge_file", str(knowledge_file))
-        try:
-            result = retrieve_knowledge("knowledge")
-            assert "This is knowledge content" in result
-        finally:
-            object.__setattr__(agent.settings, "knowledge_file", old_file)
+        settings_patch(agent, knowledge_file=str(knowledge_file))
+        result = retrieve_knowledge("knowledge")
+        assert "This is knowledge content" in result
 
-    def test_retrieve_knowledge_with_invalid_json(self, tmp_path):
+    def test_retrieve_knowledge_with_invalid_json(self, tmp_path, settings_patch):
         """Test knowledge retrieval with malformed JSON raises error."""
         knowledge_file = tmp_path / "knowledge.json"
         knowledge_file.write_text("{ invalid json }", encoding="utf-8")
@@ -63,16 +55,12 @@ class TestRetrieveKnowledge:
         from basic_agent import agent
         import json
 
-        old_file = agent.settings.knowledge_file
-        object.__setattr__(agent.settings, "knowledge_file", str(knowledge_file))
-        try:
-            # Should raise JSONDecodeError when JSON is invalid
-            with pytest.raises(json.JSONDecodeError):
-                retrieve_knowledge("test")
-        finally:
-            object.__setattr__(agent.settings, "knowledge_file", old_file)
+        settings_patch(agent, knowledge_file=str(knowledge_file))
+        # Should raise JSONDecodeError when JSON is invalid
+        with pytest.raises(json.JSONDecodeError):
+            retrieve_knowledge("test")
 
-    def test_retrieve_knowledge_respects_result_limit(self, tmp_path):
+    def test_retrieve_knowledge_respects_result_limit(self, tmp_path, settings_patch):
         """Test knowledge retrieval respects the result limit."""
         knowledge_file = tmp_path / "knowledge.json"
         knowledge_file.write_text(
@@ -85,19 +73,16 @@ class TestRetrieveKnowledge:
 
         from basic_agent import agent
 
-        old_file = agent.settings.knowledge_file
-        old_limit = agent.settings.knowledge_result_limit
-        object.__setattr__(agent.settings, "knowledge_file", str(knowledge_file))
-        object.__setattr__(agent.settings, "knowledge_result_limit", 2)
-        try:
-            result = retrieve_knowledge("content")
-            # Should only return 2 results
-            lines = result.strip().split("\n")
-            result_count = len([l for l in lines if l.startswith("[")])
-            assert result_count <= 2
-        finally:
-            object.__setattr__(agent.settings, "knowledge_file", old_file)
-            object.__setattr__(agent.settings, "knowledge_result_limit", old_limit)
+        settings_patch(
+            agent,
+            knowledge_file=str(knowledge_file),
+            knowledge_result_limit=2,
+        )
+        result = retrieve_knowledge("content")
+        # Should only return 2 results
+        lines = result.strip().split("\n")
+        result_count = len([l for l in lines if l.startswith("[")])
+        assert result_count <= 2
 
 
 class TestInspectRuntime:
@@ -181,89 +166,65 @@ class TestGetServiceStatus:
 class TestRequireRoles:
     """Test role requirement validation."""
 
-    def test_require_roles_with_matching_roles(self, monkeypatch):
+    def test_require_roles_with_matching_roles(self, settings_patch):
         """Test role validation with matching roles."""
         from basic_agent import auth
 
-        old_claim = auth.settings.keycloak_role_claim
-        object.__setattr__(auth.settings, "keycloak_role_claim", "realm_access.roles")
-        try:
-            # Should not raise
-            require_roles(
-                {"realm_access": {"roles": ["admin", "user"]}},
-                ("admin",),
-            )
-        finally:
-            object.__setattr__(auth.settings, "keycloak_role_claim", old_claim)
+        settings_patch(auth, keycloak_role_claim="realm_access.roles")
+        # Should not raise
+        require_roles(
+            {"realm_access": {"roles": ["admin", "user"]}},
+            ("admin",),
+        )
 
-    def test_require_roles_with_missing_roles(self, monkeypatch):
+    def test_require_roles_with_missing_roles(self, settings_patch):
         """Test role validation fails with missing required roles."""
         from basic_agent import auth
 
-        old_claim = auth.settings.keycloak_role_claim
-        object.__setattr__(auth.settings, "keycloak_role_claim", "realm_access.roles")
-        try:
-            with pytest.raises(HTTPException) as exc_info:
-                require_roles(
-                    {"realm_access": {"roles": ["user"]}},
-                    ("admin",),
-                )
-            assert exc_info.value.status_code == 403
-        finally:
-            object.__setattr__(auth.settings, "keycloak_role_claim", old_claim)
+        settings_patch(auth, keycloak_role_claim="realm_access.roles")
+        with pytest.raises(HTTPException) as exc_info:
+            require_roles(
+                {"realm_access": {"roles": ["user"]}},
+                ("admin",),
+            )
+        assert exc_info.value.status_code == 403
 
-    def test_require_roles_with_missing_claim_path(self):
+    def test_require_roles_with_missing_claim_path(self, settings_patch):
         """Test role validation with missing claim path."""
         from basic_agent import auth
 
-        old_claim = auth.settings.keycloak_role_claim
-        object.__setattr__(auth.settings, "keycloak_role_claim", "nonexistent.path")
-        try:
-            with pytest.raises(HTTPException) as exc_info:
-                require_roles({"realm_access": {"roles": ["user"]}}, ("user",))
-            assert exc_info.value.status_code == 403
-        finally:
-            object.__setattr__(auth.settings, "keycloak_role_claim", old_claim)
+        settings_patch(auth, keycloak_role_claim="nonexistent.path")
+        with pytest.raises(HTTPException) as exc_info:
+            require_roles({"realm_access": {"roles": ["user"]}}, ("user",))
+        assert exc_info.value.status_code == 403
 
-    def test_require_roles_with_empty_required_roles(self):
+    def test_require_roles_with_empty_required_roles(self, settings_patch):
         """Test role validation with empty required roles."""
         from basic_agent import auth
 
-        old_claim = auth.settings.keycloak_role_claim
-        object.__setattr__(auth.settings, "keycloak_role_claim", "realm_access.roles")
-        try:
-            # Should not raise when no roles required
-            require_roles({"realm_access": {"roles": []}}, ())
-        finally:
-            object.__setattr__(auth.settings, "keycloak_role_claim", old_claim)
+        settings_patch(auth, keycloak_role_claim="realm_access.roles")
+        # Should not raise when no roles required
+        require_roles({"realm_access": {"roles": []}}, ())
 
 
 class TestAuthenticateRequest:
     """Test request authentication."""
 
-    def test_authenticate_request_when_keycloak_disabled(self):
+    def test_authenticate_request_when_keycloak_disabled(self, settings_patch):
         """Test authentication returns None when Keycloak is not configured."""
         from basic_agent import auth
 
-        old_issuer = auth.settings.keycloak_issuer
-        object.__setattr__(auth.settings, "keycloak_issuer", "")
-        try:
-            request = Request({"type": "http", "headers": []})
-            result = authenticate_request(request)
-            assert result is None
-        finally:
-            object.__setattr__(auth.settings, "keycloak_issuer", old_issuer)
+        settings_patch(auth, keycloak_issuer="", auth_disabled=True)
+        request = Request({"type": "http", "headers": []})
+        result = authenticate_request(request)
+        assert result is None
 
-    def test_keycloak_enabled_false_when_not_configured(self):
+    def test_keycloak_enabled_false_when_not_configured(self, settings_patch):
         """Test keycloak_enabled returns False when not configured."""
         from basic_agent import auth
 
-        old_issuer = auth.settings.keycloak_issuer
-        object.__setattr__(auth.settings, "keycloak_issuer", "")
-        try:
-            assert keycloak_enabled() is False
-        finally:
-            object.__setattr__(auth.settings, "keycloak_issuer", old_issuer)
+        settings_patch(auth, keycloak_issuer="", auth_disabled=True)
+        assert keycloak_enabled() is False
 
 
 class TestInvocationAttributes:
@@ -301,25 +262,11 @@ class TestConfigurationEdgeCases:
         assert "search" in config.enabled_tools
         assert len(config.enabled_tools) == 2
 
-    def test_load_settings_with_invalid_pattern(self, monkeypatch):
-        """Test loading settings with invalid agent pattern."""
-        monkeypatch.setenv("AGENT_PATTERN", "invalid_pattern")
-
-        with pytest.raises(ValueError, match="Invalid AGENT_PATTERN"):
-            load_settings()
-
     def test_load_settings_min_max_iterations(self, monkeypatch):
         """Test max iterations validation."""
-        monkeypatch.setenv("AGENT_PATTERN_MAX_ITERATIONS", "0")
+        monkeypatch.setenv("AGENT_MAX_ITERATIONS", "0")
 
         with pytest.raises(ValueError, match="MAX_ITERATIONS"):
-            load_settings()
-
-    def test_load_settings_with_invalid_approval_value(self, monkeypatch):
-        """Test invalid approval value."""
-        monkeypatch.setenv("AGENT_PATTERN_REQUIRE_APPROVAL", "maybe")
-
-        with pytest.raises(ValueError, match="must be true or false"):
             load_settings()
 
     def test_load_settings_preserves_defaults(self, monkeypatch):

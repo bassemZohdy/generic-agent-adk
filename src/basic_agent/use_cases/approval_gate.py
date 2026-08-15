@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from .base import BaseUseCaseAgent
 from ..strategies import HumanInLoopStrategy
+
+
+logger = logging.getLogger(__name__)
 
 
 class ApprovalGateAgent(BaseUseCaseAgent):
@@ -12,7 +17,7 @@ class ApprovalGateAgent(BaseUseCaseAgent):
     use_case = "approval_gate"
     title = "Approval Gate"
     when_to_use = "You want risky or irreversible actions held back until a human approves them."
-    aliases = ("human_in_loop",)
+    aliases = ()
     defaults = {"require_approval": True}
     strategy = HumanInLoopStrategy()
 
@@ -36,5 +41,5 @@ class ApprovalGateAgent(BaseUseCaseAgent):
                     "reason": "This action requires human approval before execution.",
                 }
         except Exception:  # noqa: BLE001 - tolerate fake/simple contexts
-            pass
+            logger.debug("Unable to evaluate approval-gate tool state", exc_info=True)
         return None

@@ -24,11 +24,9 @@ class SequentialAgentStrategy(AgentStrategy):
         Returns:
             A SequentialAgent orchestrating multiple child agents.
         """
+        self.validate(context)
         rt = context.runtime
-
-        num_steps = 2  # Default
-        if context.extra_config and "steps" in context.extra_config:
-            num_steps = context.extra_config["steps"]
+        num_steps = self.positive_count(context, "steps", 2)
 
         workers = [
             self.llm(rt, name=f"sequential_step_{i}", description=f"Sequential step {i}")
@@ -40,3 +38,6 @@ class SequentialAgentStrategy(AgentStrategy):
             description=rt.description,
             sub_agents=workers,
         )
+
+    def validate(self, context: AgentStrategyContext) -> None:
+        self.positive_count(context, "steps", 2)

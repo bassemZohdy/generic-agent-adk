@@ -41,10 +41,17 @@ jobs:
         run: git diff --check
 
       - name: Validate JSON fixtures
-        run: uv run python -m json.tool keycloak/realm-basic-agent.json >/dev/null
+        run: |
+          uv run python -m json.tool keycloak/realm-basic-agent.json >/dev/null
+          uv run python -m json.tool keycloak/realm-basic-agent-dev.json >/dev/null
 
       - name: Validate Compose configuration
-        run: docker compose config >/dev/null
+        run: GRAFANA_ADMIN_PASSWORD=ci-grafana KEYCLOAK_ADMIN_PASSWORD=ci-keycloak docker compose config >/dev/null
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   test:
     name: Test (Python ${{ matrix.python-version }})
@@ -71,6 +78,9 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --frozen
+
+      - name: Audit Python dependencies
+        run: uvx --from pip-audit pip-audit --strict
 
       - name: Run tests with coverage
         run: |
@@ -122,7 +132,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate Compose configuration
-        run: docker compose config >/dev/null
+        run: GRAFANA_ADMIN_PASSWORD=ci-grafana KEYCLOAK_ADMIN_PASSWORD=ci-keycloak docker compose config >/dev/null
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -182,7 +192,21 @@ jobs:
           echo "Verifying image: $IMAGE_TAG"
           docker pull "$IMAGE_TAG"
           docker image inspect "$IMAGE_TAG"
-          docker run --rm "$IMAGE_TAG" --help 2>&1 | head -20
+
+      - name: Verify image dependencies are locked
+        run: |
+          IMAGE_TAG="${{ needs.build.outputs.image-tag }}"
+          IMAGE_TAG="${IMAGE_TAG%%$'\n'*}"
+          sh scripts/verify-image-dependencies.sh "$IMAGE_TAG"
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ needs.build.outputs.image-tag }}
+          format: table
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          exit-code: '1'
 
       - name: Test image startup
         run: |
@@ -204,7 +228,7 @@ jobs:
         run: |
           if [ "${{ needs.build.result }}" == "success" ]; then
             echo "✅ CI/CD pipeline completed successfully"
-            echo "✅ Tests passed (169 tests, coverage ≥ 85%)"
+            echo "✅ Tests passed (199+ tests, coverage ≥ 85%)"
             echo "✅ Docker image built, verified, and smoke-tested"
           else
             echo "❌ CI/CD pipeline failed"

@@ -176,14 +176,19 @@ Benefit: **Configuration and tests transfer across frameworks; only runtime code
 
 ## Backward Compatibility
 
-Existing pattern modules (`basic_agent/patterns/*`) remain functional.
+> Historical note: the `basic_agent/patterns/` modules and the compatibility
+> surface described here were removed in the cleanup that followed ADR-002.
+> The runtime now exposes only the use-case keys documented in ADR-002.
 
-The new `AgentStrategyRegistry` coexists with the original pattern agent definitions.
-Gradual migration path:
-1. Strategies demonstrate the new architecture
-2. Pattern modules remain for reference/compatibility
-3. New deployments use strategy-based configuration
-4. No breaking changes to existing code
+Existing pattern modules (`basic_agent/patterns/*`) remained functional during
+ the transition.
+
+The `AgentStrategyRegistry` coexisted with the original pattern agent
+ definitions during the migration. Gradual migration path at the time:
+1. Strategies demonstrated the new architecture
+2. Pattern modules remained for reference/compatibility
+3. New deployments used strategy-based configuration
+4. No breaking changes to existing code during the transition
 
 ## Consequences
 

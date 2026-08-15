@@ -12,6 +12,6 @@ class ExpertDispatchAgent(BaseUseCaseAgent):
     use_case = "expert_dispatch"
     title = "Expert Dispatch"
     when_to_use = "You want each incoming question routed to the right specialist out of a fixed roster."
-    aliases = ("router",)
+    aliases = ()
     defaults = {"specialists": ("research", "solution", "risk")}
     strategy = RouterStrategy()

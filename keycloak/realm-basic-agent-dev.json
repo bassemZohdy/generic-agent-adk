@@ -14,13 +14,28 @@
   "clients": [
     {
       "clientId": "basic-agent",
-      "name": "Basic ADK Agent",
+      "name": "Basic ADK Agent (development)",
       "enabled": true,
       "publicClient": true,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
       "redirectUris": ["http://localhost:8003/*"],
       "webOrigins": ["http://localhost:8003"]
+    }
+  ],
+  "users": [
+    {
+      "username": "demo",
+      "enabled": true,
+      "email": "demo@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["agent-user", "agent-operator"]
     }
   ]
 }

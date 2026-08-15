@@ -13,7 +13,7 @@ Both taxonomies spoke architecture (EVALUATOR_OPTIMIZER, PLANNER_EXECUTOR) inste
 
 ## Decision
 
-1. **Reclassify the public surface to nine generic use cases.** Users pick `assistant`, `research_assistant`, `pipeline`, `multi_perspective`, `refine_until_good`, `expert_dispatch`, `team_coordinator`, `plan_and_execute`, or `approval_gate`. Old names resolve as deprecated aliases (case-insensitive) for one full release, then are removed.
+1. **Reclassify the public surface to eight generic use cases.** Users pick `assistant`, `pipeline`, `multi_perspective`, `refine_until_good`, `expert_dispatch`, `team_coordinator`, `plan_and_execute`, or `approval_gate`. Use-case keys are the only accepted names; old pattern aliases are not supported.
 
 2. **Two layers, one dependency direction — `use_cases` → `strategies`, never reverse.**
    - `strategies/` (internal): *how the ADK tree is shaped.* Ten builders share a base-class `llm()` builder and per-role `RoleConfig` (instruction/model/tools overrides).
@@ -23,22 +23,29 @@ Both taxonomies spoke architecture (EVALUATOR_OPTIMIZER, PLANNER_EXECUTOR) inste
 
 4. **Runtime hooks map 1:1 to ADK callbacks** (`before_run`/`after_run` → root agent callbacks; `before_tool`/`after_tool` → every `LlmAgent` in the tree; before-tool may veto by returning a dict). Only overridden hooks are wired — declarative use cases pay zero callback overhead. Two built-ins exercise hooks for real (`approval_gate` tool veto, `multi_perspective` output aggregation); a hook-less layer would have been deleted as ceremony.
 
-5. **`patterns/` is deleted.** Its eight import-time agents duplicated the strategy builders with drift (e.g. shared prompts for all specialists). `AgentPattern` in `config.py` survives solely to validate the deprecated `AGENT_PATTERN` value during the alias window.
+5. **`patterns/` is deleted.** Its eight import-time agents duplicated the strategy builders with drift (e.g. shared prompts for all specialists). The deprecated `AgentPattern` enum and `AGENT_PATTERN*` environment variables were removed; the only selection path is `AGENT_USE_CASE` / `agent.use_case`.
 
 6. **Configuration resolution — YAML base, env override, one provenance line:**
    1. YAML at `AGENT_CONFIG_FILE` or auto-detected `/app/config/agent.yaml` (explicitly configured but missing file fails fast); `${VAR:default}` substitution runs inside it.
-   2. `apply_env_overrides()` applies only the seven documented vars (`AGENT_USE_CASE`, `ADK_MODEL`, `AGENT_INSTRUCTION`, `AGENT_TOOLS`, `AGENT_MAX_ITERATIONS`, `AGENT_SPECIALISTS`; `GOOGLE_API_KEY` via substitution), only when explicitly set. Deprecated `AGENT_PATTERN*` vars participate only when their primary is unset. Env-overriding specialists must match YAML `roles:` keys exactly, or load fails.
+   2. `apply_env_overrides()` applies only the six documented vars (`AGENT_USE_CASE`, `ADK_MODEL`, `AGENT_INSTRUCTION`, `AGENT_TOOLS`, `AGENT_MAX_ITERATIONS`, `AGENT_SPECIALISTS`; `GOOGLE_API_KEY` via substitution), only when explicitly set. Env-overriding specialists must match YAML `roles:` keys exactly, or load fails.
    3. No file → env-only builder produces the same `AgentConfig`.
    4. One log line records source + overrides: `config: yaml=…, use_case=…, env overrides: …`.
    Per-role *instructions* stay YAML-only — flat env vars cannot express structure.
 
 7. **Custom use cases register from a module**: `AGENT_USE_CASE_MODULE=/path.py` — `BaseUseCaseAgent` subclasses found in it join the default registry. Extending the runtime requires no fork.
 
+## Addendum (2026-08-15, cleanup)
+
+The backward-compat layer described in the original decision — `AgentPattern`,
+`AGENT_PATTERN*` environment variables, `agent.type`/`agent.pattern` YAML keys,
+and old pattern-name aliases — has been removed. The public surface now accepts
+only the canonical use-case keys listed above.
+
 ## Addendum (2026-08-14, post-acceptance)
 
 Three refinements shipped after acceptance:
 
-1. **Use-case consolidation: 9 → 8.** `research_assistant` merged into `assistant` (alias kept). Rationale: after the shared `llm()` builder landed, the DIRECT and REACT strategies produce *identical* agents — one-shot with no tools, tool-iterating with tools — so two use cases were one behavior wearing two names. Reviewed and deliberately kept separate: `expert_dispatch` vs `team_coordinator` (classify→one specialist vs delegate→many workers — different intent and config), `pipeline` vs `plan_and_execute` (fixed known steps vs dynamic planning).
+1. **Use-case consolidation: 9 → 8.** `research_assistant` merged into `assistant` (its alias was later removed along with the rest of the backward-compat surface). Rationale: after the shared `llm()` builder landed, the DIRECT and REACT strategies produce *identical* agents — one-shot with no tools, tool-iterating with tools — so two use cases were one behavior wearing two names. Reviewed and deliberately kept separate: `expert_dispatch` vs `team_coordinator` (classify→one specialist vs delegate→many workers — different intent and config), `pipeline` vs `plan_and_execute` (fixed known steps vs dynamic planning).
 2. **Multi-provider models.** `model.name` with a provider prefix (or a non-Google `model.provider`) routes through ADK's LiteLLM integration (OpenAI-compatible, Anthropic, Ollama, vLLM, Groq, DeepSeek, Mistral, …); Gemini stays native. Resolution lives in `basic_agent/models.py` behind `resolve_model()`; keys/base URLs pass through from YAML/env. (ADR-003 candidate: provider-specific tool support nuances.)
 3. **Interface fit metadata.** Each use case declares `interfaces` (`rest`, `web`, `cli`, + `live` for chat-like `assistant`), exposed via `list_use_cases()` — the catalog is the single source of truth for interface tooling. ADK's built-in surfaces (api_server / web / run / live service) host all use cases; no bespoke UIs were built.
 
@@ -47,7 +54,6 @@ Three refinements shipped after acceptance:
 - One Docker image, one selection path; mounted YAML finally works.
 - Two behavior changes, release-noted: mounted YAML now takes effect (previously ignored — deployments that mounted files *and* set env vars will switch from env behavior to file behavior); the seven env vars override mounted YAML by design.
 - Two abstractions exist and must stay coherent — enforced by the one-way import rule and by keeping all public naming/metadata on use-case classes only.
-- Alias removal (and the `AgentPattern` enum with it) is scheduled one full release after this ships.
 
 ## Verification
 

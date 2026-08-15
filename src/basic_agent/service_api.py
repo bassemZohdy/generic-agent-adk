@@ -1,12 +1,21 @@
 """Generic service-status API described by the configured OpenAPI toolset."""
 
-from fastapi import FastAPI, Header, HTTPException, Request
+import logging
 
-from .auth import authenticate_request
+from fastapi import FastAPI, Header, Request
+
+from .auth import authenticate_request, roles_from_claims
 from .config import settings
 
 
-app = FastAPI(title=settings.openapi_title, version=settings.app_version)
+logger = logging.getLogger(__name__)
+_production = settings.deployment.lower() in {"prod", "production", "staging", "cloud-run", "cloudrun"}
+app = FastAPI(
+    title=settings.openapi_title,
+    version=settings.app_version,
+    docs_url=None if _production else "/docs",
+    redoc_url=None if _production else "/redoc",
+)
 
 
 def get_service_status() -> dict[str, str]:
@@ -26,9 +35,14 @@ def service_status(
     x_api_key: str | None = Header(default=None),
 ) -> dict[str, str]:
     """Return status after Keycloak or internal service-key authentication."""
-    authenticate_request(
+    claims = authenticate_request(
         request, api_key=x_api_key, required_roles=settings.service_api_roles
     )
-    if settings.service_api_key and x_api_key != settings.service_api_key and not request.headers.get("authorization"):
-        raise HTTPException(status_code=401, detail="Invalid service API key")
+    logger.info(
+        "authenticated service request sub=%s auth_method=%s roles=%s path=%s",
+        claims.get("sub") if claims else "auth-disabled",
+        claims.get("auth_method", "bearer") if claims else "disabled",
+        sorted(roles_from_claims(claims)) if claims else [],
+        request.url.path,
+    )
     return get_service_status()

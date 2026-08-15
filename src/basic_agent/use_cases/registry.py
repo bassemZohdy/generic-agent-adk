@@ -7,7 +7,9 @@ import inspect
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
+import uuid
 
 if TYPE_CHECKING:
     from .base import BaseUseCaseAgent
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 #: Env var pointing at a module whose BaseUseCaseAgent subclasses get registered.
 CUSTOM_MODULE_ENV = "AGENT_USE_CASE_MODULE"
+CUSTOM_MODULE_ALLOWLIST_ENV = "AGENT_USE_CASE_MODULE_ALLOWLIST"
 
 
 class UseCaseRegistry:
@@ -148,9 +151,33 @@ def load_custom_use_cases(
     """
     from .base import BaseUseCaseAgent
 
+    candidate = Path(module_path).expanduser().resolve()
+    if not candidate.is_file():
+        raise OSError(f"Custom use-case module does not exist: {candidate}")
+    allowed_roots = tuple(
+        Path(value).expanduser().resolve()
+        for value in os.environ.get(CUSTOM_MODULE_ALLOWLIST_ENV, "").split(os.pathsep)
+        if value.strip()
+    )
+    deployment = os.environ.get("DEPLOYMENT_ENV", "docker-compose").lower()
+    production = deployment in {"prod", "production", "staging", "cloud-run", "cloudrun"}
+    if production and not allowed_roots:
+        raise ValueError(
+            f"{CUSTOM_MODULE_ALLOWLIST_ENV} is required before loading custom use cases in "
+            f"{deployment}"
+        )
+    if allowed_roots and not any(
+        candidate == root or root in candidate.parents for root in allowed_roots
+    ):
+        raise ValueError(
+            f"Custom use-case module {candidate} is outside the configured "
+            f"{CUSTOM_MODULE_ALLOWLIST_ENV}"
+        )
+
     registry = registry if registry is not None else get_default_registry()
-    module_name = f"custom_use_cases_{abs(hash(module_path))}"
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    module_uuid = uuid.uuid5(uuid.NAMESPACE_URL, str(candidate)).hex
+    module_name = f"custom_use_cases_{module_uuid}"
+    spec = importlib.util.spec_from_file_location(module_name, candidate)
     if spec is None or spec.loader is None:
         raise ValueError(f"Cannot load use-case module from {module_path!r}")
     module = importlib.util.module_from_spec(spec)

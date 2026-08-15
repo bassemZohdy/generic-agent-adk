@@ -4,7 +4,10 @@ import json
 
 from mcp.server.fastmcp import FastMCP
 
-from basic_agent.config import settings
+try:  # Package import for tests; absolute fallback when launched by MCP over stdio.
+    from .config import settings
+except ImportError:  # pragma: no cover - exercised by ``python mcp_server.py``
+    from basic_agent.config import settings
 
 
 mcp = FastMCP("basic-project")

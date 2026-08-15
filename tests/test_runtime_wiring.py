@@ -14,7 +14,6 @@ from basic_agent.agent import resolve_agent_config
 _CONFIG_ENV_VARS = (
     "AGENT_CONFIG_FILE",
     "AGENT_USE_CASE",
-    "AGENT_PATTERN",
     "ADK_MODEL",
 )
 

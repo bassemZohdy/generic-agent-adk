@@ -52,14 +52,15 @@ class RouterStrategy(AgentStrategy):
                 )
             )
 
-        return LlmAgent(
+        return self.llm(
+            rt,
             name=f"{context.agent_type.lower()}_agent",
-            model=rt.model,
             description=rt.description,
-            instruction=(
-                f"Route the request to the best specialist. "
-                f"Available specialists: {', '.join(rt.specialists)}"
+            role=RoleConfig(
+                instruction=(
+                    f"Route the request to the best specialist. "
+                    f"Available specialists: {', '.join(rt.specialists)}"
+                ),
             ),
-            tools=rt.tools or [],
             sub_agents=specialists,
         )

@@ -40,6 +40,36 @@ def _chain(first: Callable | list[Callable] | None, second: Callable) -> Callabl
     return chained
 
 
+def _chain_before_tool(first: Callable | list[Callable] | None, second: Callable) -> Callable:
+    """Chain before-tool callbacks while preserving veto short-circuiting."""
+    callbacks = list(first) if isinstance(first, list) else ([first] if first else [])
+
+    def chained(*args: Any, **kwargs: Any) -> Any:
+        for callback in callbacks:
+            result = callback(*args, **kwargs)
+            if result is not None:
+                return result
+        return second(*args, **kwargs)
+
+    return chained
+
+
+def _chain_after_tool(first: Callable | list[Callable] | None, second: Callable) -> Callable:
+    """Chain after-tool callbacks, allowing the use-case hook to transform results."""
+    callbacks = list(first) if isinstance(first, list) else ([first] if first else [])
+
+    def chained(*args: Any, **kwargs: Any) -> Any:
+        result = None
+        for callback in callbacks:
+            candidate = callback(*args, **kwargs)
+            if candidate is not None:
+                result = candidate
+        candidate = second(*args, **kwargs)
+        return candidate if candidate is not None else result
+
+    return chained
+
+
 def _iter_llm_agents(root: BaseAgent):
     """Yield every LlmAgent in the tree, root included, depth-first."""
     stack = [root]
@@ -101,10 +131,12 @@ class BaseUseCaseAgent:
 
     def compose(self, runtime: RuntimeContext) -> BaseAgent:
         """Build the ADK tree via this use case's strategy (no hook wiring)."""
+        resolved = self.resolve_runtime(runtime)
         return self.strategy.build(
             AgentStrategyContext(
                 agent_type=self.strategy.agent_type,
-                runtime=self.resolve_runtime(runtime),
+                runtime=resolved,
+                extra_config=dict(resolved.extra_config),
             )
         )
 
@@ -138,15 +170,21 @@ class BaseUseCaseAgent:
             root.after_agent_callback = _chain(first, lambda ctx: self.after_run(ctx))
         if cls.before_tool is not BaseUseCaseAgent.before_tool:
             for agent in _iter_llm_agents(root):
-                agent.before_tool_callback = lambda tool, args, tool_context: (
-                    self.before_tool(tool, args, tool_context)
+                first = agent.before_tool_callback or resolved.before_tool_callback
+                agent.before_tool_callback = _chain_before_tool(
+                    first,
+                    lambda tool, args, tool_context: self.before_tool(
+                        tool, args, tool_context
+                    ),
                 )
         if cls.after_tool is not BaseUseCaseAgent.after_tool:
             for agent in _iter_llm_agents(root):
-                agent.after_tool_callback = (
+                first = agent.after_tool_callback or resolved.after_tool_callback
+                agent.after_tool_callback = _chain_after_tool(
+                    first,
                     lambda tool, args, tool_context, result: self.after_tool(
                         tool, args, tool_context, result
-                    )
+                    ),
                 )
         return root
 

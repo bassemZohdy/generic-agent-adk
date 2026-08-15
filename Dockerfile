@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 # Upgrade system setuptools to avoid base-image CVEs before installing the project.
-RUN uv pip install --system "setuptools>=78.1.1"
+RUN uv pip install --system --force-reinstall "setuptools>=78.1.1"
 
 WORKDIR /app
 
@@ -21,7 +21,8 @@ COPY src ./src
 RUN uv sync --frozen --no-dev \
     && mkdir -p /app/.adk/artifacts \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    && uv cache clean
 
 USER appuser
 

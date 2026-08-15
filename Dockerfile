@@ -9,8 +9,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
-# Upgrade system setuptools to avoid base-image CVEs before installing the project.
-RUN uv pip install --system --force-reinstall "setuptools>=78.1.1"
+# Harden the base image: remove the bundled pip/ensurepip and any pre-existing
+# setuptools/wheel packages so scanners only see the freshly installed versions.
+RUN rm -rf \
+      /usr/local/bin/pip* \
+      /usr/local/lib/python3.13/ensurepip \
+      /usr/local/lib/python3.13/site-packages/pip \
+      /usr/local/lib/python3.13/site-packages/pip-*.dist-info \
+      /usr/local/lib/python3.13/site-packages/setuptools \
+      /usr/local/lib/python3.13/site-packages/setuptools-*.dist-info \
+      /usr/local/lib/python3.13/site-packages/_distutils_hack \
+      /usr/local/lib/python3.13/site-packages/distutils-precedence.pth \
+      /usr/local/lib/python3.13/site-packages/wheel \
+      /usr/local/lib/python3.13/site-packages/wheel-*.dist-info \
+    && uv pip install --system --force-reinstall "setuptools>=78.1.1"
 
 WORKDIR /app
 

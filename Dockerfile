@@ -7,7 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     PATH="/app/.venv/bin:$PATH"
 
-COPY --from=uv /uv /uvx /usr/local/bin/
+COPY --from=uv /uv /usr/local/bin/
+RUN ln -s /usr/local/bin/uv /usr/local/bin/uvx
 
 WORKDIR /app
 

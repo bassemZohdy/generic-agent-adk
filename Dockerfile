@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:0.7.5-python3.13-bookworm-slim AS uv
+FROM ghcr.io/astral-sh/uv:0.7.5 AS uv
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,8 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     PATH="/app/.venv/bin:$PATH"
 
-COPY --from=uv /uv /usr/local/bin/
-RUN ln -s /usr/local/bin/uv /usr/local/bin/uvx
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 

@@ -6,6 +6,7 @@ import logging
 
 import pytest
 from google.adk.agents import LlmAgent
+from google.adk.models.lite_llm import LiteLlm
 
 from basic_agent import agent as agent_module
 from basic_agent.agent import resolve_agent_config
@@ -81,3 +82,27 @@ def test_default_resolution_builds_assistant(monkeypatch):
     assert built.name == "direct_agent"
     assert built.before_agent_callback is not None
     assert built.after_agent_callback is not None
+
+
+def test_yaml_litellm_provider_builds_litellm_root_agent(tmp_path, monkeypatch):
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text(
+        """
+agent:
+  use_case: assistant
+model:
+  provider: openai
+  name: gpt-4o
+  api_key: "${OPENAI_API_KEY:sk-test}"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AGENT_CONFIG_FILE", str(config_file))
+    monkeypatch.delenv("ADK_MODEL", raising=False)
+
+    config = resolve_agent_config()
+    built = agent_module._build_root_agent(config, "yaml")
+
+    assert isinstance(built, LlmAgent)
+    assert isinstance(built.model, LiteLlm)
+    assert built.model.model == "openai/gpt-4o"

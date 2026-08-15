@@ -34,6 +34,14 @@ Both taxonomies spoke architecture (EVALUATOR_OPTIMIZER, PLANNER_EXECUTOR) inste
 
 7. **Custom use cases register from a module**: `AGENT_USE_CASE_MODULE=/path.py` — `BaseUseCaseAgent` subclasses found in it join the default registry. Extending the runtime requires no fork.
 
+## Addendum (2026-08-14, post-acceptance)
+
+Three refinements shipped after acceptance:
+
+1. **Use-case consolidation: 9 → 8.** `research_assistant` merged into `assistant` (alias kept). Rationale: after the shared `llm()` builder landed, the DIRECT and REACT strategies produce *identical* agents — one-shot with no tools, tool-iterating with tools — so two use cases were one behavior wearing two names. Reviewed and deliberately kept separate: `expert_dispatch` vs `team_coordinator` (classify→one specialist vs delegate→many workers — different intent and config), `pipeline` vs `plan_and_execute` (fixed known steps vs dynamic planning).
+2. **Multi-provider models.** `model.name` with a provider prefix (or a non-Google `model.provider`) routes through ADK's LiteLLM integration (OpenAI-compatible, Anthropic, Ollama, vLLM, Groq, DeepSeek, Mistral, …); Gemini stays native. Resolution lives in `basic_agent/models.py` behind `resolve_model()`; keys/base URLs pass through from YAML/env. (ADR-003 candidate: provider-specific tool support nuances.)
+3. **Interface fit metadata.** Each use case declares `interfaces` (`rest`, `web`, `cli`, + `live` for chat-like `assistant`), exposed via `list_use_cases()` — the catalog is the single source of truth for interface tooling. ADK's built-in surfaces (api_server / web / run / live service) host all use cases; no bespoke UIs were built.
+
 ## Consequences
 
 - One Docker image, one selection path; mounted YAML finally works.

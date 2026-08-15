@@ -25,7 +25,7 @@ class RoleConfig:
 class RuntimeContext:
     """Shared runtime resources and configuration for strategy execution."""
 
-    model: str
+    model: Any  # model name (str) or BaseLlm instance (e.g. LiteLlm)
     instruction: str
     tools: list[Any]
     description: str

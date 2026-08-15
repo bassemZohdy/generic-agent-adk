@@ -18,14 +18,22 @@ def _roles(name: str, default: str) -> tuple[str, ...]:
 
 
 class AgentPattern(str, Enum):
-    """Externally selectable orchestration pattern for the root ADK agent."""
+    """Deprecated selection variable, kept one release to validate old values.
+
+    Values exist only for back-compat; resolution to real use cases happens in
+    the use-case registry (which also accepts these as aliases).
+    """
 
     GENERIC = "generic"
+    DIRECT = "direct"
+    REACT = "react"
     SEQUENTIAL = "sequential"
     PARALLEL = "parallel"
     LOOP = "loop"
     ROUTER = "router"
+    SUPERVISOR = "supervisor"
     PLANNER_EXECUTOR = "planner_executor"
+    PLAN_EXECUTE = "plan_execute"
     EVALUATOR_OPTIMIZER = "evaluator_optimizer"
     HUMAN_IN_LOOP = "human_in_loop"
 

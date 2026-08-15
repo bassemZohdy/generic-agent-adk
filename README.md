@@ -13,8 +13,7 @@ Start from what you need, not from architecture names:
 
 | I want an agent that… | Use case | Example config |
 |---|---|---|
-| Answers questions directly, in one shot | `assistant` | [`examples/assistant.yaml`](./examples/assistant.yaml) |
-| Searches and investigates using tools | `research_assistant` | [`examples/research-assistant.yaml`](./examples/research-assistant.yaml) |
+| Answers questions directly; investigates with tools when enabled | `assistant` | [`examples/assistant.yaml`](./examples/assistant.yaml) · tools-forward: [`research-assistant.yaml`](./examples/research-assistant.yaml) |
 | Runs fixed steps in order (fetch → analyze → summarize) | `pipeline` | [`examples/pipeline.yaml`](./examples/pipeline.yaml) |
 | Gets several independent takes and aggregates them | `multi_perspective` | [`examples/multi-perspective.yaml`](./examples/multi-perspective.yaml) |
 | Keeps improving its output until it's good enough | `refine_until_good` | [`examples/refine-until-good.yaml`](./examples/refine-until-good.yaml) |
@@ -23,12 +22,15 @@ Start from what you need, not from architecture names:
 | Makes a plan first, then executes it | `plan_and_execute` | [`examples/plan-and-execute.yaml`](./examples/plan-and-execute.yaml) |
 | Proposes actions and waits for my approval | `approval_gate` | [`examples/approval-gate.yaml`](./examples/approval-gate.yaml) |
 
+With no tools enabled, `assistant` answers in one shot; with tools (search, knowledge, code) it iterates over them — one use case, two behaviors, driven purely by tool config. (`research_assistant` remains a working alias.)
+
 ### Run with environment variables only (minimal)
 
 ```bash
 docker run \
-  -e GOOGLE_API_KEY=your-key \
-  -e AGENT_USE_CASE=research_assistant \
+  -e OPENAI_API_KEY=your-key \
+  -e AGENT_USE_CASE=assistant \
+  -e ADK_MODEL=openai/gpt-4o \
   ghcr.io/your-org/adk:latest
 ```
 
@@ -51,13 +53,48 @@ A config file mounted at `/app/config/agent.yaml` is auto-detected (or set `AGEN
 
 | Variable | Required | Default | Applies to |
 |---|---|---|---|
-| `GOOGLE_API_KEY` | ✅ | — | all use cases |
+| `GOOGLE_API_KEY` | ✅ (Gemini) | — | Gemini models |
+| provider key (e.g. `OPENAI_API_KEY`) | ✅ (non-Gemini) | — | see Models below |
 | `AGENT_USE_CASE` | — | `assistant` | all |
-| `ADK_MODEL` | — | `gemini-3.6-flash` | all |
+| `ADK_MODEL` | — | `gemini-3.6-flash` | all; accepts `provider/model` prefixes |
 | `AGENT_INSTRUCTION` | — | built-in generic prompt | all |
 | `AGENT_TOOLS` | — | all tools | all |
 | `AGENT_MAX_ITERATIONS` | — | `3` | `refine_until_good`, `plan_and_execute` |
 | `AGENT_SPECIALISTS` | — | `research,solution,risk` | `expert_dispatch` |
+
+### Models: any provider
+
+`model.name` starting with a provider prefix routes through LiteLLM — OpenAI-compatible APIs, Anthropic, Ollama, vLLM, Groq, DeepSeek, Mistral, and everything else LiteLLM supports. No prefix (or `provider: google`) stays on native Gemini.
+
+```bash
+# env: prefix syntax
+ADK_MODEL=openai/gpt-4o          # or anthropic/claude-sonnet-4-5, groq/llama-3.3-70b, ...
+ADK_MODEL=ollama/llama3          # local; set OLLAMA_API_BASE=http://localhost:11434
+```
+
+```yaml
+# YAML: provider field or prefix; api_key/base_url pass through
+model:
+  provider: openai               # or anthropic, ollama, hosted_vllm, ...
+  name: gpt-4o
+  api_key: "${OPENAI_API_KEY}"
+  base_url: "${OLLAMA_API_BASE}" # for local/self-hosted OpenAI-compatible servers
+```
+
+Common provider env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `OLLAMA_API_BASE` (base URL, no key needed).
+
+### Interfaces
+
+Every use case runs behind the same three ADK interfaces; chat-like ones (`assistant`) also support the Live WebSocket:
+
+| Interface | How | Fit |
+|---|---|---|
+| REST / A2A API | `adk api_server` (compose service `api`, port 8002, Swagger at `/docs`) | all use cases |
+| Web UI | `adk web` | all use cases — best for `approval_gate` (human approval UX) |
+| Interactive CLI | `adk run` | all use cases |
+| Live WebSocket | compose service `live`, port 8003 | `assistant` |
+
+Each use case declares its fit in `interfaces` (see `list_use_cases()`); the catalog is the source of truth for tooling.
 
 Advanced variables (auth, MCP, OpenAPI, knowledge, telemetry) are listed in [.env.example](.env.example).
 

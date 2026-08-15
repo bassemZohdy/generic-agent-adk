@@ -25,7 +25,6 @@ MINIMAL_RUNTIME = RuntimeContext(
 
 ALL_KEYS = [
     "assistant",
-    "research_assistant",
     "pipeline",
     "multi_perspective",
     "refine_until_good",
@@ -35,6 +34,9 @@ ALL_KEYS = [
     "approval_gate",
 ]
 
+# Merged/legacy keys that must still resolve (alias surface).
+ALIAS_KEYS = ["research_assistant", "react", "generic", "direct"]
+
 
 def walk(root):
     """Yield every agent in the tree, root first."""
@@ -43,7 +45,7 @@ def walk(root):
         yield from walk(child)
 
 
-# --- T2.2: all nine built-ins build with a minimal runtime ---
+# --- T2.2: all eight built-ins build with a minimal runtime ---
 
 
 @pytest.mark.parametrize("key", ALL_KEYS)
@@ -51,6 +53,14 @@ def test_all_builtins_build(key):
     agent = get_default_registry().get(key).build(MINIMAL_RUNTIME)
     assert agent is not None
     assert list(walk(agent))
+
+
+@pytest.mark.parametrize("key", ALIAS_KEYS)
+def test_merged_aliases_resolve_to_assistant(key):
+    """research_assistant/react merged into assistant; aliases keep resolving."""
+    canonical, instance = get_default_registry().resolve(key)
+    assert canonical == "assistant"
+    assert instance.build(MINIMAL_RUNTIME) is not None
 
 
 # --- T2.1: defaults application ---
@@ -218,13 +228,17 @@ def test_unknown_key_lists_valid_keys():
 
 def test_list_use_cases_catalog():
     entries = get_default_registry().list_use_cases()
-    assert len(entries) == 9
+    assert len(entries) == 8
     keys = [e["key"] for e in entries]
     assert keys == sorted(keys)
     for entry in entries:
         assert entry["title"]
         assert entry["when_to_use"]
         assert isinstance(entry["aliases"], list)
+        assert {"rest", "web", "cli"} <= set(entry["interfaces"])
+    by_key = {e["key"]: e for e in entries}
+    assert "live" in by_key["assistant"]["interfaces"]
+    assert "live" not in by_key["pipeline"]["interfaces"]
 
 
 def test_registry_has():
@@ -292,10 +306,10 @@ def test_env_module_autoregisters(tmp_path, monkeypatch):
     assert registry.has("snarky")
 
 
-def test_env_module_unset_keeps_nine(tmp_path, monkeypatch):
+def test_env_module_unset_keeps_eight(tmp_path, monkeypatch):
     monkeypatch.delenv("AGENT_USE_CASE_MODULE", raising=False)
     fresh = UseCaseRegistry()
     from basic_agent.use_cases import registry as registry_mod
 
     registry_mod._register_builtins(fresh)
-    assert len(fresh.list_use_cases()) == 9
+    assert len(fresh.list_use_cases()) == 8

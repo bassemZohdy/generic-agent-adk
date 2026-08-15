@@ -309,7 +309,8 @@ def test_all_examples_are_loadable():
 
 EXAMPLE_USE_CASES = [
     ("assistant.yaml", "assistant", LlmAgent),
-    ("research-assistant.yaml", "research_assistant", LlmAgent),
+    # research-assistant.yaml uses the merged alias; loader canonicalizes to assistant.
+    ("research-assistant.yaml", "assistant", LlmAgent),
     ("pipeline.yaml", "pipeline", SequentialAgent),
     ("multi-perspective.yaml", "multi_perspective", ParallelAgent),
     ("refine-until-good.yaml", "refine_until_good", LoopAgent),

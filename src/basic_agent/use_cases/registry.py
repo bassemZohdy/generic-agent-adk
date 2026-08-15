@@ -71,13 +71,14 @@ class UseCaseRegistry:
         return canonical in self._use_cases
 
     def list_use_cases(self) -> list[dict]:
-        """Return catalog entries sorted by key: key, title, when_to_use, aliases."""
+        """Return catalog entries sorted by key: key, title, when_to_use, aliases, interfaces."""
         return [
             {
                 "key": key,
                 "title": instance.title,
                 "when_to_use": instance.when_to_use,
                 "aliases": list(instance.aliases),
+                "interfaces": list(instance.interfaces),
             }
             for key, instance in sorted(self._use_cases.items())
         ]
@@ -104,7 +105,7 @@ def get_default_registry() -> UseCaseRegistry:
 
 
 def _register_builtins(registry: UseCaseRegistry) -> None:
-    """Register the nine built-in use cases (imports here avoid cycles)."""
+    """Register the eight built-in use cases (imports here avoid cycles)."""
     from .approval_gate import ApprovalGateAgent
     from .assistant import AssistantAgent
     from .expert_dispatch import ExpertDispatchAgent
@@ -112,12 +113,10 @@ def _register_builtins(registry: UseCaseRegistry) -> None:
     from .pipeline import PipelineAgent
     from .plan_and_execute import PlanAndExecuteAgent
     from .refine_until_good import RefineUntilGoodAgent
-    from .research_assistant import ResearchAssistantAgent
     from .team_coordinator import TeamCoordinatorAgent
 
     for instance in (
         AssistantAgent(),
-        ResearchAssistantAgent(),
         PipelineAgent(),
         MultiPerspectiveAgent(),
         RefineUntilGoodAgent(),

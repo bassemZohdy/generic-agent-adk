@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from .autoconfig import CapabilityProvider, discover_capabilities
 from .config import settings
+from .models import resolve_model
 from .config_loader import (
     AgentConfig,
     apply_env_overrides,
@@ -264,8 +265,18 @@ def _build_runtime_context(config: AgentConfig) -> RuntimeContext:
         runtime_tools.append(tool)
 
     execution = config.execution
+    model = resolve_model(
+        (config.model.name if config.model else "") or settings.model,
+        provider=config.model.provider if config.model else "google",
+        api_key=config.model.api_key if config.model else None,
+        base_url=config.model.base_url if config.model else None,
+    )
+    logger.info(
+        "model resolved: %s",
+        model if isinstance(model, str) else f"litellm:{model.model}",
+    )
     return RuntimeContext(
-        model=(config.model.name if config.model else "") or settings.model,
+        model=model,
         instruction=(config.instructions.value if config.instructions else "")
         or settings.agent_instruction,
         tools=runtime_tools,

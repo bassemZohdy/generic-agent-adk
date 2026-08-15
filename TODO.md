@@ -141,6 +141,26 @@ Alias map: `generic`→`assistant`, `direct`→`assistant`, `react`→`research_
 Remaining housekeeping: commits A–D (see sequencing); working tree also holds pre-existing
 `src/` layout + docs moves to commit first.
 
+## Improvement round 2 — 2026-08-14 (providers / interfaces / consolidation)
+
+- [x] **Multi-provider LLM** — `src/basic_agent/models.py` `resolve_model()`: Gemini native,
+  any `provider/model` prefix (openai, anthropic, ollama, groq, deepseek, mistral, vllm, …)
+  via ADK LiteLlm; `ModelConfig.base_url`; api_key/base_url passthrough; provider env hints
+  with warn-once; `litellm` dependency added. Verified: `openai/gpt-4o` YAML + env builds
+  LiteLlm root agent locally and in container (construction-only, no network).
+- [x] **Interfaces metadata** — `interfaces` attr on use cases (rest/web/cli default; `live`
+  on assistant), exposed in `list_use_cases()` catalog; README Interfaces section. Verified:
+  `adk api_server` serves docs 200 + app registered in container.
+- [x] **Use-case consolidation 9 → 8** — `research_assistant` merged into `assistant`
+  (DIRECT and REACT strategies build identical agents; behavior differs only by tools
+  enabled); `research_assistant`/`react` kept as aliases; example file repurposed
+  tools-forward. Kept separate (documented in ADR-002 addendum): expert_dispatch vs
+  team_coordinator, pipeline vs plan_and_execute.
+- [x] **Bug found & fixed** — `AGENT_PATTERN` enum rejected legacy `react`/`direct`/
+  `supervisor`/`plan_execute` names that `agent.type` YAML always accepted; enum completed;
+  container-verified `AGENT_PATTERN=react → assistant`.
+- [x] Gate: 182 passed; docker rebuilt; smokes green. ADR-002 addendum records all three.
+
 ## Commit / rollback sequencing
 
 | Commit | Contents | Reverts |

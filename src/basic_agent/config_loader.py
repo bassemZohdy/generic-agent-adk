@@ -24,6 +24,7 @@ class ModelConfig:
     provider: str
     name: str
     api_key: str | None = None
+    base_url: str | None = None
 
 
 @dataclass
@@ -462,6 +463,7 @@ def _parse_agent_config(data: dict) -> AgentConfig:
             provider=model_data.get("provider", "google"),
             name=model_data.get("name", ""),
             api_key=model_data.get("api_key"),
+            base_url=model_data.get("base_url"),
         )
 
     instructions_data = data.get("instructions", {})

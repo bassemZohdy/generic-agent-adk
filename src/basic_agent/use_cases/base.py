@@ -66,6 +66,10 @@ class BaseUseCaseAgent:
     defaults: ClassVar[dict] = {}
     aliases: tuple[str, ...] = ()
     strategy: AgentStrategy
+    # Interfaces this use case fits: rest (API/A2A), web (adk web UI),
+    # cli (adk run), live (WebSocket voice/streaming). Chat-like use cases
+    # add "live"; every built-in supports rest/web/cli.
+    interfaces: tuple[str, ...] = ("rest", "web", "cli")
 
     def resolve_runtime(self, runtime: RuntimeContext) -> RuntimeContext:
         """Apply ``self.defaults`` onto a copy of ``runtime``.

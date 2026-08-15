@@ -76,6 +76,23 @@ def test_pattern_runtime_configuration_is_validated(monkeypatch):
         load_settings()
 
 
+def test_deprecated_agent_pattern_accepts_all_legacy_names(monkeypatch):
+    """Every legacy agent.type name validates as AGENT_PATTERN and resolves via the registry."""
+    from basic_agent.use_cases.registry import get_default_registry
+
+    legacy = (
+        "generic", "direct", "react", "sequential", "parallel", "loop",
+        "router", "supervisor", "planner_executor", "plan_execute",
+        "evaluator_optimizer", "human_in_loop",
+    )
+    for value in legacy:
+        monkeypatch.setenv("AGENT_PATTERN", value)
+        settings = load_settings()
+        assert settings.agent_pattern.value == value
+        canonical, _ = get_default_registry().resolve(value)
+        assert canonical  # resolves to a live use case
+
+
 def test_generic_plugin_and_runtime_contracts():
     assert GenericAgentPlugin().name
     runtime = inspect_runtime()

@@ -1,9 +1,10 @@
-# Research Assistant — You want an agent that searches and investigates using tools.
-# It reasons step-by-step, calls search/knowledge/code tools as needed, and cites what it found.
+# Assistant (tools-forward) — You want an agent that searches and investigates using tools.
+# Same `assistant` use case with tools enabled: the reasoning loop iterates over
+# search/knowledge/code tools and cites what it found.
 # Run: docker run -v ./research-assistant.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
 
 agent:
-  use_case: research_assistant
+  use_case: assistant
   description: Investigates questions with search and tool use.
 
 model:

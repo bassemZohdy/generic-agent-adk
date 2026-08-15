@@ -9,6 +9,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
+# Upgrade system setuptools to avoid base-image CVEs before installing the project.
+RUN uv pip install --system "setuptools>=78.1.1"
+
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./

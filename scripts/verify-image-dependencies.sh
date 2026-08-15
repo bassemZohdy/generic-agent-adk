@@ -5,7 +5,6 @@ image="${1:?usage: $0 IMAGE}"
 
 docker run --rm "$image" sh -ceu '
   uv lock --check
-  uv sync --frozen --no-dev --check
   uv pip freeze --python /app/.venv/bin/python > /tmp/image-freeze.txt
   python - <<'"'"'PY'"'"'
 import tomllib

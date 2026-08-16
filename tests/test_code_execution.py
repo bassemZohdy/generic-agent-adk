@@ -181,6 +181,7 @@ class _FakeDockerClient:
         self.constructor_kwargs: list[dict] = []
         self.run_calls: list[dict] = []
         self.stop_calls: list[str] = []
+        self.kill_calls: list[str] = []
         self.remove_calls: list[str] = []
         self.ping_raises: Exception | None = None
         self.exec_handler: "Callable[[list[str]], _FakeExecResult] | None" = None
@@ -217,6 +218,9 @@ class _FakeContainer:
 
     def stop(self):
         self._client.stop_calls.append(self.id)
+
+    def kill(self):
+        self._client.kill_calls.append(self.id)
 
     def remove(self):
         self._client.remove_calls.append(self.id)
@@ -345,9 +349,11 @@ def test_hardened_executor_timeout_kills_and_recovers(clean_registry, monkeypatc
     result = executor.execute_code(None, _code_input("while True: pass"))
     assert "timed out after 1s" in result.stderr
     assert result.stdout == ""
-    # The long-lived container was killed and a fresh one started:
+    # The long-lived container was SIGKILLed (not a 10s graceful stop) and a
+    # fresh one started:
+    assert client.kill_calls and client.remove_calls
+    assert client.stop_calls == []
     assert len(client.run_calls) == 2
-    assert client.stop_calls and client.remove_calls
 
 
 def test_hardened_executor_next_call_after_timeout_works(clean_registry, monkeypatch):

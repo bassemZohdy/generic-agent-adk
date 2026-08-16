@@ -370,8 +370,26 @@ def _hardened_executor_cls_get() -> type:
                 ADK reuses one long-lived container across every
                 ``exec_run`` in a session; without active recovery one hung
                 execution degrades every subsequent call.
+
+                Uses SIGKILL (``kill()``), not the graceful ``stop()`` of
+                ``_cleanup_container``: docker-py's stop defaults to a 10s
+                grace period, which would dominate recovery latency for an
+                already-hung process (live-measured: 15.6s wall for a 5s
+                timeout under stop()).
                 """
-                self._cleanup_container()
+                if getattr(self, "_container", None):
+                    try:
+                        self._container.kill()
+                    except Exception:
+                        logger.debug(
+                            "sandbox container kill failed", exc_info=True
+                        )
+                    try:
+                        self._container.remove()
+                    except Exception:
+                        logger.debug(
+                            "sandbox container remove failed", exc_info=True
+                        )
                 self._start_container()
 
             def execute_code(self, invocation_context, code_execution_input):

@@ -2,6 +2,33 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-16 — Test & CI hardening follow-up (post code-execution series)
+
+- Shared test doubles: `tests/fakes.py` now holds the single canonical
+  fake docker SDK module graph (`FakeDockerClient`/`FakeContainer`/
+  `FakeExecResult`, `install_fake_docker`, `install_fake_kubernetes`),
+  replacing the implementations duplicated across `test_code_execution.py`
+  and `test_runtime_wiring.py`.
+- Warning hygiene: the pytest suite now runs with **zero** warnings via a
+  curated `filterwarnings` list — each entry is an individually-commented
+  third-party noise filter (ADK `BaseAgentConfig`/`plugins=` deprecations,
+  EXPERIMENTAL-feature notices, pydantic-settings lifespan, fastapi httpx).
+  Anything unlisted still surfaces loudly.
+- Seven new edge-case tests, one of which caught a real wiring bug: the
+  code-execution env/YAML merge made YAML values beat explicit
+  environment variables, contradicting the repo-wide env-wins convention
+  (`apply_env_overrides`). Fixed to `{**overlay, **os.environ}`; covered by
+  `test_yaml_strategy_is_overridden_by_env`.
+- CI: new `test-extras` job runs the full suite (with the coverage gate)
+  against `uv sync --frozen --extra docker` — the opt-in extra was never
+  previously exercised; `build` now gates on it. Compose validation in
+  lint and build also renders the `--profile code-exec` shape, which the
+  default config alone cannot see.
+- Docs: TODO.md closed out (landed-work record only); the verified-facts
+  appendices (ADK 2.6.3 internals, docker-py kwargs, socket-proxy v0.3.0
+  ACL semantics, sandbox-image decision) moved into ADR-004 Appendices
+  A/B, where the upgrade re-verification duties belong.
+
 ## 2026-08-16 — Pluggable code-execution sandbox (ADR-004)
 
 - The `code_execution` tool flag now resolves a sandbox at agent startup

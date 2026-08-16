@@ -17,8 +17,7 @@ class EvaluatorOptimizerStrategy(AgentStrategy):
 
     def validate(self, context: AgentStrategyContext) -> None:
         """Ensure max_iterations is set for this pattern."""
-        if context.runtime.max_iterations < 1:
-            raise ValueError("EVALUATOR_OPTIMIZER strategy requires max_iterations >= 1")
+        self.require_min_iterations(context)
 
     def build(self, context: AgentStrategyContext) -> Agent:
         """Build an EVALUATOR_OPTIMIZER-mode agent.

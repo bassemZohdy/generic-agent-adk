@@ -8,10 +8,9 @@ modifying the core runtime.
 from .base import AgentStrategy, AgentStrategyContext, RoleConfig, RuntimeContext
 from .registry import AgentStrategyRegistry, get_default_registry
 from .direct import DirectStrategy
-from .react import ReactStrategy
-from .sequential import SequentialAgentStrategy
-from .parallel import ParallelAgentStrategy
-from .loop import LoopAgentStrategy
+from .sequential import SequentialStrategy
+from .parallel import ParallelStrategy
+from .loop import LoopStrategy
 from .router import RouterStrategy
 from .supervisor import SupervisorStrategy
 from .planner_executor import PlannerExecutorStrategy
@@ -26,10 +25,9 @@ __all__ = [
     "AgentStrategyRegistry",
     "get_default_registry",
     "DirectStrategy",
-    "ReactStrategy",
-    "SequentialAgentStrategy",
-    "ParallelAgentStrategy",
-    "LoopAgentStrategy",
+    "SequentialStrategy",
+    "ParallelStrategy",
+    "LoopStrategy",
     "RouterStrategy",
     "SupervisorStrategy",
     "PlannerExecutorStrategy",

@@ -356,7 +356,6 @@ def test_strategy_builder_pattern_composability():
 
     # Retrieve different strategies
     direct = registry.get("DIRECT")
-    react = registry.get("REACT")
     sequential = registry.get("SEQUENTIAL")
 
     # All should be buildable
@@ -367,7 +366,7 @@ def test_strategy_builder_pattern_composability():
         description="Test",
     )
 
-    for strategy in [direct, react, sequential]:
+    for strategy in [direct, sequential]:
         context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
         agent = strategy.build(context)
         assert agent is not None

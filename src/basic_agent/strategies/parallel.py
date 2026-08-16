@@ -5,7 +5,7 @@ from google.adk.agents import Agent, ParallelAgent
 from .base import AgentStrategy, AgentStrategyContext
 
 
-class ParallelAgentStrategy(AgentStrategy):
+class ParallelStrategy(AgentStrategy):
     """Parallel execution of independent agents.
 
     Runs multiple agents concurrently and aggregates results.
@@ -24,20 +24,12 @@ class ParallelAgentStrategy(AgentStrategy):
         Returns:
             A ParallelAgent running multiple workers concurrently.
         """
-        self.validate(context)
-        rt = context.runtime
-        num_workers = self.positive_count(context, "workers", 2)
-
-        workers = [
-            self.llm(rt, name=f"parallel_worker_{i}", description=f"Parallel worker {i}")
-            for i in range(num_workers)
-        ]
+        workers = self.build_worker_pool(
+            context, key="workers", name_prefix="parallel_worker", description="Parallel worker"
+        )
 
         return ParallelAgent(
             name=f"{context.agent_type.lower()}_agent",
-            description=rt.description,
+            description=context.runtime.description,
             sub_agents=workers,
         )
-
-    def validate(self, context: AgentStrategyContext) -> None:
-        self.positive_count(context, "workers", 2)

@@ -2,7 +2,7 @@
 
 from google.adk.agents import Agent, LlmAgent
 
-from .base import AgentStrategy, AgentStrategyContext
+from .base import AgentStrategy, AgentStrategyContext, RoleConfig
 
 
 class SupervisorStrategy(AgentStrategy):
@@ -18,20 +18,40 @@ class SupervisorStrategy(AgentStrategy):
     def build(self, context: AgentStrategyContext) -> Agent:
         """Build a SUPERVISOR-mode agent.
 
+        Each worker gets a distinct default instruction identifying its place
+        on the team (worker N of count), overridable per-index via
+        ``rt.roles["worker_{i}"]`` — the same override mechanism
+        ``RouterStrategy`` uses for named specialists.
+
         Args:
             context: Runtime configuration.
 
         Returns:
-            An LlmAgent supervising multiple sub-agents.
+            An LlmAgent supervising multiple distinctly-briefed sub-agents.
         """
-        self.validate(context)
         rt = context.runtime
-        num_workers = self.positive_count(context, "workers", 2)
+        count = self.positive_count(context, "workers", 2)
 
-        workers = [
-            self.llm(rt, name=f"supervisor_worker_{i}", description=f"Worker {i}")
-            for i in range(num_workers)
-        ]
+        workers = []
+        for i in range(count):
+            config = rt.roles.get(f"worker_{i}", RoleConfig())
+            workers.append(
+                self.llm(
+                    rt,
+                    name=f"supervisor_worker_{i}",
+                    role=RoleConfig(
+                        instruction=config.instruction
+                        or (
+                            f"You are worker {i} of {count} on this team. Handle "
+                            "the portion of the coordinator's request assigned to "
+                            "you, then report your result back."
+                        ),
+                        model=config.model,
+                        tools=config.tools,
+                    ),
+                    description=f"Worker {i}",
+                )
+            )
 
         return self.llm(
             rt,
@@ -39,6 +59,3 @@ class SupervisorStrategy(AgentStrategy):
             description=rt.description,
             sub_agents=workers,
         )
-
-    def validate(self, context: AgentStrategyContext) -> None:
-        self.positive_count(context, "workers", 2)

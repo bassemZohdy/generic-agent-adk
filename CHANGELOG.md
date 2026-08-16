@@ -2,6 +2,36 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-16 — Strategy/use-case cleanup: dead code, duplication, worker differentiation
+
+Follow-up to the project review below: a deep-dive on `strategies/` and
+`use_cases/` for reusable code and use-case merge/split candidates.
+
+- Removed dead `ReactStrategy` (`strategies/react.py`) — byte-identical to
+  `DirectStrategy`, unreachable from any use case.
+- Extracted `build_worker_pool()` and `require_min_iterations()` helpers
+  into `strategies/base.py`, removing duplicated `validate()` overrides from
+  `parallel.py`, `sequential.py`, `supervisor.py`, `loop.py`, and
+  `evaluator_optimizer.py`.
+- Fixed `SupervisorStrategy` (`team_coordinator`) and `SequentialStrategy`
+  (`pipeline`): workers/steps were anonymous and got the identical
+  top-level instruction. Both now generate a distinct positional default
+  instruction, overridable per-index via `rt.roles["worker_{i}"]` /
+  `rt.roles["step_{i}"]` — matching `RouterStrategy`'s existing
+  per-specialist override pattern. `examples/team-coordinator.yaml` and
+  `examples/pipeline.yaml` now demonstrate this.
+- Renamed `ParallelAgentStrategy` → `ParallelStrategy`,
+  `LoopAgentStrategy` → `LoopStrategy`, and `SequentialAgentStrategy` →
+  `SequentialStrategy` for naming consistency — they were the last
+  strategy classes carrying a redundant "Agent" suffix no sibling strategy
+  class used.
+- Merge/split review: all 8 use cases confirmed genuinely distinct — no
+  redundant aliases, no config-flag-driven fake splits. See the
+  [ADR-002 addendum](docs/ADR-002-use-case-taxonomy.md).
+
+**Verified:** 218 tests passing, 90% coverage; `sequential.py` and
+`supervisor.py` at 100% coverage.
+
 ## 2026-08-16 — Project review: security-path coverage, CI ordering, doc accuracy
 
 Full-project audit (CI/CD and Docker supply chain, examples/ADRs/config completeness, untested code paths) — 13 findings, all resolved.

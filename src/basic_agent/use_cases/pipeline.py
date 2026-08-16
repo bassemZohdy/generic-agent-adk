@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .base import BaseUseCaseAgent
-from ..strategies import SequentialAgentStrategy
+from ..strategies import SequentialStrategy
 
 
 class PipelineAgent(BaseUseCaseAgent):
@@ -13,4 +13,4 @@ class PipelineAgent(BaseUseCaseAgent):
     title = "Pipeline"
     when_to_use = "You want fixed steps always executed in the same order, like fetch, analyze, summarize."
     aliases = ()
-    strategy = SequentialAgentStrategy()
+    strategy = SequentialStrategy()

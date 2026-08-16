@@ -14,6 +14,14 @@ instructions:
     Break complex work into subtasks, delegate each subtask to a worker
     agent, and combine their results into a coherent final answer.
 
+roles:                              # per-worker overrides, keyed worker_0 .. worker_{N-1}
+  worker_0:
+    instruction: "Research background facts relevant to the request."
+  worker_1:
+    instruction: "Draft a proposed solution based on the research."
+  worker_2:
+    instruction: "Review the draft solution for risks and gaps."
+
 tools:
   enabled:
     - search

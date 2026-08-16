@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from .base import BaseUseCaseAgent
-from ..strategies import ParallelAgentStrategy
+from ..strategies import ParallelStrategy
 
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ class MultiPerspectiveAgent(BaseUseCaseAgent):
     title = "Multi-Perspective"
     when_to_use = "You want several independent takes on the same question compared or combined."
     aliases = ()
-    strategy = ParallelAgentStrategy()
+    strategy = ParallelStrategy()
 
     def after_run(self, callback_context) -> None:
         """Collect ``perspective_*`` state entries into an aggregated list.

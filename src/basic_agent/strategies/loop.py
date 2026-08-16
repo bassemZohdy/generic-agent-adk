@@ -5,7 +5,7 @@ from google.adk.agents import Agent, LoopAgent
 from .base import AgentStrategy, AgentStrategyContext
 
 
-class LoopAgentStrategy(AgentStrategy):
+class LoopStrategy(AgentStrategy):
     """Repeated execution with loop control.
 
     Iterates an agent up to a configured maximum.
@@ -17,8 +17,7 @@ class LoopAgentStrategy(AgentStrategy):
 
     def validate(self, context: AgentStrategyContext) -> None:
         """Ensure max_iterations is set and valid."""
-        if context.runtime.max_iterations < 1:
-            raise ValueError("LOOP strategy requires max_iterations >= 1")
+        self.require_min_iterations(context)
 
     def build(self, context: AgentStrategyContext) -> Agent:
         """Build a LOOP-mode agent.

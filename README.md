@@ -2,7 +2,7 @@
 
 One Docker image, eight generic use cases. Pick what you want the agent to do, configure it with environment variables or YAML, run it.
 
-[![Tests](https://img.shields.io/badge/tests-215%20passing-brightgreen)](./tests/)
+[![Tests](https://img.shields.io/badge/tests-218%20passing-brightgreen)](./tests/)
 [![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen)](./tests/)
 <!-- Test count/coverage badges are updated by hand; re-check with
      `uv run pytest tests/ -q --cov=src --cov-report=term-missing` before
@@ -134,6 +134,13 @@ tools:
 execution:
   max_iterations: 5                # refine_until_good, plan_and_execute
 ```
+
+`team_coordinator` and `pipeline` accept the same `roles:` block keyed by
+position instead of name — `worker_0`, `worker_1`, … for `team_coordinator`;
+`step_0`, `step_1`, … for `pipeline`. Unset positions get an auto-generated
+instruction identifying their place in the sequence (e.g. "worker 1 of 3").
+See [`examples/team-coordinator.yaml`](./examples/team-coordinator.yaml) and
+[`examples/pipeline.yaml`](./examples/pipeline.yaml).
 
 ## Extending: custom use cases
 

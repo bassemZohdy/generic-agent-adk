@@ -49,6 +49,36 @@ Three refinements shipped after acceptance:
 2. **Multi-provider models.** `model.name` with a provider prefix (or a non-Google `model.provider`) routes through ADK's LiteLLM integration (OpenAI-compatible, Anthropic, Ollama, vLLM, Groq, DeepSeek, Mistral, …); Gemini stays native. Resolution lives in `basic_agent/models.py` behind `resolve_model()`; keys/base URLs pass through from YAML/env. (ADR-003 candidate: provider-specific tool support nuances.)
 3. **Interface fit metadata.** Each use case declares `interfaces` (`rest`, `web`, `cli`, + `live` for chat-like `assistant`), exposed via `list_use_cases()` — the catalog is the single source of truth for interface tooling. ADK's built-in surfaces (api_server / web / run / live service) host all use cases; no bespoke UIs were built.
 
+## Addendum (2026-08-16, strategy cleanup)
+
+Follow-up cleanup after a codebase review:
+
+1. **Removed dead `ReactStrategy`.** Its `build()` was byte-identical to
+   `DirectStrategy`'s and unreachable from any use case — a leftover from
+   before DIRECT/REACT were merged into `assistant` (see the addendum
+   above).
+2. **Extracted shared worker/iteration-count validation**
+   (`build_worker_pool()`, `require_min_iterations()`) into `AgentStrategy`
+   (`strategies/base.py`), removing duplicated `validate()` overrides
+   across `parallel.py`, `sequential.py`, `supervisor.py`, `loop.py`, and
+   `evaluator_optimizer.py`.
+3. **Fixed undifferentiated workers/steps.** `SupervisorStrategy`
+   (`team_coordinator`) and `SequentialStrategy` (`pipeline`) built
+   anonymous sub-agents that all received the identical top-level
+   instruction — no positional awareness, unlike `RouterStrategy`'s named
+   specialists. Both now generate a distinct default instruction per
+   worker/step ("worker N of count" / "step N of count"), overridable via
+   `rt.roles["worker_{i}"]` / `rt.roles["step_{i}"]` — the same override
+   mechanism `RouterStrategy` already used. `examples/team-coordinator.yaml`
+   and `examples/pipeline.yaml` now demonstrate this via `roles:`.
+4. **Renamed for naming consistency**: `ParallelAgentStrategy` →
+   `ParallelStrategy`, `LoopAgentStrategy` → `LoopStrategy`,
+   `SequentialAgentStrategy` → `SequentialStrategy` (formerly the only
+   three strategy classes carrying a redundant "Agent" in the name; every
+   other strategy — `DirectStrategy`, `RouterStrategy`, `SupervisorStrategy`,
+   `PlannerExecutorStrategy`, `EvaluatorOptimizerStrategy`,
+   `HumanInLoopStrategy` — already omitted it).
+
 ## Consequences
 
 - One Docker image, one selection path; mounted YAML finally works.

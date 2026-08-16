@@ -97,10 +97,9 @@ def _register_builtin_strategies(registry: AgentStrategyRegistry) -> None:
     """
     # Import here to avoid circular imports
     from .direct import DirectStrategy
-    from .react import ReactStrategy
-    from .sequential import SequentialAgentStrategy
-    from .parallel import ParallelAgentStrategy
-    from .loop import LoopAgentStrategy
+    from .sequential import SequentialStrategy
+    from .parallel import ParallelStrategy
+    from .loop import LoopStrategy
     from .router import RouterStrategy
     from .supervisor import SupervisorStrategy
     from .planner_executor import PlannerExecutorStrategy
@@ -109,10 +108,9 @@ def _register_builtin_strategies(registry: AgentStrategyRegistry) -> None:
 
     strategies = [
         DirectStrategy(),
-        ReactStrategy(),
-        SequentialAgentStrategy(),
-        ParallelAgentStrategy(),
-        LoopAgentStrategy(),
+        SequentialStrategy(),
+        ParallelStrategy(),
+        LoopStrategy(),
         RouterStrategy(),
         SupervisorStrategy(),
         PlannerExecutorStrategy(),

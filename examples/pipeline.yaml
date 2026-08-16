@@ -14,6 +14,17 @@ instructions:
     Process the input through each stage in order: first gather the relevant
     information, then analyze it, then summarize the findings for the user.
 
+roles:                              # per-step overrides, keyed step_0 .. step_{N-1}
+  step_0:
+    instruction: "Gather the relevant information needed to answer the request."
+  step_1:
+    instruction: "Analyze the gathered information for key findings and patterns."
+  step_2:
+    instruction: "Summarize the analysis into a clear, concise answer for the user."
+
 tools:
   enabled:
     - search
+
+execution:
+  steps: 3

@@ -13,10 +13,9 @@ from basic_agent.strategies import (
     DirectStrategy,
     EvaluatorOptimizerStrategy,
     HumanInLoopStrategy,
-    ReactStrategy,
-    SequentialAgentStrategy,
-    ParallelAgentStrategy,
-    LoopAgentStrategy,
+    SequentialStrategy,
+    ParallelStrategy,
+    LoopStrategy,
     RouterStrategy,
     SupervisorStrategy,
 )
@@ -44,11 +43,11 @@ def test_strategy_registry_rejects_duplicate_registration():
 def test_strategy_registry_lists_types():
     registry = AgentStrategyRegistry()
     registry.register(DirectStrategy())
-    registry.register(ReactStrategy())
+    registry.register(SequentialStrategy())
 
     types = registry.list_types()
     assert "DIRECT" in types
-    assert "REACT" in types
+    assert "SEQUENTIAL" in types
     assert types == sorted(types)
 
 
@@ -57,7 +56,6 @@ def test_default_registry_initializes_builtin_strategies():
 
     expected_types = {
         "DIRECT",
-        "REACT",
         "SEQUENTIAL",
         "PARALLEL",
         "LOOP",
@@ -89,26 +87,8 @@ def test_direct_strategy_builds_single_agent():
     assert agent.instruction == "Test instruction"
 
 
-def test_react_strategy_builds_agent_with_tools():
-    strategy = ReactStrategy()
-    tools = [lambda: "test"]  # Mock tool
-
-    runtime = RuntimeContext(
-        model="test-model",
-        instruction="Test instruction",
-        tools=tools,
-        description="Test agent",
-    )
-    context = AgentStrategyContext(agent_type="REACT", runtime=runtime)
-
-    agent = strategy.build(context)
-
-    assert isinstance(agent, Agent)
-    assert agent.tools == tools
-
-
 def test_sequential_strategy_builds_sequential_agent():
-    strategy = SequentialAgentStrategy()
+    strategy = SequentialStrategy()
     runtime = RuntimeContext(
         model="test-model",
         instruction="Test instruction",
@@ -122,8 +102,47 @@ def test_sequential_strategy_builds_sequential_agent():
     assert isinstance(agent, SequentialAgent)
 
 
+def test_sequential_strategy_differentiates_steps():
+    strategy = SequentialStrategy()
+    runtime = RuntimeContext(
+        model="test-model",
+        instruction="Process the pipeline.",
+        tools=[],
+        description="Test agent",
+    )
+    context = AgentStrategyContext(
+        agent_type="SEQUENTIAL", runtime=runtime, extra_config={"steps": 2}
+    )
+
+    agent = strategy.build(context)
+
+    step_0, step_1 = agent.sub_agents
+    assert step_0.instruction != step_1.instruction
+    assert step_0.instruction != runtime.instruction
+    assert "step 0" in step_0.instruction.lower()
+    assert "step 1" in step_1.instruction.lower()
+
+
+def test_sequential_step_role_override():
+    strategy = SequentialStrategy()
+    runtime = RuntimeContext(
+        model="test-model",
+        instruction="Process the pipeline.",
+        tools=[],
+        description="Test agent",
+        roles={"step_0": RoleConfig(instruction="Gather relevant information.")},
+    )
+    context = AgentStrategyContext(
+        agent_type="SEQUENTIAL", runtime=runtime, extra_config={"steps": 2}
+    )
+
+    agent = strategy.build(context)
+
+    assert agent.sub_agents[0].instruction == "Gather relevant information."
+
+
 def test_parallel_strategy_builds_parallel_agent():
-    strategy = ParallelAgentStrategy()
+    strategy = ParallelStrategy()
     runtime = RuntimeContext(
         model="test-model",
         instruction="Test instruction",
@@ -139,7 +158,7 @@ def test_parallel_strategy_builds_parallel_agent():
 
 @pytest.mark.parametrize("bad_workers", [0, -1, True, "two", 1.5])
 def test_parallel_strategy_rejects_invalid_workers(bad_workers):
-    strategy = ParallelAgentStrategy()
+    strategy = ParallelStrategy()
     runtime = RuntimeContext(
         model="test-model",
         instruction="Test instruction",
@@ -155,7 +174,7 @@ def test_parallel_strategy_rejects_invalid_workers(bad_workers):
 
 
 def test_loop_strategy_validates_max_iterations():
-    strategy = LoopAgentStrategy()
+    strategy = LoopStrategy()
     runtime = RuntimeContext(
         model="test-model",
         instruction="Test instruction",
@@ -170,7 +189,7 @@ def test_loop_strategy_validates_max_iterations():
 
 
 def test_loop_strategy_builds_loop_agent():
-    strategy = LoopAgentStrategy()
+    strategy = LoopStrategy()
     runtime = RuntimeContext(
         model="test-model",
         instruction="Test instruction",
@@ -232,6 +251,45 @@ def test_supervisor_strategy_builds_supervisor_agent():
 
     assert isinstance(agent, LlmAgent)
     assert agent.sub_agents  # Should have workers
+
+
+def test_supervisor_strategy_differentiates_workers():
+    strategy = SupervisorStrategy()
+    runtime = RuntimeContext(
+        model="test-model",
+        instruction="Coordinate the team.",
+        tools=[],
+        description="Test agent",
+    )
+    context = AgentStrategyContext(
+        agent_type="SUPERVISOR", runtime=runtime, extra_config={"workers": 2}
+    )
+
+    agent = strategy.build(context)
+
+    worker_0, worker_1 = agent.sub_agents
+    assert worker_0.instruction != worker_1.instruction
+    assert worker_0.instruction != runtime.instruction
+    assert "worker 0" in worker_0.instruction.lower()
+    assert "worker 1" in worker_1.instruction.lower()
+
+
+def test_supervisor_worker_role_override():
+    strategy = SupervisorStrategy()
+    runtime = RuntimeContext(
+        model="test-model",
+        instruction="Coordinate the team.",
+        tools=[],
+        description="Test agent",
+        roles={"worker_0": RoleConfig(instruction="Custom worker 0 instruction")},
+    )
+    context = AgentStrategyContext(
+        agent_type="SUPERVISOR", runtime=runtime, extra_config={"workers": 2}
+    )
+
+    agent = strategy.build(context)
+
+    assert agent.sub_agents[0].instruction == "Custom worker 0 instruction"
 
 
 def test_llm_builder_applies_role_overrides():

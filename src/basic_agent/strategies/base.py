@@ -117,6 +117,34 @@ class AgentStrategy(ABC):
             sub_agents=sub_agents or [],
         )
 
+    def build_worker_pool(
+        self,
+        context: AgentStrategyContext,
+        *,
+        key: str,
+        name_prefix: str,
+        description: str,
+        default: int = 2,
+    ) -> list[LlmAgent]:
+        """Build N worker LlmAgents from a positive-int strategy option.
+
+        Args:
+            context: The strategy context (provides runtime + extra_config).
+            key: extra_config key holding the worker/step count.
+            name_prefix: Prefix for each worker's `name` (suffixed `_{i}`).
+            description: Prefix for each worker's `description` (suffixed ` {i}`).
+            default: Default count if `key` is absent from extra_config.
+
+        Returns:
+            A list of `count` LlmAgents built via `self.llm()`.
+        """
+        rt = context.runtime
+        count = self.positive_count(context, key, default)
+        return [
+            self.llm(rt, name=f"{name_prefix}_{i}", description=f"{description} {i}")
+            for i in range(count)
+        ]
+
     def validate(self, context: AgentStrategyContext) -> None:
         """Validate strategy-specific configuration requirements.
 
@@ -139,3 +167,11 @@ class AgentStrategy(ABC):
                 f"{context.agent_type} strategy option {key!r} must be an integer >= 1"
             )
         return value
+
+    @staticmethod
+    def require_min_iterations(context: AgentStrategyContext, minimum: int = 1) -> None:
+        """Raise if runtime.max_iterations is below the minimum."""
+        if context.runtime.max_iterations < minimum:
+            raise ValueError(
+                f"{context.agent_type} strategy requires max_iterations >= {minimum}"
+            )

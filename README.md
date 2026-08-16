@@ -234,8 +234,7 @@ OpenTelemetry (OTLP/gRPC) → Grafana stack (Loki logs, Tempo traces, Prometheus
 - [ADR-001 — Generic runtime architecture](./docs/ADR-001-generic-runtime-architecture.md)
 - [ADR-002 — Use-case taxonomy & consolidation](./docs/ADR-002-use-case-taxonomy.md)
 - [ADR-003 — ADK Workflow migration spike](./docs/ADR-003-adk-workflow-migration.md)
-- [Security hardening completion record](./docs/SECURITY-HARDENING-2026-08-15.md)
-- [Project review completion record](./docs/REVIEW-2026-08-16.md)
+- [CHANGELOG](./CHANGELOG.md) — dated record of completed work
 - [CI/CD guide](./.github/CI-CD-INTEGRATION.md) · [Publishing guide](./.github/PUBLISHING.md)
 
 ## Troubleshooting

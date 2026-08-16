@@ -49,7 +49,11 @@ jobs:
           uv run python -m json.tool keycloak/realm-basic-agent-dev.json >/dev/null
 
       - name: Validate Compose configuration
-        run: GRAFANA_ADMIN_PASSWORD=ci-grafana KEYCLOAK_ADMIN_PASSWORD=ci-keycloak docker compose config >/dev/null
+        run: |
+          GRAFANA_ADMIN_PASSWORD=ci-grafana KEYCLOAK_ADMIN_PASSWORD=ci-keycloak docker compose config >/dev/null
+          # The sandbox-socket-proxy service renders only under its profile;
+          # validate that shape too so a bad profile edit can't slip through.
+          GRAFANA_ADMIN_PASSWORD=ci-grafana KEYCLOAK_ADMIN_PASSWORD=ci-keycloak docker compose --profile code-exec config >/dev/null
 
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v2
@@ -122,11 +126,47 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+  # The docker extra is opt-in (`uv sync --extra docker`) and therefore
+  # never exercised by the matrix above. It must stay installable from the
+  # lock and the full suite must pass with the SDK present — note the
+  # import-safety test intentionally skips there (its assertion is only
+  # provable without the package); the no-docker matrix leg covers it.
+  test-extras:
+    name: "Test (extras: docker)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies (with docker extra)
+        run: uv sync --frozen --extra docker
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest tests/ \
+            -v \
+            --tb=short \
+            --cov=basic_agent \
+            --cov-report=term \
+            --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
+
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [test, lint]
+    needs: [test, test-extras, lint]
     outputs:
       # Unverified staging tag only — never a floating release tag (latest,
       # branch, semver). Those are applied by promote-image only after

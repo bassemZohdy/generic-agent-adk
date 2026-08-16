@@ -5,9 +5,9 @@ from __future__ import annotations
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 
-from .auth import authenticate_request, keycloak_enabled
-from .config import settings
-from ._util import is_production
+from .core import authenticate_request, keycloak_enabled
+from ..config.settings import settings
+from ..util import is_production
 
 
 _production = is_production(settings.deployment)

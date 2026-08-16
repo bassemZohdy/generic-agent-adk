@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 import pytest
 
-import basic_agent.code_execution as ce
+import basic_agent.execution.resolver as ce
 from fakes import (
     FakeDockerClient,
     FakeExecResult,
@@ -19,7 +19,7 @@ from fakes import (
     install_fake_kubernetes,
 )
 from basic_agent.autoconfig import ProviderConfigurationError
-from basic_agent.code_execution import (
+from basic_agent.execution.resolver import (
     STRATEGY_ENV,
     _CodeExecutionProviderSpec,
     register,

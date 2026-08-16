@@ -2,7 +2,7 @@
 
 import json
 
-from basic_agent.mcp_server import get_service_status
+from basic_agent.interfaces.mcp import get_service_status
 
 
 def test_get_service_status_returns_expected_shape():

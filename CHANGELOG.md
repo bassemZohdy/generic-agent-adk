@@ -2,6 +2,26 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-16 — Source folder reorganization
+
+- `src/basic_agent/` reorganized from 17 root-level files into 4 focused
+  packages + 7 root modules:
+  - `config/` — `settings.py` (from `config.py`) + `loader.py` (from
+    `config_loader.py`); `__init__.py` re-exports the public API.
+  - `auth/` — `core.py` (from `auth.py`) + `gateway.py` (from
+    `auth_gateway.py`).
+  - `interfaces/` — `rest.py`, `live.py`, `service.py`, `mcp.py` (from
+    `api_server.py`, `live_server.py`, `service_api.py`, `mcp_server.py`);
+    `__init__.py` is intentionally lazy (no eager import of adapters that
+    run `create_app()` at module level).
+  - `execution/` — `resolver.py` (from `code_execution.py`).
+  - `_util.py` renamed to `util.py` (public utility, not private).
+- All internal imports, test imports, and compose references
+  (`basic_agent.auth.gateway:app`, `basic_agent.interfaces.rest:app`, etc.)
+  updated to the new paths. `tools.py`'s `MCP_SERVER_PATH` updated to
+  `interfaces/mcp.py`.
+- `docs/ARCHITECTURE.md` module map updated to reflect the new structure.
+
 ## 2026-08-16 — Source structure refactoring
 
 - New `src/basic_agent/_util.py`: `is_production()` (unifies the

@@ -12,8 +12,8 @@ from typing import Any
 
 import yaml
 
-from .strategies.base import RoleConfig
-from ._util import split_csv
+from ..strategies.base import RoleConfig
+from ..util import split_csv
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +185,7 @@ def _resolve_use_case_key(raw: str) -> str:
     Unresolvable values pass through so the use-case registry raises the
     authoritative error at build time.
     """
-    from .use_cases.registry import get_default_registry
+    from ..use_cases.registry import get_default_registry
 
     registry = get_default_registry()
     if registry.has(raw):
@@ -313,7 +313,7 @@ def load_config_from_env() -> AgentConfig:
     Returns:
         AgentConfig populated from environment.
     """
-    from .config import settings
+    from .settings import settings
 
     use_case_raw = os.environ.get("AGENT_USE_CASE", "").strip()
     if not use_case_raw:

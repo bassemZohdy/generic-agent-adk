@@ -13,11 +13,11 @@ from basic_agent.tools import (
 from basic_agent.knowledge import retrieve_knowledge
 from basic_agent.auth import authenticate_request, keycloak_enabled
 from basic_agent.auth import require_roles
-from basic_agent.auth_gateway import app as auth_gateway_app
+from basic_agent.auth.gateway import app as auth_gateway_app
 from basic_agent.autoconfig import ProviderConfigurationError, discover_capabilities
 from basic_agent.config import load_settings
-from basic_agent.live_server import LIVE_MODEL, app
-from basic_agent.service_api import get_service_status
+from basic_agent.interfaces.live import LIVE_MODEL, app
+from basic_agent.interfaces.service import get_service_status
 from basic_agent.telemetry import tracer
 from google.adk.agents import LlmAgent
 import logging
@@ -99,7 +99,7 @@ def test_external_knowledge_file_is_loaded_and_ranked(tmp_path, settings_patch):
 
 def test_skills_toolset_is_empty_when_unconfigured():
     from basic_agent.tools import _build_skill_toolset
-    from basic_agent.config_loader import AgentConfig
+    from basic_agent.config.loader import AgentConfig
 
     toolset = _build_skill_toolset(AgentConfig(use_case="assistant"))
     assert toolset.skills == []
@@ -113,7 +113,7 @@ def test_skills_are_loaded_from_configured_directory(tmp_path, settings_patch):
         encoding="utf-8",
     )
     from basic_agent import tools as agent_tools
-    from basic_agent.config_loader import AgentConfig
+    from basic_agent.config.loader import AgentConfig
 
     settings_patch(agent_tools, skills_dir=str(tmp_path))
     toolset = agent_tools._build_skill_toolset(AgentConfig(use_case="assistant"))
@@ -125,7 +125,7 @@ def test_skills_directory_skips_invalid_skill(tmp_path, settings_patch, caplog):
     bad_dir = tmp_path / "broken-skill"
     bad_dir.mkdir()  # no SKILL.md -> invalid, must be skipped, not raise
     from basic_agent import tools as agent_tools
-    from basic_agent.config_loader import AgentConfig
+    from basic_agent.config.loader import AgentConfig
 
     settings_patch(agent_tools, skills_dir=str(tmp_path))
     caplog.set_level(logging.WARNING, logger="basic_agent.tools")
@@ -258,7 +258,7 @@ def test_keycloak_and_forward_auth_surfaces_exist():
 def test_authentication_requires_explicit_disable_when_keycloak_is_not_configured(settings_patch):
     from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=True)
+    settings_patch(auth.core, auth_disabled=True)
     request = Request({"type": "http", "headers": []})
 
     assert authenticate_request(request) is None
@@ -268,7 +268,7 @@ def test_authentication_requires_bearer_token_when_keycloak_is_configured(settin
     from basic_agent import auth
 
     settings_patch(
-        auth,
+        auth.core,
         keycloak_issuer="https://keycloak.example/realms/agent",
         auth_disabled=False,
     )
@@ -279,7 +279,7 @@ def test_authentication_requires_bearer_token_when_keycloak_is_configured(settin
 def test_role_claims_accept_nested_configured_roles(settings_patch):
     from basic_agent import auth
 
-    settings_patch(auth, keycloak_role_claim="resource_access.agent.roles")
+    settings_patch(auth.core, keycloak_role_claim="resource_access.agent.roles")
     require_roles(
         {"resource_access": {"agent": {"roles": ["agent-user"]}}},
         ("agent-user",),
@@ -290,7 +290,7 @@ def test_role_claims_reject_missing_role(settings_patch):
     from basic_agent import auth
     from fastapi import HTTPException
 
-    settings_patch(auth, keycloak_role_claim="realm_access.roles")
+    settings_patch(auth.core, keycloak_role_claim="realm_access.roles")
     try:
         require_roles({"realm_access": {"roles": ["other"]}}, ("agent-user",))
     except HTTPException as error:

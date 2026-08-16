@@ -13,7 +13,7 @@ from google.adk.agents import (
 
 import pytest
 
-from basic_agent.config_loader import load_config_from_yaml
+from basic_agent.config.loader import load_config_from_yaml
 from basic_agent.strategies.base import RuntimeContext, AgentStrategyContext
 from basic_agent.strategies.registry import get_default_registry
 from basic_agent.use_cases.registry import get_default_registry as get_use_case_registry

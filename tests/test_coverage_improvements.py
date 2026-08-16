@@ -14,7 +14,7 @@ from fastapi import HTTPException
 
 from basic_agent.agent import retrieve_knowledge, inspect_runtime, request_approval
 from basic_agent.config import settings, load_settings
-from basic_agent.service_api import get_service_status
+from basic_agent.interfaces.service import get_service_status
 from basic_agent.auth import require_roles, authenticate_request, keycloak_enabled
 from basic_agent.telemetry import invocation_attributes
 
@@ -170,7 +170,7 @@ class TestRequireRoles:
         """Test role validation with matching roles."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_role_claim="realm_access.roles")
+        settings_patch(auth.core, keycloak_role_claim="realm_access.roles")
         # Should not raise
         require_roles(
             {"realm_access": {"roles": ["admin", "user"]}},
@@ -181,7 +181,7 @@ class TestRequireRoles:
         """Test role validation fails with missing required roles."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_role_claim="realm_access.roles")
+        settings_patch(auth.core, keycloak_role_claim="realm_access.roles")
         with pytest.raises(HTTPException) as exc_info:
             require_roles(
                 {"realm_access": {"roles": ["user"]}},
@@ -193,7 +193,7 @@ class TestRequireRoles:
         """Test role validation with missing claim path."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_role_claim="nonexistent.path")
+        settings_patch(auth.core, keycloak_role_claim="nonexistent.path")
         with pytest.raises(HTTPException) as exc_info:
             require_roles({"realm_access": {"roles": ["user"]}}, ("user",))
         assert exc_info.value.status_code == 403
@@ -202,7 +202,7 @@ class TestRequireRoles:
         """Test role validation with empty required roles."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_role_claim="realm_access.roles")
+        settings_patch(auth.core, keycloak_role_claim="realm_access.roles")
         # Should not raise when no roles required
         require_roles({"realm_access": {"roles": []}}, ())
 
@@ -214,7 +214,7 @@ class TestAuthenticateRequest:
         """Test authentication returns None when Keycloak is not configured."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_issuer="", auth_disabled=True)
+        settings_patch(auth.core, keycloak_issuer="", auth_disabled=True)
         request = Request({"type": "http", "headers": []})
         result = authenticate_request(request)
         assert result is None
@@ -223,7 +223,7 @@ class TestAuthenticateRequest:
         """Test keycloak_enabled returns False when not configured."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_issuer="", auth_disabled=True)
+        settings_patch(auth.core, keycloak_issuer="", auth_disabled=True)
         assert keycloak_enabled() is False
 
 

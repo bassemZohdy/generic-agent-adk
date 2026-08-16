@@ -14,7 +14,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .config import settings
+from .config.settings import settings
 
 logger = logging.getLogger(__name__)
 

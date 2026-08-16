@@ -34,7 +34,7 @@ model:
     )
     monkeypatch.setenv("AGENT_CONFIG_FILE", str(config_file))
     monkeypatch.setenv("ADK_MODEL", "env-model")
-    caplog.set_level(logging.INFO, logger="basic_agent.config_loader")
+    caplog.set_level(logging.INFO, logger="basic_agent.config.loader")
 
     config = resolve_agent_config()
 
@@ -149,8 +149,8 @@ import types
 from types import SimpleNamespace
 
 from basic_agent.autoconfig import ProviderConfigurationError
-from basic_agent.code_execution import CodeExecutionResolution
-from basic_agent.config_loader import (
+from basic_agent.execution.resolver import CodeExecutionResolution
+from basic_agent.config.loader import (
     AgentConfig,
     ExecutionConfig,
     ExecutionCodeExecutionConfig,

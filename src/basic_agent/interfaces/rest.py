@@ -11,9 +11,9 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .auth import authenticate_request
-from .config import settings
-from ._util import is_production
+from ..auth.core import authenticate_request
+from ..config.settings import settings
+from ..util import is_production
 
 
 _RUN_PATHS = {"/run", "/run_sse"}

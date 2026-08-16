@@ -7,7 +7,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 import pytest
 
-from basic_agent import auth, service_api
+from basic_agent import auth
+from basic_agent.interfaces import service as service_api
 
 
 @pytest.fixture
@@ -17,7 +18,7 @@ def client():
 
 def _patch_both(settings_patch, **changes):
     """Keep basic_agent.auth.settings and basic_agent.service_api.settings in sync."""
-    settings_patch(auth, **changes)
+    settings_patch(auth.core, **changes)
     return settings_patch(service_api, **changes)
 
 
@@ -84,7 +85,7 @@ class TestStatusEndpointBearerToken:
             service_api_roles=("agent-user",),
         )
         claims = {"sub": "user-1", "realm_access": {"roles": ["agent-user"]}}
-        with patch("basic_agent.auth._decode", return_value=claims):
+        with patch("basic_agent.auth.core._decode", return_value=claims):
             response = client.get(
                 "/status", headers={"authorization": "Bearer valid-token"}
             )
@@ -100,7 +101,7 @@ class TestStatusEndpointBearerToken:
             service_api_roles=("agent-user",),
         )
         claims = {"sub": "user-1", "realm_access": {"roles": ["someone-else"]}}
-        with patch("basic_agent.auth._decode", return_value=claims):
+        with patch("basic_agent.auth.core._decode", return_value=claims):
             response = client.get(
                 "/status", headers={"authorization": "Bearer valid-token"}
             )

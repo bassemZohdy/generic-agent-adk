@@ -62,7 +62,7 @@ services:
 
   auth-gateway:
     <<: [*app-image, *resource-limits]
-    command: ["uvicorn", "basic_agent.auth_gateway:app", "--host", "0.0.0.0", "--port", "8010"]
+    command: ["uvicorn", "basic_agent.auth.gateway:app", "--host", "0.0.0.0", "--port", "8010"]
     environment:
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
@@ -119,7 +119,7 @@ services:
 
   adk-api:
     <<: [*app-image, *resource-limits]
-    command: ["uvicorn", "basic_agent.api_server:app", "--host", "0.0.0.0", "--port", "8002", "--limit-concurrency", "100"]
+    command: ["uvicorn", "basic_agent.interfaces.rest:app", "--host", "0.0.0.0", "--port", "8002", "--limit-concurrency", "100"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       APP_NAME: ${APP_NAME:-basic_agent}
@@ -183,7 +183,7 @@ services:
   service-api:
     <<: [*app-image, *resource-limits]
     profiles: ["demo"]
-    command: ["uvicorn", "basic_agent.service_api:app", "--host", "0.0.0.0", "--port", "8001", "--limit-concurrency", "50"]
+    command: ["uvicorn", "basic_agent.interfaces.service:app", "--host", "0.0.0.0", "--port", "8001", "--limit-concurrency", "50"]
     ports:
       - "${AGENT_SERVICE_API_PORT:-8001}:8001"
     environment:
@@ -212,7 +212,7 @@ services:
   live-api:
     <<: [*app-image, *resource-limits]
     profiles: ["live"]
-    command: ["uvicorn", "basic_agent.live_server:app", "--host", "0.0.0.0", "--port", "8003", "--limit-concurrency", "50"]
+    command: ["uvicorn", "basic_agent.interfaces.live:app", "--host", "0.0.0.0", "--port", "8003", "--limit-concurrency", "50"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       APP_NAME: ${APP_NAME:-basic_agent}

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 
-from ._util import is_production, split_csv
+from ..util import is_production, split_csv
 
 
 def _env(name: str, default: str = "") -> str:

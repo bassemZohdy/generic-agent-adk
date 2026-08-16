@@ -27,7 +27,7 @@ from typing import Any, Mapping
 
 from google.adk.code_executors.code_execution_utils import CodeExecutionResult
 
-from .autoconfig import ProviderConfigurationError
+from ..autoconfig import ProviderConfigurationError
 
 logger = logging.getLogger(__name__)
 

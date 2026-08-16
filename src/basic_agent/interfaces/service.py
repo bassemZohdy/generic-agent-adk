@@ -4,9 +4,9 @@ import logging
 
 from fastapi import FastAPI, Header, Request
 
-from .auth import authenticate_request, roles_from_claims
-from .config import settings
-from ._util import is_production
+from ..auth.core import authenticate_request, roles_from_claims
+from ..config.settings import settings
+from ..util import is_production
 
 
 logger = logging.getLogger(__name__)

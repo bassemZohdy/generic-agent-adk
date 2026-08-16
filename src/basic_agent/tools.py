@@ -22,11 +22,11 @@ from google.adk.tools.skill_toolset import SkillToolset
 from google.adk.tools.tool_context import ToolContext
 from mcp import StdioServerParameters
 
-from .config import settings
+from .config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-MCP_SERVER_PATH = Path(__file__).with_name("mcp_server.py")
+MCP_SERVER_PATH = Path(__file__).parent / "interfaces" / "mcp.py"
 
 
 # ── Built-in tool functions ──────────────────────────────────────────────────

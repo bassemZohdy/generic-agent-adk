@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 import uuid
 
-from .._util import is_production
+from ..util import is_production
 
 if TYPE_CHECKING:
     from .base import BaseUseCaseAgent

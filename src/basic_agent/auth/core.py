@@ -9,7 +9,7 @@ from fastapi import HTTPException, Request, WebSocket
 from jwt import PyJWKClient
 import jwt
 
-from .config import settings
+from ..config.settings import settings
 
 
 _jwks_clients: dict[str, PyJWKClient] = {}

@@ -35,7 +35,7 @@ def test_auth_rejects_hs256_confusion_and_wrong_issuer(settings_patch, monkeypat
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = private_key.public_key()
     settings_patch(
-        auth,
+        auth.core,
         auth_disabled=False,
         keycloak_issuer="https://issuer.example/realms/basic-agent",
         keycloak_jwks_url="https://issuer.example/jwks",
@@ -46,7 +46,7 @@ def test_auth_rejects_hs256_confusion_and_wrong_issuer(settings_patch, monkeypat
         def get_signing_key_from_jwt(self, _token):
             return SimpleNamespace(key=public_key)
 
-    monkeypatch.setattr(auth, "_jwks_client", lambda _url: FakeJwksClient())
+    monkeypatch.setattr(auth.core, "_jwks_client", lambda _url: FakeJwksClient())
 
     wrong_issuer = jwt.encode(
         {"sub": "subject-a", "iss": "https://wrong.example", "aud": "basic-agent"},
@@ -54,22 +54,22 @@ def test_auth_rejects_hs256_confusion_and_wrong_issuer(settings_patch, monkeypat
         algorithm="RS256",
     )
     with pytest.raises(HTTPException) as wrong_issuer_error:
-        auth._decode(wrong_issuer)
+        auth.core._decode(wrong_issuer)
     assert wrong_issuer_error.value.status_code == 401
 
     hs256 = jwt.encode(
-        {"sub": "subject-a", "iss": auth.settings.keycloak_issuer, "aud": "basic-agent"},
+        {"sub": "subject-a", "iss": auth.core.settings.keycloak_issuer, "aud": "basic-agent"},
         "s" * 32,
         algorithm="HS256",
     )
     with pytest.raises(HTTPException) as confusion_error:
-        auth._decode(hs256)
+        auth.core._decode(hs256)
     assert confusion_error.value.status_code == 401
 
     valid = jwt.encode(
         {
             "sub": "subject-a",
-            "iss": auth.settings.keycloak_issuer,
+            "iss": auth.core.settings.keycloak_issuer,
             "aud": ["other", "basic-agent"],
             "realm_access": {"roles": ["agent-user"]},
         },
@@ -79,36 +79,36 @@ def test_auth_rejects_hs256_confusion_and_wrong_issuer(settings_patch, monkeypat
     request = StarletteRequest(
         {"type": "http", "headers": [[b"authorization", f"Bearer {valid}".encode()]]}
     )
-    assert auth.authenticate_request(request, required_roles=("agent-user",))["sub"] == "subject-a"
+    assert auth.core.authenticate_request(request, required_roles=("agent-user",))["sub"] == "subject-a"
 
 
 def test_auth_configuration_and_jwks_client_fail_closed(settings_patch, monkeypatch):
     from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=False, keycloak_issuer="", keycloak_jwks_url="")
+    settings_patch(auth.core, auth_disabled=False, keycloak_issuer="", keycloak_jwks_url="")
     with pytest.raises(HTTPException) as missing_issuer:
-        auth.authenticate_request(StarletteRequest({"type": "http", "headers": []}))
+        auth.core.authenticate_request(StarletteRequest({"type": "http", "headers": []}))
     assert missing_issuer.value.status_code == 503
     with pytest.raises(HTTPException) as decode_without_issuer:
-        auth._decode("not-a-token")
+        auth.core._decode("not-a-token")
     assert decode_without_issuer.value.status_code == 503
 
     settings_patch(
-        auth,
+        auth.core,
         auth_disabled=False,
         keycloak_issuer="https://issuer.example",
         keycloak_jwks_url="",
     )
     with pytest.raises(HTTPException) as missing_jwks:
-        auth._decode("not-a-token")
+        auth.core._decode("not-a-token")
     assert missing_jwks.value.status_code == 503
 
     client = Mock()
-    monkeypatch.setattr(auth, "PyJWKClient", lambda *args, **kwargs: client)
-    monkeypatch.setattr(auth, "_jwks_clients", {})
-    assert auth._jwks_client("https://issuer.example/jwks") is client
-    assert auth._jwks_client("https://issuer.example/jwks") is client
-    assert client is auth._jwks_clients["https://issuer.example/jwks"]
+    monkeypatch.setattr(auth.core, "PyJWKClient", lambda *args, **kwargs: client)
+    monkeypatch.setattr(auth.core, "_jwks_clients", {})
+    assert auth.core._jwks_client("https://issuer.example/jwks") is client
+    assert auth.core._jwks_client("https://issuer.example/jwks") is client
+    assert client is auth.core._jwks_clients["https://issuer.example/jwks"]
 
 
 def test_websocket_auth_header_subprotocol_and_first_message(settings_patch, monkeypatch):
@@ -116,35 +116,35 @@ def test_websocket_auth_header_subprotocol_and_first_message(settings_patch, mon
 
     claims = {"sub": "subject-a", "realm_access": {"roles": ["agent-user"]}}
     settings_patch(
-        auth,
+        auth.core,
         auth_disabled=False,
         keycloak_issuer="https://issuer.example",
         live_api_roles=("agent-user",),
     )
-    monkeypatch.setattr(auth, "_decode", lambda token: {**claims, "token": token})
+    monkeypatch.setattr(auth.core, "_decode", lambda token: {**claims, "token": token})
 
     header_ws = SimpleNamespace(
         headers={"authorization": "Bearer header-token", "sec-websocket-protocol": ""}
     )
-    assert auth.authenticate_websocket(header_ws, required_roles=("agent-user",))["token"] == "header-token"
+    assert auth.core.authenticate_websocket(header_ws, required_roles=("agent-user",))["token"] == "header-token"
 
     subprotocol_ws = SimpleNamespace(
         headers={"authorization": "", "sec-websocket-protocol": "chat, bearer.protocol-token"}
     )
     assert auth.websocket_auth_subprotocol(subprotocol_ws) == "bearer.protocol-token"
-    assert auth._websocket_header_token(subprotocol_ws) == "protocol-token"
-    assert auth.authenticate_websocket(subprotocol_ws)["token"] == "protocol-token"
-    assert auth.authenticate_websocket_token("first-message-token")["token"] == "first-message-token"
+    assert auth.core._websocket_header_token(subprotocol_ws) == "protocol-token"
+    assert auth.core.authenticate_websocket(subprotocol_ws)["token"] == "protocol-token"
+    assert auth.core.authenticate_websocket_token("first-message-token")["token"] == "first-message-token"
 
     with pytest.raises(HTTPException, match="Bearer token"):
-        auth.authenticate_websocket_token(" ")
+        auth.core.authenticate_websocket_token(" ")
 
 
 def test_service_api_key_is_role_checked_and_constant_time(settings_patch):
     from basic_agent import auth
 
     settings_patch(
-        auth,
+        auth.core,
         auth_disabled=False,
         keycloak_issuer="https://issuer.example/realms/basic-agent",
         service_api_key="service-secret",
@@ -153,7 +153,7 @@ def test_service_api_key_is_role_checked_and_constant_time(settings_patch):
     )
     request = StarletteRequest({"type": "http", "headers": []})
 
-    claims = auth.authenticate_request(
+    claims = auth.core.authenticate_request(
         request,
         api_key="service-secret",
         required_roles=("service-reader",),
@@ -165,7 +165,7 @@ def test_service_api_key_is_role_checked_and_constant_time(settings_patch):
     }
 
     with pytest.raises(HTTPException) as role_error:
-        auth.authenticate_request(
+        auth.core.authenticate_request(
             request,
             api_key="service-secret",
             required_roles=("agent-operator",),
@@ -177,7 +177,7 @@ def test_rest_identity_binding_rejects_idor_and_injects_subject(
     tmp_path, settings_patch, monkeypatch
 ):
     monkeypatch.setenv("ADK_DATA_DIR", str(tmp_path / "adk"))
-    from basic_agent import api_server
+    from basic_agent.interfaces import rest as api_server
 
     settings_patch(api_server, auth_disabled=False)
     monkeypatch.setattr(
@@ -223,7 +223,7 @@ def test_rest_identity_binding_rejects_idor_and_injects_subject(
 
 
 def test_live_rejects_unknown_session_id_for_subject(monkeypatch):
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     monkeypatch.setattr(
         live_server.session_service,
@@ -239,7 +239,7 @@ def test_adk_documentation_routes_are_removed_in_production(
     tmp_path, settings_patch, monkeypatch
 ):
     monkeypatch.setenv("ADK_DATA_DIR", str(tmp_path / "adk"))
-    from basic_agent import api_server
+    from basic_agent.interfaces import rest as api_server
 
     settings_patch(api_server, deployment="production", auth_disabled=True)
     production_app = api_server.create_app()
@@ -250,7 +250,7 @@ def test_adk_documentation_routes_are_removed_in_production(
 def test_knowledge_and_runtime_instruction_frame_injected_content(tmp_path, settings_patch):
     from basic_agent import knowledge as knowledge_mod
     from basic_agent.knowledge import retrieve_knowledge
-    from basic_agent.config_loader import AgentConfig, ToolsConfig
+    from basic_agent.config.loader import AgentConfig, ToolsConfig
 
     knowledge_file = tmp_path / "injection-corpus.json"
     knowledge_file.write_text(
@@ -281,7 +281,7 @@ def test_knowledge_and_runtime_instruction_frame_injected_content(tmp_path, sett
 
 
 def test_websocket_oversized_frame_is_closed(settings_patch):
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     settings_patch(live_server, live_max_message_bytes=4)
 
@@ -298,7 +298,7 @@ def test_websocket_oversized_frame_is_closed(settings_patch):
 
 
 def test_websocket_budget_is_scoped_to_authenticated_subject(settings_patch):
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     settings_patch(live_server, live_max_messages_per_minute=1)
     live_server._message_windows.clear()
@@ -315,11 +315,11 @@ def test_websocket_query_tokens_are_not_accepted():
         headers={},
         query_params={"access_token": "should-not-be-read"},
     )
-    assert auth._websocket_header_token(websocket) is None
+    assert auth.core._websocket_header_token(websocket) is None
 
 
 def test_forward_auth_emits_only_subject_header(settings_patch, monkeypatch):
-    from basic_agent import auth_gateway
+    from basic_agent.auth import gateway as auth_gateway
 
     settings_patch(auth_gateway, auth_disabled=True)
     monkeypatch.setattr(
@@ -334,7 +334,7 @@ def test_forward_auth_emits_only_subject_header(settings_patch, monkeypatch):
 
 
 def test_live_helpers_serialize_events_and_reject_bad_json(settings_patch):
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     settings_patch(live_server, live_max_message_bytes=100)
     assert asyncio.run(live_server.healthz())["status"] == "ok"
@@ -354,7 +354,7 @@ def test_live_helpers_serialize_events_and_reject_bad_json(settings_patch):
 
 
 def test_live_session_creation_and_forwarding(settings_patch):
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     settings_patch(live_server, live_max_message_bytes=100)
     created = SimpleNamespace(id="new-session")
@@ -432,7 +432,7 @@ def _mock_live_websocket(*, headers=None, query_params=None, frames=()):
 
 
 def test_get_runner_builds_and_caches_singleton(monkeypatch):
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     monkeypatch.setattr(live_server, "_runner", None)
     first = live_server._get_runner()
@@ -442,7 +442,7 @@ def test_get_runner_builds_and_caches_singleton(monkeypatch):
 
 
 def test_session_returns_existing_session_for_known_id():
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     async def _run():
         created = await live_server.session_service.create_session(
@@ -455,7 +455,7 @@ def test_session_returns_existing_session_for_known_id():
 
 
 def test_forward_events_closes_on_oversized_payload(settings_patch):
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     settings_patch(live_server, live_max_message_bytes=5)
 
@@ -475,7 +475,7 @@ def test_forward_events_closes_on_oversized_payload(settings_patch):
 
 
 def test_forward_events_swallows_runner_exceptions():
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     class FailingRunner:
         async def run_live(self, **_kwargs):
@@ -491,7 +491,7 @@ def test_forward_events_swallows_runner_exceptions():
 
 
 def test_forward_events_reraises_cancelled_error():
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     class HangingRunner:
         async def run_live(self, **_kwargs):
@@ -514,7 +514,7 @@ def test_forward_events_reraises_cancelled_error():
 
 
 def test_rate_limit_evicts_timestamps_older_than_window(monkeypatch, settings_patch):
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     settings_patch(live_server, live_max_messages_per_minute=5)
     live_server._message_windows.clear()
@@ -528,7 +528,7 @@ def test_rate_limit_evicts_timestamps_older_than_window(monkeypatch, settings_pa
 
 
 def test_receive_json_message_returns_parsed_dict():
-    from basic_agent import live_server
+    from basic_agent.interfaces import live as live_server
 
     websocket = SimpleNamespace(
         receive_text=AsyncMock(return_value=json.dumps({"text": "hi"})),
@@ -540,9 +540,10 @@ def test_receive_json_message_returns_parsed_dict():
 
 
 def test_live_endpoint_auth_disabled_full_message_loop(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=True)
+    settings_patch(auth.core, auth_disabled=True)
     settings_patch(live_server, auth_disabled=True)
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
 
@@ -564,9 +565,10 @@ def test_live_endpoint_auth_disabled_full_message_loop(settings_patch, monkeypat
 
 
 def test_live_endpoint_header_auth_success(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(auth.core, auth_disabled=False, keycloak_issuer="https://issuer.example")
     settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
     monkeypatch.setattr(
@@ -582,9 +584,10 @@ def test_live_endpoint_header_auth_success(settings_patch, monkeypatch):
 
 
 def test_live_endpoint_first_message_auth_success(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(auth.core, auth_disabled=False, keycloak_issuer="https://issuer.example")
     settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
     monkeypatch.setattr(
@@ -602,9 +605,10 @@ def test_live_endpoint_first_message_auth_success(settings_patch, monkeypatch):
 
 
 def test_live_endpoint_first_message_invalid_type_closes_4401(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(auth.core, auth_disabled=False, keycloak_issuer="https://issuer.example")
     settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
 
@@ -616,10 +620,11 @@ def test_live_endpoint_first_message_invalid_type_closes_4401(settings_patch, mo
 
 
 def test_live_endpoint_header_auth_failure_closes_4401(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
     from fastapi import HTTPException
 
-    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(auth.core, auth_disabled=False, keycloak_issuer="https://issuer.example")
     settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
 
     def _raise(*_args, **_kwargs):
@@ -634,9 +639,10 @@ def test_live_endpoint_header_auth_failure_closes_4401(settings_patch, monkeypat
 
 
 def test_live_endpoint_auth_unexpected_error_closes_1011(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(auth.core, auth_disabled=False, keycloak_issuer="https://issuer.example")
     settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
 
     def _raise(*_args, **_kwargs):
@@ -651,10 +657,11 @@ def test_live_endpoint_auth_unexpected_error_closes_1011(settings_patch, monkeyp
 
 
 def test_live_endpoint_session_rejected_closes_4403(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
     from fastapi import HTTPException
 
-    settings_patch(auth, auth_disabled=True)
+    settings_patch(auth.core, auth_disabled=True)
     settings_patch(live_server, auth_disabled=True)
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
 
@@ -670,9 +677,10 @@ def test_live_endpoint_session_rejected_closes_4403(settings_patch, monkeypatch)
 
 
 def test_live_endpoint_rate_limit_exceeded_closes_4429(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=True)
+    settings_patch(auth.core, auth_disabled=True)
     settings_patch(live_server, auth_disabled=True)
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
     monkeypatch.setattr(live_server, "_message_is_rate_limited", lambda subject: True)
@@ -695,9 +703,10 @@ def test_live_endpoint_rate_limit_exceeded_closes_4429(settings_patch, monkeypat
 def test_live_endpoint_message_loop_rejects_malformed_messages(
     settings_patch, monkeypatch, frame, expected_code
 ):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=True)
+    settings_patch(auth.core, auth_disabled=True)
     settings_patch(live_server, auth_disabled=True)
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
 
@@ -708,9 +717,10 @@ def test_live_endpoint_message_loop_rejects_malformed_messages(
 
 
 def test_live_endpoint_oversized_audio_closes_1009(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=True)
+    settings_patch(auth.core, auth_disabled=True)
     settings_patch(live_server, auth_disabled=True, live_max_audio_bytes=4)
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
 
@@ -722,9 +732,10 @@ def test_live_endpoint_oversized_audio_closes_1009(settings_patch, monkeypatch):
 
 
 def test_live_endpoint_disconnect_mid_loop_is_handled(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=True)
+    settings_patch(auth.core, auth_disabled=True)
     settings_patch(live_server, auth_disabled=True)
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
 
@@ -735,9 +746,10 @@ def test_live_endpoint_disconnect_mid_loop_is_handled(settings_patch, monkeypatc
 
 
 def test_live_endpoint_unexpected_error_mid_loop_is_logged(settings_patch, monkeypatch):
-    from basic_agent import live_server, auth
+    from basic_agent.interfaces import live as live_server
+    from basic_agent import auth
 
-    settings_patch(auth, auth_disabled=True)
+    settings_patch(auth.core, auth_disabled=True)
     settings_patch(live_server, auth_disabled=True)
     monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
 

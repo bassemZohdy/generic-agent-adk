@@ -6,7 +6,7 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from basic_agent.config_loader import (
+from basic_agent.config.loader import (
     AgentConfig,
     ExecutionConfig,
     InstructionsConfig,
@@ -494,7 +494,7 @@ def test_specialists_roles_match_passes(monkeypatch):
 
 
 def test_provenance_log_line(monkeypatch, base_config, caplog):
-    caplog.set_level(logging.INFO, logger="basic_agent.config_loader")
+    caplog.set_level(logging.INFO, logger="basic_agent.config.loader")
     for var in _ALL_CONFIG_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("ADK_MODEL", "env-model")
@@ -566,7 +566,7 @@ execution:
 
 
 def test_env_builder_code_execution_defaults(monkeypatch):
-    from basic_agent.config_loader import ExecutionCodeExecutionConfig
+    from basic_agent.config.loader import ExecutionCodeExecutionConfig
 
     config = load_config_from_env()
 
@@ -582,10 +582,11 @@ def test_env_builder_code_execution_defaults(monkeypatch):
 
 
 def test_env_builder_code_execution_from_settings(settings_patch):
-    import basic_agent.config as config_module
+    import sys
+    settings_mod = sys.modules["basic_agent.config.settings"]
 
     settings_patch(
-        config_module,
+        settings_mod,
         code_execution_strategy="gemini_built_in",
         code_execution_docker_host="tcp://proxy:2375",
         code_execution_docker_image="python:3.13-alpine",

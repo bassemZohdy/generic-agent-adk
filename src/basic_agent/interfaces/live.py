@@ -18,16 +18,16 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from .agent import GenericAgentPlugin, get_root_agent
-from .autoconfig import discover_capabilities
-from .auth import (
+from ..agent import GenericAgentPlugin, get_root_agent
+from ..autoconfig import discover_capabilities
+from ..auth.core import (
     authenticate_websocket,
     authenticate_websocket_token,
     roles_from_claims,
     websocket_auth_subprotocol,
 )
-from .config import settings
-from ._util import is_production
+from ..config.settings import settings
+from ..util import is_production
 
 
 logger = logging.getLogger(__name__)

@@ -23,7 +23,7 @@ class TestAuthenticationFlow:
         from basic_agent import auth
 
         settings_patch(
-            auth,
+            auth.core,
             keycloak_issuer="https://keycloak.example/realms/test",
             auth_disabled=False,
         )
@@ -35,7 +35,7 @@ class TestAuthenticationFlow:
         """Test authentication with Bearer token in headers."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_issuer="", auth_disabled=True)
+        settings_patch(auth.core, keycloak_issuer="", auth_disabled=True)
         # Authentication is disabled only by explicit opt-in.
         request = Request(
             {
@@ -54,7 +54,7 @@ class TestRoleValidation:
         """Test role validation with multiple matching roles."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_role_claim="realm_access.roles")
+        settings_patch(auth.core, keycloak_role_claim="realm_access.roles")
         # Should not raise when user has required role
         require_roles(
             {"realm_access": {"roles": ["admin", "user", "viewer"]}},
@@ -65,7 +65,7 @@ class TestRoleValidation:
         """Test role validation with deeply nested claim structure."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_role_claim="resource_access.api.roles")
+        settings_patch(auth.core, keycloak_role_claim="resource_access.api.roles")
         require_roles(
             {"resource_access": {"api": {"roles": ["api-user"]}}},
             ("api-user",),
@@ -76,7 +76,7 @@ class TestRoleValidation:
         from basic_agent import auth
         from fastapi import HTTPException
 
-        settings_patch(auth, keycloak_role_claim="resource_access.api.roles")
+        settings_patch(auth.core, keycloak_role_claim="resource_access.api.roles")
         with pytest.raises(HTTPException) as exc_info:
             require_roles({"resource_access": {}}, ("api-user",))
         assert exc_info.value.status_code == 403
@@ -86,7 +86,7 @@ class TestRoleValidation:
         from basic_agent import auth
         from fastapi import HTTPException
 
-        settings_patch(auth, keycloak_role_claim="realm_access.roles")
+        settings_patch(auth.core, keycloak_role_claim="realm_access.roles")
         # Roles value is not a list
         with pytest.raises((HTTPException, TypeError, AttributeError)):
             require_roles(
@@ -103,7 +103,7 @@ class TestKeycloakEnabledCheck:
         from basic_agent import auth
 
         settings_patch(
-            auth,
+            auth.core,
             keycloak_issuer="https://keycloak.example/realms/test",
             auth_disabled=False,
         )
@@ -113,14 +113,14 @@ class TestKeycloakEnabledCheck:
         """Test keycloak_enabled returns False when issuer is empty."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_issuer="", auth_disabled=False)
+        settings_patch(auth.core, keycloak_issuer="", auth_disabled=False)
         assert keycloak_enabled() is False
 
     def test_keycloak_enabled_with_whitespace_issuer(self, settings_patch):
         """Test keycloak_enabled with whitespace-only issuer."""
         from basic_agent import auth
 
-        settings_patch(auth, keycloak_issuer="   ", auth_disabled=False)
+        settings_patch(auth.core, keycloak_issuer="   ", auth_disabled=False)
         # Whitespace-only issuer should be treated as False
         result = keycloak_enabled()
         assert isinstance(result, bool)

@@ -12,10 +12,10 @@ from google.adk.plugins import BasePlugin
 from pydantic import BaseModel, Field
 
 from .autoconfig import CapabilityProvider, discover_capabilities
-from .code_execution import CE_FIELD_ENV_MAP, CodeExecutionResolution, resolve_code_executor
-from .config import settings
+from .execution.resolver import CE_FIELD_ENV_MAP, CodeExecutionResolution, resolve_code_executor
+from .config.settings import settings
 from .models import resolve_model
-from .config_loader import (
+from .config.loader import (
     AgentConfig,
     apply_env_overrides,
     load_config_from_env,

@@ -1,27 +1,13 @@
 # TODO
 
-No outstanding implementation tasks. All 13 findings from the 2026-08-16
-project review (below) have been addressed; kept as a record of what was
-found and how it was resolved. Test suite: 215 passed, 90% coverage — see
-README badges for current numbers, which will drift as tests are added.
+No outstanding implementation tasks.
 
-## High priority — untested security-relevant paths
+The completed project review (13 findings: untested security-relevant code
+paths, CI/CD supply-chain hardening, and doc accuracy) is recorded in
+[`docs/REVIEW-2026-08-16.md`](docs/REVIEW-2026-08-16.md). The prior security/
+correctness hardening pass is recorded in
+[`docs/SECURITY-HARDENING-2026-08-15.md`](docs/SECURITY-HARDENING-2026-08-15.md).
 
-- [x] `use_cases/registry.py:156,165,172,182` — added tests for the custom-use-case-module guardrails (missing file, production-without-allowlist, outside-allowlist, within-allowlist). Coverage for this file is now 99%.
-- [x] `service_api.py:38-48` — added `tests/test_service_api.py`: end-to-end `TestClient` tests for the `/status` endpoint covering auth-disabled, misconfigured issuer, no credentials, valid/invalid API key, and valid/insufficient-role bearer token. File is now 100% covered.
-- [x] `.github/workflows/ci.yml` — fixed publish-before-scan ordering: `build` now only ever pushes an unverified `ci-<sha>` staging tag; a new `promote-image` job attaches the real release tags (`latest`, branch, semver) to the verified digest only after `verify-image` passes.
-- [x] `.github/workflows/ci.yml` — PRs now get real image verification: `build` loads the image locally (`load: true`, no push) and runs the dependency-lock check, Trivy scan, and smoke test in-job against it, since forked-PR runs have no registry credentials to push/pull with.
-
-## Medium priority — architecture/config debt
-
-- [x] ADR-003's migration gate can't be met until upstream ADK lets `Workflow` act as an `LlmAgent` sub-agent (criteria 1-3 are blocked, not us). Since criterion 4 can't be true until then either, added a targeted `filterwarnings` ignore in `pyproject.toml` (pointing back to the ADR) so the expected noise doesn't look like an untracked bug, and clarified the ADR text. Not attempting the actual migration — that's still correctly blocked.
-- [x] `use_cases/base.py` — added tests for hook-chaining (`_chain`, `_chain_before_tool`/`_chain_after_tool`), the `after_tool` wiring path (no built-in exercised it before), and `resolve_runtime`'s roles-merge / model-instruction-tools-override / unconditional-default branches. File is now 100% covered.
-- [x] `strategies/base.py:138` — added a parametrized test for `positive_count`'s validation error (0, negative, bool, non-int, float). File is now 100% covered.
-- [x] `use_cases/registry.py:39,41-47` — covered by `test_register_duplicate_key_raises`/`test_register_duplicate_alias_raises` (added alongside the item-1 guardrail tests above).
-
-## Low priority — doc hygiene / cleanup
-
-- [x] Rewrote `.github/CI-CD-INTEGRATION.md` and updated `.github/PUBLISHING.md` to match the actual pipeline (pip-audit, gitleaks, Trivy as a hard gate, the verify script, and the new staging-tag/promote model). Removed fabricated metrics/module tables that no longer matched the codebase.
-- [x] README badges and `docs/SECURITY-HARDENING-2026-08-15.md` now reflect real counts; added a note on the security doc that its numbers are a point-in-time snapshot, not the live CI gate (which is `COVERAGE_THRESHOLD` = 85% in `ci.yml`).
-- [x] `use_cases/registry.py:94` — docstring fixed: "eight built-ins" (was "nine").
-- [x] `strategies/registry.py`'s unused `list_strategies()` removed (no callers, no test, unlike its sibling `list_use_cases()` which is genuinely used).
+The only environment-dependent follow-up is to run the Docker build locally
+when a Docker daemon is available; CI already contains that build and its
+locked-dependency, audit, scan, verify, and promote gates.

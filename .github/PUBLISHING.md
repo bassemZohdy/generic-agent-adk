@@ -41,24 +41,39 @@ The workflow automatically generates multiple tags:
 
 ## Workflow Steps
 
-### 1. Test Job
+### 1. Lint Job
+- `git diff --check`, Keycloak JSON fixture validation, `docker compose config`
+- Secret scan via `gitleaks/gitleaks-action`
+
+### 2. Test Job
 - Runs pytest across Python 3.10, 3.11, 3.12, 3.13
-- Validates configuration files
-- Checks patch formatting
-- Only builds if tests pass
+- `pip-audit --strict` against locked dependencies
+- Enforces the coverage gate (`COVERAGE_THRESHOLD`, currently 85%)
 
-### 2. Build Job
-- Sets up Docker Buildx for multi-architecture builds
-- Logs into GitHub Container Registry (on non-PR pushes)
-- Extracts metadata and generates tags
-- Builds and pushes image to GHCR
-- Uses GitHub Actions cache for layer caching
+### 3. Build Job
+- Sets up Docker Buildx
+- Builds the image tagged only as an **unverified staging tag**
+  (`ghcr.io/<owner>/<repo>:ci-<sha>`) — never a floating release tag directly
+- Non-PR events: pushes the staging tag to GHCR (`push: true`)
+- PR events: loads the image into the local Docker daemon only (`load: true`,
+  never pushed — forked-PR runs have no registry credentials) and runs the
+  dependency-lock check, Trivy scan, and startup smoke test right there,
+  against the local image
 
-### 3. Verify Job
-- Runs only after successful build on `main` branch
-- Pulls published image from GHCR
-- Verifies image metadata
-- Confirms image is accessible
+### 4. Verify Staged Image Job (non-PR only)
+- Pulls the staging tag from GHCR
+- Runs `scripts/verify-image-dependencies.sh` (confirms installed packages
+  match `uv.lock` exactly)
+- Scans the staging tag with Trivy (`HIGH,CRITICAL`, fails the build on any
+  unfixed match — this is a hard gate, not informational)
+- Runs a startup smoke test for two use cases
+
+### 5. Promote Verified Image Job (non-PR only)
+- Runs only after Verify Staged Image succeeds
+- Uses `docker buildx imagetools create` to attach the real release tags
+  (`latest`, branch name, semver, `<branch>-<sha>`) to the **already-verified
+  digest** — so a vulnerable or broken image is never reachable under a
+  release tag, even transiently
 
 ## Usage
 
@@ -121,8 +136,9 @@ git push origin v1.0.0
 
 This triggers:
 1. Tests to run
-2. Build job to create image
-3. Image published as:
+2. Build job to create the staging-tagged image
+3. Verify Staged Image to scan and smoke-test it
+4. Promote Verified Image to attach the release tags, only once verified:
    - `ghcr.io/your-org/adk:v1.0.0`
    - `ghcr.io/your-org/adk:1.0`
    - `ghcr.io/your-org/adk:latest`
@@ -192,7 +208,9 @@ The `GITHUB_TOKEN` used in workflows:
 
 ## Image Scanning
 
-GitHub automatically scans published images in your repository (enterprise feature).
+Every image is scanned with Trivy (`HIGH,CRITICAL`, unfixed findings ignored)
+as a hard CI gate before it can carry a release tag — see Verify Staged Image
+above. This is enforced, not merely informational.
 
 To manually scan locally:
 
@@ -250,8 +268,13 @@ services:
 
 The workflow is defined in `.github/workflows/ci.yml`:
 
-- **test**: Python tests across 4 versions
-- **build**: Docker build and push
-- **verify-image**: Verify published image
+- **lint**: formatting, config validation, secret scan
+- **test**: Python tests across 4 versions, `pip-audit`, coverage gate
+- **build**: Docker build; pushes only an unverified staging tag (non-PR), or
+  builds + verifies locally with no push (PR)
+- **verify-image**: dependency-lock check, Trivy scan, smoke test of the
+  staging tag (non-PR only)
+- **promote-image**: attaches release tags to the verified digest (non-PR
+  only)
 
 See `.github/workflows/ci.yml` for complete configuration.

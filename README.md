@@ -4,6 +4,10 @@ One Docker image, eight generic use cases. Pick what you want the agent to do, c
 
 [![Tests](https://img.shields.io/badge/tests-199%20passing-brightgreen)](./tests/)
 [![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](./tests/)
+<!-- Test count/coverage badges are updated by hand; re-check with
+     `uv run pytest tests/ -q --cov=src --cov-report=term-missing` before
+     editing them, since they silently drift from the enforced CI gate
+     (COVERAGE_THRESHOLD in .github/workflows/ci.yml) otherwise. -->
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-production%20ready-green)](.)
 

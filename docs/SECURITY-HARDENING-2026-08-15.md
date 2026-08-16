@@ -25,9 +25,13 @@ Implemented areas:
 - Tests: immutable-settings fixture, authentication/IDOR/prompt-injection/
   WebSocket regressions, subject-scoped quota checks, and CI-gate assertions.
 
-Verification completed:
+Verification completed (as of this record's date; the CI-enforced coverage
+gate is `COVERAGE_THRESHOLD` in `.github/workflows/ci.yml`, currently 85% —
+see the README badges for the current test count/coverage, which drift as
+tests are added or removed):
 
-- `uv run pytest -q`: **199 passed** (87.62% coverage with the CI gate).
+- `uv run pytest -q`: **199 passed** (87.62% coverage at the time of this
+  record).
 - `docker compose config` with required CI passwords: passed.
 - `uv lock --check`: passed.
 - Python compilation, JSON validation, shell syntax, and `git diff --check`:

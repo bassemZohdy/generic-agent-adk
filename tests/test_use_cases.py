@@ -11,6 +11,7 @@ from basic_agent.strategies import RuntimeContext
 from basic_agent.use_cases import (
     ApprovalGateAgent,
     AssistantAgent,
+    BaseUseCaseAgent,
     ExpertDispatchAgent,
     MultiPerspectiveAgent,
     RefineUntilGoodAgent,
@@ -301,3 +302,81 @@ def test_env_module_unset_keeps_eight(tmp_path, monkeypatch):
 
     registry_mod._register_builtins(fresh)
     assert len(fresh.list_use_cases()) == 8
+
+
+# --- T2.5: custom module loading guardrails ---
+
+
+def test_load_custom_use_cases_missing_file_raises(tmp_path):
+    missing = tmp_path / "does_not_exist.py"
+    with pytest.raises(OSError, match="does not exist"):
+        load_custom_use_cases(str(missing))
+
+
+def test_load_custom_use_cases_production_requires_allowlist(tmp_path, monkeypatch):
+    module_file = tmp_path / "prod_use_cases.py"
+    module_file.write_text(CUSTOM_MODULE_SOURCE)
+    monkeypatch.delenv("AGENT_USE_CASE_MODULE_ALLOWLIST", raising=False)
+    monkeypatch.setenv("DEPLOYMENT_ENV", "production")
+
+    with pytest.raises(ValueError, match="AGENT_USE_CASE_MODULE_ALLOWLIST"):
+        load_custom_use_cases(str(module_file), registry=UseCaseRegistry())
+
+
+def test_load_custom_use_cases_outside_allowlist_rejected(tmp_path, monkeypatch):
+    allowed_dir = tmp_path / "allowed"
+    allowed_dir.mkdir()
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    module_file = other_dir / "custom_use_cases.py"
+    module_file.write_text(CUSTOM_MODULE_SOURCE)
+    monkeypatch.setenv("AGENT_USE_CASE_MODULE_ALLOWLIST", str(allowed_dir))
+    monkeypatch.delenv("DEPLOYMENT_ENV", raising=False)
+
+    with pytest.raises(ValueError, match="outside the configured"):
+        load_custom_use_cases(str(module_file), registry=UseCaseRegistry())
+
+
+def test_load_custom_use_cases_within_allowlist_allowed(tmp_path, monkeypatch):
+    allowed_dir = tmp_path / "allowed"
+    allowed_dir.mkdir()
+    module_file = allowed_dir / "custom_use_cases.py"
+    module_file.write_text(CUSTOM_MODULE_SOURCE)
+    monkeypatch.setenv("AGENT_USE_CASE_MODULE_ALLOWLIST", str(allowed_dir))
+    monkeypatch.delenv("DEPLOYMENT_ENV", raising=False)
+
+    keys = load_custom_use_cases(str(module_file), registry=UseCaseRegistry())
+    assert keys == ["snarky"]
+
+
+# --- T2.6: registry duplicate-key/alias guardrails ---
+
+
+def test_register_duplicate_key_raises():
+    registry = UseCaseRegistry()
+    registry.register(AssistantAgent())
+    with pytest.raises(ValueError, match="already registered"):
+        registry.register(AssistantAgent())
+
+
+def test_register_duplicate_alias_raises():
+    from basic_agent.strategies import DirectStrategy
+
+    class FirstAgent(BaseUseCaseAgent):
+        use_case = "first_agent"
+        title = "First"
+        when_to_use = "Test-only."
+        aliases = ("shared_alias",)
+        strategy = DirectStrategy()
+
+    class SecondAgent(BaseUseCaseAgent):
+        use_case = "second_agent"
+        title = "Second"
+        when_to_use = "Test-only."
+        aliases = ("shared_alias",)
+        strategy = DirectStrategy()
+
+    registry = UseCaseRegistry()
+    registry.register(FirstAgent())
+    with pytest.raises(ValueError, match="already registered for"):
+        registry.register(SecondAgent())

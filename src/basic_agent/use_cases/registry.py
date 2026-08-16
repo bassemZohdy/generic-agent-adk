@@ -91,7 +91,7 @@ _default_registry: UseCaseRegistry | None = None
 
 
 def get_default_registry() -> UseCaseRegistry:
-    """Get or create the default registry with the nine built-ins registered.
+    """Get or create the default registry with the eight built-ins registered.
 
     Reads ``AGENT_USE_CASE_MODULE`` at call time (not import time); when set,
     custom use cases from that module are registered too.

@@ -68,14 +68,6 @@ class AgentStrategyRegistry:
         """
         return sorted(self._strategies.keys())
 
-    def list_strategies(self) -> dict[str, AgentStrategy]:
-        """Return a copy of all registered strategies.
-
-        Returns:
-            Mapping of agent type to strategy instance.
-        """
-        return dict(self._strategies)
-
 
 _default_registry: AgentStrategyRegistry | None = None
 

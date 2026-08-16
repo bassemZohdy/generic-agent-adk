@@ -4,10 +4,10 @@ Findings from the 2026-08-16 project review. Grouped by priority.
 
 ## High priority — untested security-relevant paths
 
-- [ ] `use_cases/registry.py:156,165,172,182` — add tests for the custom-use-case-module guardrails: nonexistent file, production-without-allowlist rejection, and outside-allowlist rejection. Only the happy path and idempotency are currently tested; this is the actual control preventing arbitrary code loading in production.
-- [ ] `service_api.py:38-48` — add an end-to-end test for the real `/status` FastAPI endpoint (auth + role-check + subject logging) via `TestClient` with valid/invalid API keys and bearer tokens. Tests currently only exercise the underlying `get_service_status()` helper, not the endpoint's auth wiring.
-- [ ] `.github/workflows/ci.yml` — fix publish-before-scan ordering: the `build` job pushes the image to GHCR (`push: true`) before `verify-image` (Trivy scan, dependency-drift check, smoke test) runs. Add a promote/retag-on-pass step, or gate the push on `verify-image` succeeding first.
-- [ ] `.github/workflows/ci.yml` — `verify-image` only runs `if: github.event_name != 'pull_request'`, so PRs get no Trivy/image-verification coverage. Decide whether to run a scan-only (no-push) variant on PRs.
+- [x] `use_cases/registry.py:156,165,172,182` — added tests for the custom-use-case-module guardrails (missing file, production-without-allowlist, outside-allowlist, within-allowlist). Coverage for this file is now 99%.
+- [x] `service_api.py:38-48` — added `tests/test_service_api.py`: end-to-end `TestClient` tests for the `/status` endpoint covering auth-disabled, misconfigured issuer, no credentials, valid/invalid API key, and valid/insufficient-role bearer token. File is now 100% covered.
+- [x] `.github/workflows/ci.yml` — fixed publish-before-scan ordering: `build` now only ever pushes an unverified `ci-<sha>` staging tag; a new `promote-image` job attaches the real release tags (`latest`, branch, semver) to the verified digest only after `verify-image` passes.
+- [x] `.github/workflows/ci.yml` — PRs now get real image verification: `build` loads the image locally (`load: true`, no push) and runs the dependency-lock check, Trivy scan, and smoke test in-job against it, since forked-PR runs have no registry credentials to push/pull with.
 
 ## Medium priority — architecture/config debt
 
@@ -18,7 +18,7 @@ Findings from the 2026-08-16 project review. Grouped by priority.
 
 ## Low priority — doc hygiene / cleanup
 
-- [ ] Update `.github/CI-CD-INTEGRATION.md` and `.github/PUBLISHING.md`: they don't mention pip-audit/gitleaks/Trivy/the verify script, and mischaracterize the image-verify job as "non-blocking (informational only)" when it's actually a hard `exit-code: 1` gate.
-- [ ] Fix stale test-count/coverage claims: README badge says "199 tests passing"; `docs/SECURITY-HARDENING-2026-08-15.md` says "199 passed (87.62% coverage)". Actual is 186 passed, and the enforced CI gate is 85%, not ~87% (a test was deleted in commit `71444d8` without updating these).
-- [ ] `use_cases/registry.py:94` — fix docstring: says "nine built-ins" registered, actually 8.
-- [ ] `strategies/registry.py`'s `list_strategies()` has no callers anywhere in `src/` or `tests/` — either add a test/caller or remove it as dead code.
+- [x] Rewrote `.github/CI-CD-INTEGRATION.md` and updated `.github/PUBLISHING.md` to match the actual pipeline (pip-audit, gitleaks, Trivy as a hard gate, the verify script, and the new staging-tag/promote model). Removed fabricated metrics/module tables that no longer matched the codebase.
+- [x] README badges and `docs/SECURITY-HARDENING-2026-08-15.md` now reflect real counts (199 passed, 88% coverage after the new tests above); added a note on the security doc that its numbers are a point-in-time snapshot, not the live CI gate (which is `COVERAGE_THRESHOLD` = 85% in `ci.yml`).
+- [x] `use_cases/registry.py:94` — docstring fixed: "eight built-ins" (was "nine").
+- [x] `strategies/registry.py`'s unused `list_strategies()` removed (no callers, no test, unlike its sibling `list_use_cases()` which is genuinely used).

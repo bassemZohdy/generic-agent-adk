@@ -433,3 +433,35 @@ class GeminiBuiltInCodeExecutionProvider(_CodeExecutionProviderSpec):
 
 
 register(GeminiBuiltInCodeExecutionProvider, auto=True)
+
+
+# ── unsafe_local strategy (TODO P4) ──────────────────────────────────────────
+
+
+class UnsafeLocalCodeExecutionProvider(_CodeExecutionProviderSpec):
+    """``unsafe_local`` strategy: in-process execution, no isolation.
+
+    Never auto-detected — reachable ONLY through an explicit
+    ``AGENT_CODE_EXECUTION_STRATEGY=unsafe_local`` opt-in. Every selection
+    logs a warning naming the risk, mirroring the ``AUTH_DISABLED`` /
+    ``DEMO_MODE`` dangerous-needs-a-named-opt-in convention.
+    """
+
+    strategy = "unsafe_local"
+    warn_on_select = (
+        "unsafe_local code execution selected: model-generated code runs "
+        "IN-PROCESS on the host with NO isolation"
+    )
+
+    @classmethod
+    def probe(cls, environment: Mapping[str, str], *, model: Any) -> bool:
+        return True  # always "available"; never in _AUTO_DETECT_ORDER
+
+    @classmethod
+    def build(cls, environment: Mapping[str, str]) -> Any:
+        from google.adk.code_executors import UnsafeLocalCodeExecutor  # eager
+
+        return UnsafeLocalCodeExecutor()
+
+
+register(UnsafeLocalCodeExecutionProvider)

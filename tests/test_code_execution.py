@@ -460,3 +460,40 @@ def test_gemini_explicit_with_pre_2_0_model_raises(clean_registry):
         resolve_code_executor(
             {STRATEGY_ENV: "gemini_built_in"}, model="gemini-1.5-flash"
         )
+
+
+# ── P4: unsafe_local provider ────────────────────────────────────────────────
+
+
+def test_unsafe_local_never_auto_selected(clean_registry, monkeypatch):
+    client = _FakeDockerClient()
+    _install_fake_docker(monkeypatch, client)
+    ce.register(ce.DockerContainerCodeExecutionProvider, auto=True)
+    ce.register(ce.GeminiBuiltInCodeExecutionProvider, auto=True)
+    ce.register(ce.UnsafeLocalCodeExecutionProvider)  # registered, never auto
+    env = {
+        "DOCKER_HOST": "tcp://docker:2375",
+        "AGENT_CODE_EXECUTION_DOCKER_HOST": "tcp://docker:2375",
+    }
+    resolution = resolve_code_executor(env, model="gemini-2.0-flash")
+    assert resolution.strategy == "docker_container"
+
+
+def test_unsafe_local_not_selected_even_with_nothing_else(clean_registry, monkeypatch):
+    monkeypatch.setitem(sys.modules, "docker", None)
+    ce.register(ce.DockerContainerCodeExecutionProvider, auto=True)
+    ce.register(ce.UnsafeLocalCodeExecutionProvider)
+    resolution = resolve_code_executor({}, model="gemini-1.5-flash")
+    assert resolution.strategy == "unavailable"
+
+
+def test_unsafe_local_explicit_warns_and_builds(clean_registry, caplog):
+    from google.adk.code_executors import UnsafeLocalCodeExecutor
+
+    ce.register(ce.UnsafeLocalCodeExecutionProvider)
+    with caplog.at_level(logging.WARNING):
+        resolution = resolve_code_executor({STRATEGY_ENV: "unsafe_local"}, model="m")
+    assert resolution.strategy == "unsafe_local"
+    assert resolution.detail == "explicit override"
+    assert isinstance(resolution.executor, UnsafeLocalCodeExecutor)
+    assert "NO isolation" in caplog.text

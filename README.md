@@ -1,137 +1,236 @@
-# Generic Agent Runtime (ADK)
+# Generic Agent Runtime
 
-One Docker image, eight use cases. Configure with env vars or YAML, run it.
+An AI agent that adapts to your needs. Choose what you want it to do, configure it with environment variables, and run it with one Docker command.
 
 [![Tests](https://img.shields.io/badge/tests-311%20passing-brightgreen)](./tests/)
 [![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](./tests/)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-production%20ready-green)](.)
 
-## Quick start
+## What does it do?
+
+This agent can:
+
+- **Answer questions** using your documents, web search, or connected services
+- **Run multi-step workflows** — fetch data, analyze it, summarize results
+- **Route questions to specialists** — billing goes to billing, tech goes to tech
+- **Coordinate teams of AI workers** on complex tasks
+- **Plan and execute** — make a plan first, then carry it out
+- **Ask for your approval** before taking actions
+
+All powered by Google's ADK (Agent Development Kit) with support for any AI model — Gemini, OpenAI, Anthropic, Ollama, and more.
+
+## Quick start (30 seconds)
 
 ```bash
-# Minimal — env vars only
-docker run \
-  -e OPENAI_API_KEY=your-key \
-  -e AGENT_USE_CASE=assistant \
-  -e ADK_MODEL=openai/gpt-4o \
+# 1. Set your API key
+export OPENAI_API_KEY=your-key
+
+# 2. Run the agent
+docker run -p 8002:8002 \
+  -e OPENAI_API_KEY=$OPENAI_API_KEY \
   -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 
-# Full control — mount a YAML config
-docker run \
-  -v ./examples/expert-dispatch.yaml:/app/config/agent.yaml \
-  -e GOOGLE_API_KEY=your-key \
-  -e AUTH_DISABLED=true \
-  ghcr.io/bassemzohdy/generic-agent-adk:latest
+# 3. Open http://localhost:8002/docs to try it
 ```
 
-## Use cases
+That's it! The agent runs as a REST API you can call from any application.
 
-| I want an agent that… | Use case |
-|---|---|
-| Answers questions; investigates when tools are enabled | `assistant` |
-| Runs fixed steps in order | `pipeline` |
-| Gets several independent takes and aggregates them | `multi_perspective` |
-| Keeps improving until it's good enough | `refine_until_good` |
-| Routes questions to the right specialist | `expert_dispatch` |
-| Coordinates a team of workers | `team_coordinator` |
-| Plans first, then executes | `plan_and_execute` |
-| Proposes actions, waits for approval | `approval_gate` |
+## Choose what your agent does
 
-See [`examples/`](./examples/) for YAML configs.
+Set `AGENT_USE_CASE` to pick a behavior:
 
-## Configuration
-
-| Variable | Default | Notes |
+| What you want | Use case | Example |
 |---|---|---|
-| `GOOGLE_API_KEY` | — | Required for Gemini models |
-| `OPENAI_API_KEY` | — | Required for OpenAI (or `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, etc.) |
-| `AGENT_USE_CASE` | `assistant` | Any use case from the table above |
-| `ADK_MODEL` | `gemini-3.6-flash` | `provider/model` prefix for LiteLLM routing |
-| `AGENT_INSTRUCTION` | built-in prompt | Custom instruction for the agent |
-| `AGENT_TOOLS` | `knowledge,search,mcp,openapi,approval,runtime,structured_output` | Comma-separated tool list |
-| `AGENT_MAX_ITERATIONS` | `3` | For `refine_until_good`, `plan_and_execute` |
-| `AGENT_SPECIALISTS` | `research,solution,risk` | For `expert_dispatch` |
-| `AUTH_DISABLED` | `false` | Set `true` for local dev without Keycloak |
-
-All variables listed in [.env.example](.env.example). YAML config supports `${VAR:default}` substitution and per-role overrides — see [examples/](./examples/).
-
-## Tools
-
-**Skills** — add `skills` to `AGENT_TOOLS`, set `AGENT_SKILLS_DIR` to a folder of `SKILL.md` directories. See [`skills/status-check/SKILL.md`](./skills/status-check/SKILL.md).
-
-**Code execution** — add `code_execution` to `AGENT_TOOLS`. The agent auto-detects the best sandbox strategy:
-
-| Strategy | Trigger |
-|---|---|
-| `vertex_ai` | `AGENT_CODE_EXECUTION_VERTEX_RESOURCE` set |
-| `agent_engine_sandbox` | `AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE` set |
-| `gke` | `AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH` set |
-| `docker_container` | Docker daemon reachable |
-| `gemini_built_in` | Native Gemini 2.0+ model |
-| `unsafe_local` | Explicit opt-in only — **no isolation** |
-
-Pin with `AGENT_CODE_EXECUTION_STRATEGY`. In Compose, enable `--profile code-exec` and set `AGENT_CODE_EXECUTION_DOCKER_HOST=tcp://code-exec-socket-proxy:2375`. Default sandbox: `python:3.13-slim` (512 MB RAM, 1 CPU, read-only rootfs, no network).
-
-## Docker Compose
+| Answer questions, use tools when needed | `assistant` | "What's our Q3 revenue?" |
+| Run steps in order | `pipeline` | "Fetch data → analyze → summarize" |
+| Get multiple perspectives | `multi_perspective` | "What do different experts think?" |
+| Keep improving until it's good | `refine_until_good` | "Write a better version" |
+| Route to the right specialist | `expert_dispatch` | "Billing question → billing AI" |
+| Coordinate a team | `team_coordinator` | "Research, write, and review this" |
+| Plan then execute | `plan_and_execute` | "Break this into steps and do them" |
+| Ask before acting | `approval_gate` | "Should I send this email?" |
 
 ```bash
-cp .env.example .env
-# Set KEYCLOAK_ADMIN_PASSWORD in .env
-docker compose up --build
+docker run -e AGENT_USE_CASE=pipeline \
+  -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  -e AUTH_DISABLED=true \
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
-| Profile | Adds |
-|---|---|
-| `live` | Live WebSocket (`:8003`) |
-| `observability` | Grafana/Loki/Tempo/Prometheus (`:3000`) |
-| `demo` | Example service API (`:8001`) |
-| `code-exec` | Sandbox code-execution proxy |
+## Choose your AI model
 
-REST API at `:8002/docs`, Keycloak at `:8080`.
+Works with any AI provider:
+
+```bash
+# OpenAI
+docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=...
+
+# Anthropic
+docker run -e ADK_MODEL=anthropic/claude-sonnet-4-5 -e ANTHROPIC_API_KEY=...
+
+# Google Gemini
+docker run -e GOOGLE_API_KEY=...
+
+# Local with Ollama
+docker run -e ADK_MODEL=ollama/llama3 -e OLLAMA_API_BASE=http://host.docker.internal:11434
+```
+
+## Give your agent tools
+
+Add tools to make your agent more capable:
+
+```bash
+docker run -e AGENT_TOOLS=knowledge,search,code_execution \
+  -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  -e AUTH_DISABLED=true \
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
+```
+
+Available tools:
+- `knowledge` — search your documents
+- `search` — web search
+- `code_execution` — run Python code safely in a sandbox
+- `approval` — ask for human approval before actions
+- `skills` — load specialized capabilities from folders
+
+## Run with Docker Compose (production)
+
+For a full setup with authentication, monitoring, and more:
+
+```bash
+# 1. Clone and configure
+git clone https://github.com/bassemZohdy/generic-agent-adk.git
+cd generic-agent-adk
+cp .env.example .env
+# Edit .env with your API keys
+
+# 2. Start everything
+docker compose up --build
+
+# 3. Open http://localhost:8002/docs
+```
+
+Add features with profiles:
+
+```bash
+# Add live WebSocket support
+docker compose --profile live up --build
+
+# Add monitoring dashboards
+docker compose --profile observability up --build
+
+# Add code execution sandbox
+docker compose --profile code-exec up --build
+```
+
+## Configure with YAML (advanced)
+
+For complex setups, use a YAML config file:
+
+```yaml
+# config.yaml
+agent:
+  use_case: expert_dispatch
+  description: "Customer support dispatcher"
+
+model:
+  name: "openai/gpt-4o"
+
+roles:
+  billing:
+    instruction: "You handle billing and payment questions."
+  technical:
+    instruction: "You handle technical support issues."
+
+tools:
+  enabled: [knowledge, search, approval]
+```
+
+```bash
+docker run \
+  -v ./config.yaml:/app/config/agent.yaml \
+  -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  -e AUTH_DISABLED=true \
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
+```
 
 ## Authentication
 
-Keycloak OIDC. Set `DEMO_MODE=true` in `.env` for local dev with `demo`/`demo` credentials. Production: set `KEYCLOAK_ISSUER`, disable `DEMO_MODE`.
+By default, the agent requires authentication. For local development:
 
 ```bash
-# Get a token
-curl -X POST http://localhost:8080/realms/basic-agent/protocol/openid-connect/token \
-  -d client_id=basic-agent -d username=demo -d password=demo -d grant_type=password
+# Disable auth for local testing
+docker run -e AUTH_DISABLED=true ...
 
-# Use it
-curl -H "Authorization: Bearer <token>" http://localhost:8002/status
+# Or use the demo credentials
+docker run -e DEMO_MODE=true ...
+# Login with: demo / demo
 ```
 
-## Local development
+For production, set up Keycloak or your own identity provider.
 
+## Common configurations
+
+### Simple Q&A agent
 ```bash
-uv sync
-cp .env.example .env
-export GOOGLE_API_KEY=your-key
-
-uv run adk api_server src/basic_agent    # REST API
-uv run adk web src/basic_agent           # Web UI
-uv run pytest tests/ -v                  # Tests
+docker run -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
-## Documentation
+### Agent with web search
+```bash
+docker run -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+  -e AGENT_TOOLS=knowledge,search \
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
+```
 
-- [Architecture](./docs/ARCHITECTURE.md) — module map, config pipeline, request path
-- [ADR-001](./docs/ADR-001-generic-runtime-architecture.md) · [ADR-002](./docs/ADR-002-use-case-taxonomy.md) · [ADR-003](./docs/ADR-003-adk-workflow-migration.md) · [ADR-004](./docs/ADR-004-pluggable-code-execution.md)
-- [CHANGELOG](./CHANGELOG.md) · [CI/CD guide](./.github/CI-CD-INTEGRATION.md) · [Publishing guide](./.github/PUBLISHING.md)
+### Agent that writes and runs code
+```bash
+docker run -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+  -e AGENT_TOOLS=knowledge,search,code_execution \
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
+```
+
+### Multi-step workflow
+```bash
+docker run -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+  -e AGENT_USE_CASE=pipeline \
+  -e AGENT_INSTRUCTION="First research the topic, then write a summary, then review it." \
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
+```
+
+## Learn more
+
+- [Architecture](./docs/ARCHITECTURE.md) — how it works internally
+- [Examples](./examples/) — ready-to-use YAML configs
+- [Skills](./skills/) — add specialized capabilities
+- [CHANGELOG](./CHANGELOG.md) — what's new
 
 ## Troubleshooting
 
-- **Import errors** → `uv sync --upgrade`
-- **Keycloak won't start** → check port 8080 is free, wait 30s
-- **Wrong agent behavior** → check startup provenance log for resolved config
+| Problem | Solution |
+|---|---|
+| Agent doesn't start | Check your API key is set correctly |
+| Wrong behavior | Check the startup log for which config was loaded |
+| Keycloak won't start | Make sure port 8080 is free |
+| Import errors | Run `uv sync --upgrade` |
 
-## Production checklist
+## For developers
 
-1. Replace Keycloak starter with a managed identity provider
-2. Set `KEYCLOAK_ISSUER`, `KEYCLOAK_AUDIENCE`, production secrets
-3. Keep `AUTH_DISABLED=false`, `DEMO_MODE=false`
-4. Keep CI gates enabled (pip-audit, gitleaks, Trivy)
-5. If code execution enabled: keep `code-exec` proxy on dedicated network, digest-pin sandbox image, verify resource limits after ADK upgrades, never use `unsafe_local` in production
+```bash
+# Setup
+git clone https://github.com/bassemZohdy/generic-agent-adk.git
+cd generic-agent-adk
+uv sync
+cp .env.example .env
+
+# Run locally
+uv run adk api_server src/basic_agent
+
+# Run tests
+uv run pytest tests/ -v
+```
+
+See [Architecture](./docs/ARCHITECTURE.md) for how the code is organized.

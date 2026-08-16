@@ -27,12 +27,13 @@ from .auth import (
     websocket_auth_subprotocol,
 )
 from .config import settings
+from ._util import is_production
 
 
 logger = logging.getLogger(__name__)
 APP_NAME = settings.app_name
 LIVE_MODEL = settings.live_model
-_production = settings.deployment.lower() in {"prod", "production", "staging", "cloud-run", "cloudrun"}
+_production = is_production(settings.deployment)
 
 app = FastAPI(
     title="Generic Agent Live API",

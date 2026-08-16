@@ -6,10 +6,11 @@ from fastapi import FastAPI, Header, Request
 
 from .auth import authenticate_request, roles_from_claims
 from .config import settings
+from ._util import is_production
 
 
 logger = logging.getLogger(__name__)
-_production = settings.deployment.lower() in {"prod", "production", "staging", "cloud-run", "cloudrun"}
+_production = is_production(settings.deployment)
 app = FastAPI(
     title=settings.openapi_title,
     version=settings.app_version,

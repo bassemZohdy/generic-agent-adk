@@ -7,15 +7,10 @@ from fastapi.responses import Response
 
 from .auth import authenticate_request, keycloak_enabled
 from .config import settings
+from ._util import is_production
 
 
-_production = settings.deployment.lower() in {
-    "prod",
-    "production",
-    "staging",
-    "cloud-run",
-    "cloudrun",
-}
+_production = is_production(settings.deployment)
 app = FastAPI(
     title="Keycloak ForwardAuth",
     version=settings.app_version,

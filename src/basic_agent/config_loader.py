@@ -13,6 +13,7 @@ from typing import Any
 import yaml
 
 from .strategies.base import RoleConfig
+from ._util import split_csv
 
 logger = logging.getLogger(__name__)
 
@@ -153,8 +154,12 @@ class AgentConfig:
 
 
 def _split_names(raw: str) -> list[str]:
-    """Split a comma-separated env value into stripped, non-empty names."""
-    return [part.strip() for part in raw.split(",") if part.strip()]
+    """Split a comma-separated env value into stripped, non-empty names.
+
+    Delegates to :func:`_util.split_csv`; kept as a local alias so callers
+    in this module read naturally without an extra import line.
+    """
+    return split_csv(raw)
 
 
 def _positive_int(value: Any, name: str) -> int:

@@ -4,10 +4,13 @@ from basic_agent.agent import (
     GenericAgentPlugin,
     GenericAgentResponse,
     inspect_runtime,
-    request_approval,
-    retrieve_knowledge,
     root_agent,
 )
+from basic_agent.tools import (
+    request_approval,
+    build_tool as _build_skill_toolset_compat,
+)
+from basic_agent.knowledge import retrieve_knowledge
 from basic_agent.auth import authenticate_request, keycloak_enabled
 from basic_agent.auth import require_roles
 from basic_agent.auth_gateway import app as auth_gateway_app
@@ -80,10 +83,10 @@ def test_external_knowledge_file_is_loaded_and_ranked(tmp_path, settings_patch):
         '{"title":"Beta","content":"beta guidance"}]',
         encoding="utf-8",
     )
-    from basic_agent import agent
+    from basic_agent import knowledge as knowledge_mod
 
     settings_patch(
-        agent,
+        knowledge_mod,
         knowledge_file=str(knowledge),
         knowledge_result_limit=1,
     )
@@ -95,7 +98,7 @@ def test_external_knowledge_file_is_loaded_and_ranked(tmp_path, settings_patch):
 
 
 def test_skills_toolset_is_empty_when_unconfigured():
-    from basic_agent.agent import _build_skill_toolset
+    from basic_agent.tools import _build_skill_toolset
     from basic_agent.config_loader import AgentConfig
 
     toolset = _build_skill_toolset(AgentConfig(use_case="assistant"))
@@ -109,11 +112,11 @@ def test_skills_are_loaded_from_configured_directory(tmp_path, settings_patch):
         "---\nname: example-skill\ndescription: A test skill.\n---\n\nDo the thing.",
         encoding="utf-8",
     )
-    from basic_agent import agent
+    from basic_agent import tools as agent_tools
     from basic_agent.config_loader import AgentConfig
 
-    settings_patch(agent, skills_dir=str(tmp_path))
-    toolset = agent._build_skill_toolset(AgentConfig(use_case="assistant"))
+    settings_patch(agent_tools, skills_dir=str(tmp_path))
+    toolset = agent_tools._build_skill_toolset(AgentConfig(use_case="assistant"))
 
     assert [s.name for s in toolset.skills] == ["example-skill"]
 
@@ -121,13 +124,13 @@ def test_skills_are_loaded_from_configured_directory(tmp_path, settings_patch):
 def test_skills_directory_skips_invalid_skill(tmp_path, settings_patch, caplog):
     bad_dir = tmp_path / "broken-skill"
     bad_dir.mkdir()  # no SKILL.md -> invalid, must be skipped, not raise
-    from basic_agent import agent
+    from basic_agent import tools as agent_tools
     from basic_agent.config_loader import AgentConfig
 
-    settings_patch(agent, skills_dir=str(tmp_path))
-    caplog.set_level(logging.WARNING, logger="basic_agent.agent")
+    settings_patch(agent_tools, skills_dir=str(tmp_path))
+    caplog.set_level(logging.WARNING, logger="basic_agent.tools")
 
-    toolset = agent._build_skill_toolset(AgentConfig(use_case="assistant"))
+    toolset = agent_tools._build_skill_toolset(AgentConfig(use_case="assistant"))
 
     assert toolset.skills == []
     assert "Skipping invalid skill" in caplog.text

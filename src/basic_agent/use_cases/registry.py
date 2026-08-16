@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 import uuid
 
+from .._util import is_production
+
 if TYPE_CHECKING:
     from .base import BaseUseCaseAgent
 
@@ -159,9 +161,8 @@ def load_custom_use_cases(
         for value in os.environ.get(CUSTOM_MODULE_ALLOWLIST_ENV, "").split(os.pathsep)
         if value.strip()
     )
-    deployment = os.environ.get("DEPLOYMENT_ENV", "docker-compose").lower()
-    production = deployment in {"prod", "production", "staging", "cloud-run", "cloudrun"}
-    if production and not allowed_roots:
+    deployment = os.environ.get("DEPLOYMENT_ENV", "docker-compose")
+    if is_production(deployment) and not allowed_roots:
         raise ValueError(
             f"{CUSTOM_MODULE_ALLOWLIST_ENV} is required before loading custom use cases in "
             f"{deployment}"

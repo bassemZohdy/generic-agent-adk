@@ -5,15 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 
+from ._util import is_production, split_csv
+
 
 def _env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
 def _roles(name: str, default: str) -> tuple[str, ...]:
-    return tuple(
-        role.strip() for role in _env(name, default).split(",") if role.strip()
-    )
+    return tuple(split_csv(_env(name, default)))
 
 
 def _bool(name: str, default: bool = False) -> bool:
@@ -113,7 +113,7 @@ def load_settings() -> Settings:
     deployment = _env("DEPLOYMENT_ENV", "docker-compose")
     issuer = _env("KEYCLOAK_ISSUER")
     auth_disabled = _bool("AUTH_DISABLED")
-    if deployment.lower() in {"prod", "production", "staging", "cloud-run", "cloudrun"} and not issuer and not auth_disabled:
+    if is_production(deployment) and not issuer and not auth_disabled:
         raise ValueError(
             "KEYCLOAK_ISSUER is required when DEPLOYMENT_ENV is production-like; "
             "set AUTH_DISABLED=true only for an intentional unauthenticated deployment"

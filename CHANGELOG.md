@@ -2,6 +2,26 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-16 — Source structure refactoring
+
+- New `src/basic_agent/_util.py`: `is_production()` (unifies the
+  production-deployment check previously duplicated across 5 files with
+  the same `{"prod", "production", "staging", "cloud-run", "cloudrun"}`
+  set) and `split_csv()` (unifies `_roles`/`_split_names` in
+  `config.py`/`config_loader.py`).
+- New `src/basic_agent/knowledge.py`: knowledge file caching +
+  `retrieve_knowledge` tool function extracted from `agent.py`.
+- New `src/basic_agent/tools.py`: tool building factories
+  (`build_tool`, MCP/OpenAPI/Skill/ApplicationIntegration toolsets),
+  tool audit callbacks (`protect_and_audit_tool`, `audit_tool_result`),
+  and `request_approval` extracted from `agent.py`.
+- `agent.py` slimmed from 560 to ~248 lines — now focused on config
+  resolution, runtime wiring, and the root agent/plugin contract.
+- `CE_FIELD_ENV_MAP` constant added to `code_execution.py` — single
+  source of truth for the config-field → env-var mapping consumed by
+  `agent.py`'s code-execution overlay (previously a hardcoded tuple).
+- All test imports updated to reflect the new module boundaries.
+
 ## 2026-08-16 — End-user README + architecture doc
 
 - README restructured for *using* the application: the deep architecture

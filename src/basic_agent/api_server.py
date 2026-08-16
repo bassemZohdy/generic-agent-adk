@@ -13,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from .auth import authenticate_request
 from .config import settings
+from ._util import is_production
 
 
 _RUN_PATHS = {"/run", "/run_sse"}
@@ -101,13 +102,7 @@ def create_app():
         auto_create_session=False,
         extra_plugins=["basic_agent.agent.GenericAgentPlugin"],
     )
-    if settings.deployment.lower() in {
-        "prod",
-        "production",
-        "staging",
-        "cloud-run",
-        "cloudrun",
-    }:
+    if is_production(settings.deployment):
         documentation_paths = {
             "/openapi.json",
             "/docs",

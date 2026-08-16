@@ -43,12 +43,15 @@ Google ADK agent tree
 
 | Module | Responsibility |
 |---|---|
-| `agent.py` | Entrypoint. Resolves config, builds the `RuntimeContext` (tools, model, code executor, instruction assembly), asks the use-case registry for the agent tree, exposes `root_agent`, the observability plugin, and the built-in tools (`inspect_runtime`, `request_approval`, …). |
+| `agent.py` | Entrypoint (~250 lines). Resolves config, builds the `RuntimeContext` (tool construction, model, code executor, instruction assembly), asks the use-case registry for the agent tree, exposes `root_agent`, the observability plugin, and `inspect_runtime`. Tool construction and knowledge retrieval live in focused companion modules. |
+| `tools.py` | Tool building factories (`build_tool`, MCP/OpenAPI/Skill/ApplicationIntegration toolsets) and the before/after-tool audit callbacks (`protect_and_audit_tool`, `audit_tool_result`). Extracted from `agent.py` for single-responsibility. |
+| `knowledge.py` | Knowledge file caching and `retrieve_knowledge` tool function. Extracted from `agent.py`. |
+| `_util.py` | Import-cycle-free shared utilities: `is_production()` (unifies the production-deployment check duplicated across 5 files) and `split_csv()` (comma-split used by `config.py` and `config_loader.py`). Zero imports from the rest of the package. |
 | `config.py` | `Settings`: frozen dataclass snapshotted from the environment once at import. Operational knobs (ports, limits, feature env vars). |
 | `config_loader.py` | YAML ↔ env merge: `load_config_from_yaml` (with `${VAR:default}` substitution), `load_config_from_env`, `apply_env_overrides` (explicit env vars win), provenance logging. Defines the `AgentConfig` dataclass tree. |
 | `models.py` | `resolve_model()`: bare string → native Gemini; `provider/model` prefix → `LiteLlm` instance. The single place provider routing is decided. |
 | `autoconfig.py` | Ambient capability discovery (`discover_capabilities()`): probes for knowledge/search/storage backends etc. and reports a strategy per capability. Source of `ProviderConfigurationError`. |
-| `code_execution.py` | ADR-004: the code-execution sandbox resolver — provider specs with pure-bool `probe()`, explicit-override-then-auto-detect chain, and the hardened Docker executor. See below. |
+| `code_execution.py` | ADR-004: the code-execution sandbox resolver — provider specs with pure-bool `probe()`, explicit-override-then-auto-detect chain, `CE_FIELD_ENV_MAP`, and the hardened Docker executor. See below. |
 | `strategies/` | Internal composition layer. `base.py` defines `RuntimeContext` (everything a strategy may consume); one builder file per composition pattern; `registry.py` maps strategy keys to builders. |
 | `use_cases/` | Public catalog. One class per use case binding metadata + a strategy; `base.py` provides `BaseUseCaseAgent` with runtime hooks wired as ADK callbacks. |
 | `api_server.py` | REST/A2A interface (compose service `adk-api`, port 8002). |

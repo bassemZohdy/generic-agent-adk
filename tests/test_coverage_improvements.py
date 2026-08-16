@@ -30,9 +30,9 @@ class TestRetrieveKnowledge:
             encoding="utf-8",
         )
 
-        from basic_agent import agent
+        from basic_agent import knowledge as knowledge_mod
 
-        settings_patch(agent, knowledge_file=str(knowledge_file))
+        settings_patch(knowledge_mod, knowledge_file=str(knowledge_file))
         result = retrieve_knowledge("Java programming")
         assert "Python" in result
 
@@ -41,9 +41,9 @@ class TestRetrieveKnowledge:
         knowledge_file = tmp_path / "knowledge.txt"
         knowledge_file.write_text("This is knowledge content", encoding="utf-8")
 
-        from basic_agent import agent
+        from basic_agent import knowledge as knowledge_mod
 
-        settings_patch(agent, knowledge_file=str(knowledge_file))
+        settings_patch(knowledge_mod, knowledge_file=str(knowledge_file))
         result = retrieve_knowledge("knowledge")
         assert "This is knowledge content" in result
 
@@ -52,10 +52,10 @@ class TestRetrieveKnowledge:
         knowledge_file = tmp_path / "knowledge.json"
         knowledge_file.write_text("{ invalid json }", encoding="utf-8")
 
-        from basic_agent import agent
+        from basic_agent import knowledge as knowledge_mod
         import json
 
-        settings_patch(agent, knowledge_file=str(knowledge_file))
+        settings_patch(knowledge_mod, knowledge_file=str(knowledge_file))
         # Should raise JSONDecodeError when JSON is invalid
         with pytest.raises(json.JSONDecodeError):
             retrieve_knowledge("test")
@@ -71,10 +71,10 @@ class TestRetrieveKnowledge:
             encoding="utf-8",
         )
 
-        from basic_agent import agent
+        from basic_agent import knowledge as knowledge_mod
 
         settings_patch(
-            agent,
+            knowledge_mod,
             knowledge_file=str(knowledge_file),
             knowledge_result_limit=2,
         )

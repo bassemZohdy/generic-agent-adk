@@ -43,6 +43,20 @@ GKE_KUBECONFIG_CONTEXT_ENV = "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_CONTEXT"
 #: Environment variable holding an explicit strategy override.
 STRATEGY_ENV = "AGENT_CODE_EXECUTION_STRATEGY"
 
+#: Mapping from ``ExecutionCodeExecutionConfig`` field names to their
+#: environment-variable equivalents, consumed by ``agent.py`` when building
+#: the resolver overlay. Single source of truth — the old hardcoded tuple
+#: in ``agent.py`` was a duplication risk.
+CE_FIELD_ENV_MAP: tuple[tuple[str, str], ...] = (
+    ("strategy", "AGENT_CODE_EXECUTION_STRATEGY"),
+    ("docker_host", "AGENT_CODE_EXECUTION_DOCKER_HOST"),
+    ("docker_image", "AGENT_CODE_EXECUTION_DOCKER_IMAGE"),
+    ("vertex_resource", "AGENT_CODE_EXECUTION_VERTEX_RESOURCE"),
+    ("agent_engine_resource", "AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE"),
+    ("gke_kubeconfig_path", "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH"),
+    ("gke_kubeconfig_context", "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_CONTEXT"),
+)
+
 #: Optional Docker daemon endpoint; falls back to ``DOCKER_HOST``.
 DOCKER_HOST_ENV = "AGENT_CODE_EXECUTION_DOCKER_HOST"
 

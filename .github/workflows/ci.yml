@@ -28,6 +28,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          # Full history for the gitleaks secret scan: GitHub's push event
+          # lists at most 20 commits, so a multi-commit push makes gitleaks
+          # pick a base revision outside a depth-1 shallow clone and the
+          # scan errors out (observed on a 21-commit push). With full
+          # history the base always resolves.
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.0.1

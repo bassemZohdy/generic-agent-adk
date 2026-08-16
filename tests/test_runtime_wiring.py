@@ -10,6 +10,7 @@ from google.adk.models.lite_llm import LiteLlm
 
 from basic_agent import agent as agent_module
 from basic_agent.agent import resolve_agent_config
+from fakes import FakeDockerClient, install_fake_docker
 
 _CONFIG_ENV_VARS = (
     "AGENT_CONFIG_FILE",
@@ -180,60 +181,6 @@ def _ce_config(model_name: str = "gemini-3.6-flash", tools=("code_execution",),
     )
 
 
-class _RecordingClient:
-    def __init__(self):
-        self.constructor_kwargs: list[dict] = []
-
-    def ping(self):
-        return True
-
-    @property
-    def containers(self):
-        client = self
-
-        class _Containers:
-            def run(self, **kwargs):
-                container = SimpleNamespace(
-                    id="sandbox-1",
-                    exec_run=lambda cmd, demux=False: SimpleNamespace(
-                        exit_code=0, output=(b"/usr/local/bin/python3\n", b"")
-                    ),
-                    stop=lambda: None,
-                    remove=lambda: None,
-                )
-                return container
-
-        return _Containers()
-
-
-def _install_fake_docker(monkeypatch):
-    client = _RecordingClient()
-    docker_mod = types.ModuleType("docker")
-    client_mod = types.ModuleType("docker.client")
-    models_mod = types.ModuleType("docker.models")
-    containers_mod = types.ModuleType("docker.models.containers")
-
-    def _constructor(**kwargs):
-        client.constructor_kwargs.append(kwargs)
-        return client
-
-    docker_mod.DockerClient = _constructor
-    docker_mod.from_env = _constructor
-    client_mod.DockerClient = _constructor
-    containers_mod.Container = object
-    docker_mod.client = client_mod
-    docker_mod.models = models_mod
-    models_mod.containers = containers_mod
-    for name, module in (
-        ("docker", docker_mod),
-        ("docker.client", client_mod),
-        ("docker.models", models_mod),
-        ("docker.models.containers", containers_mod),
-    ):
-        monkeypatch.setitem(sys.modules, name, module)
-    return client
-
-
 @pytest.fixture
 def clean_code_exec_env(monkeypatch):
     for var in _CODE_EXEC_ENV_VARS:
@@ -242,7 +189,7 @@ def clean_code_exec_env(monkeypatch):
 
 
 def test_runtime_context_resolves_docker_strategy(monkeypatch, clean_code_exec_env):
-    _install_fake_docker(monkeypatch)
+    client = install_fake_docker(monkeypatch, FakeDockerClient())
     runtime = agent_module._build_runtime_context(_ce_config())
 
     assert runtime.code_execution_strategy == "docker_container"
@@ -300,7 +247,8 @@ def test_runtime_context_yaml_overlay_reaches_resolver(monkeypatch, clean_code_e
 
 
 def test_runtime_context_without_tool_skips_resolution(monkeypatch, clean_code_exec_env):
-    client = _install_fake_docker(monkeypatch)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     runtime = agent_module._build_runtime_context(
         _ce_config(tools=("knowledge",), model_name="gemini-2.0-flash")
     )
@@ -358,3 +306,56 @@ def test_plugin_span_carries_code_execution_strategy(monkeypatch, clean_code_exe
     attr = spans[0].attributes.get("adk.capabilities", "")
     assert "code_execution:docker_container" in attr
     plugin._spans.clear()
+
+
+def test_yaml_code_execution_overlay_reaches_docker_client(monkeypatch, clean_code_exec_env):
+    """docker_host + docker_image from execution.code_execution flow through
+    the resolver into the DockerClient constructor and containers.run."""
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
+    runtime = agent_module._build_runtime_context(
+        _ce_config(
+            code_execution=ExecutionCodeExecutionConfig(
+                docker_host="tcp://from-yaml:2375",
+                docker_image="python:3.13-alpine",
+            )
+        )
+    )
+
+    assert runtime.code_execution_strategy == "docker_container"
+    # Two client constructions by design: probe (timeout=1) then build
+    # (executor default) — both must carry the YAML-configured host.
+    assert client.constructor_kwargs == [
+        {"base_url": "tcp://from-yaml:2375", "timeout": 1},
+        {"base_url": "tcp://from-yaml:2375"},
+    ]
+    assert client.run_calls[0]["image"] == "python:3.13-alpine"
+
+
+def test_yaml_strategy_is_overridden_by_env(monkeypatch, clean_code_exec_env):
+    """Env var wins over YAML when both pin a strategy (overlay ordering)."""
+    monkeypatch.setitem(sys.modules, "docker", None)
+    monkeypatch.setenv("AGENT_CODE_EXECUTION_STRATEGY", "gemini_built_in")
+    runtime = agent_module._build_runtime_context(
+        _ce_config(
+            model_name="gemini-2.0-flash",
+            code_execution=ExecutionCodeExecutionConfig(strategy="docker_container"),
+        )
+    )
+    assert runtime.code_execution_strategy == "gemini_built_in"
+
+
+def test_rebuild_without_tool_resets_resolution_stash(monkeypatch, clean_code_exec_env):
+    """A second build without code_execution must not leak the previous
+    resolution into inspect_runtime()/spans."""
+    install_fake_docker(monkeypatch, FakeDockerClient())
+    with_res = agent_module._build_runtime_context(_ce_config())
+    assert with_res.code_execution_strategy == "docker_container"
+    assert "code_execution" in json.loads(agent_module.inspect_runtime())["capabilities"]
+
+    without_res = agent_module._build_runtime_context(
+        _ce_config(tools=("knowledge",), model_name="gemini-2.0-flash")
+    )
+    assert without_res.code_execution_strategy is None
+    assert agent_module._code_execution_resolution is None
+    assert "code_execution" not in json.loads(agent_module.inspect_runtime())["capabilities"]

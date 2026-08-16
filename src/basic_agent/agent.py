@@ -454,8 +454,12 @@ def _build_runtime_context(config: AgentConfig) -> RuntimeContext:
                 value = getattr(ce, attr)
                 if value:
                     overlay[env_name] = value
+        # Env-vars-win merge, matching the repo-wide convention
+        # (apply_env_overrides: explicit env beats YAML). The env-only
+        # config path is unaffected — its overlay values are exactly the
+        # env-derived settings values.
         _code_execution_resolution = resolve_code_executor(
-            {**os.environ, **overlay}, model=model
+            {**overlay, **os.environ}, model=model
         )
         logger.info(
             "code execution resolved: strategy=%s (%s)",

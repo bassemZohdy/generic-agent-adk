@@ -46,4 +46,20 @@ filterwarnings = [
     # migration gate). Not a warning we can act on yet; silence the noise
     # without hiding unrelated deprecations.
     "ignore:.*is deprecated in favor of Workflow.*:DeprecationWarning",
+    # ---- Third-party noise we cannot act on from this repo ----
+    # ADK 2.6.3 constructs BaseAgentConfig internally when BaseAgent
+    # subclasses are instantiated; the deprecation is aimed at ADK's own
+    # callers, not us. Re-check on google-adk upgrades.
+    "ignore:BaseAgentConfig is deprecated:DeprecationWarning",
+    # ADK's own fast_api/get_agent_app plumbing still passes `plugins=`.
+    "ignore:The `plugins` argument is deprecated:DeprecationWarning",
+    # Experimental ADK features we deliberately exercise in tests.
+    "ignore:\\[EXPERIMENTAL\\].*:UserWarning",
+    # pydantic_settings introspects FastAPI's lifespan forward ref.
+    "ignore:Field 'lifespan' has an incomplete definition:Warning",
+    # fastapi's testclient still uses httpx; upstream migration pending.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:Warning",
 ]
+# Anything NOT listed above surfaces loudly — the list is curated, not a
+# blanket -W ignore. New deprecations in our own code or newly actionable
+# upstream ones will fail review instead of drowning in noise.

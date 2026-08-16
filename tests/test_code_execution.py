@@ -12,6 +12,12 @@ from typing import Any, Callable
 import pytest
 
 import basic_agent.code_execution as ce
+from fakes import (
+    FakeDockerClient,
+    FakeExecResult,
+    install_fake_docker,
+    install_fake_kubernetes,
+)
 from basic_agent.autoconfig import ProviderConfigurationError
 from basic_agent.code_execution import (
     STRATEGY_ENV,
@@ -168,98 +174,9 @@ def test_module_imports_without_docker_sdk(clean_registry):
 # ── P2: Docker provider + hardened executor ─────────────────────────────────
 
 
-class _FakeExecResult:
-    def __init__(self, exit_code=0, output=(b"", b"")):
-        self.exit_code = exit_code
-        self.output = output
-
-
-class _FakeDockerClient:
-    """Records container lifecycle calls; dispatches configurable execs."""
-
-    def __init__(self):
-        self.constructor_kwargs: list[dict] = []
-        self.run_calls: list[dict] = []
-        self.stop_calls: list[str] = []
-        self.kill_calls: list[str] = []
-        self.remove_calls: list[str] = []
-        self.ping_raises: Exception | None = None
-        self.exec_handler: "Callable[[list[str]], _FakeExecResult] | None" = None
-
-    def ping(self):
-        if self.ping_raises:
-            raise self.ping_raises
-        return True
-
-    @property
-    def containers(self):
-        client = self
-
-        class _Containers:
-            def run(self, **kwargs):
-                client.run_calls.append(kwargs)
-                return _FakeContainer(client)
-
-        return _Containers()
-
-
-class _FakeContainer:
-    def __init__(self, client):
-        self._client = client
-        self.id = f"fake-container-{len(client.run_calls)}"
-
-    def exec_run(self, cmd, demux=False):
-        cmd = list(cmd)
-        if cmd == ["which", "python3"]:
-            return _FakeExecResult(0, (b"/usr/local/bin/python3\n", b""))
-        if self._client.exec_handler is not None:
-            return self._client.exec_handler(cmd)
-        return _FakeExecResult(0, (b"ok\n", b""))
-
-    def stop(self):
-        self._client.stop_calls.append(self.id)
-
-    def kill(self):
-        self._client.kill_calls.append(self.id)
-
-    def remove(self):
-        self._client.remove_calls.append(self.id)
-
-
-def _install_fake_docker(monkeypatch, client: _FakeDockerClient):
-    """Install a docker module graph the ADK import chain can live with."""
-    import types
-
-    docker_mod = types.ModuleType("docker")
-    client_mod = types.ModuleType("docker.client")
-    models_mod = types.ModuleType("docker.models")
-    containers_mod = types.ModuleType("docker.models.containers")
-
-    def _constructor(**kwargs):
-        client.constructor_kwargs.append(kwargs)
-        return client
-
-    docker_mod.DockerClient = _constructor
-    docker_mod.from_env = _constructor
-    client_mod.DockerClient = _constructor
-    containers_mod.Container = object
-    docker_mod.client = client_mod
-    docker_mod.models = models_mod
-    models_mod.containers = containers_mod
-
-    for name, module in (
-        ("docker", docker_mod),
-        ("docker.client", client_mod),
-        ("docker.models", models_mod),
-        ("docker.models.containers", containers_mod),
-    ):
-        monkeypatch.setitem(sys.modules, name, module)
-    return docker_mod
-
-
 def test_docker_probe_success_with_env_precedence(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     env = {
         "DOCKER_HOST": "tcp://fallback:2375",
         "AGENT_CODE_EXECUTION_DOCKER_HOST": "tcp://primary:2375",
@@ -271,8 +188,8 @@ def test_docker_probe_success_with_env_precedence(clean_registry, monkeypatch):
 
 
 def test_docker_probe_uses_docker_host_fallback(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     assert ce.DockerContainerCodeExecutionProvider.probe(
         {"DOCKER_HOST": "tcp://fallback:2375"}, model="m"
     )
@@ -280,16 +197,16 @@ def test_docker_probe_uses_docker_host_fallback(clean_registry, monkeypatch):
 
 
 def test_docker_probe_uses_from_env_without_host(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     assert ce.DockerContainerCodeExecutionProvider.probe({}, model="m")
     assert client.constructor_kwargs == [{"timeout": 1}]
 
 
 def test_docker_probe_unreachable_daemon_returns_false(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
+    client = FakeDockerClient()
     client.ping_raises = ConnectionError("no daemon")
-    _install_fake_docker(monkeypatch, client)
+    install_fake_docker(monkeypatch, client)
     assert not ce.DockerContainerCodeExecutionProvider.probe({}, model="m")
 
 
@@ -299,8 +216,8 @@ def test_docker_probe_package_missing_returns_false(clean_registry, monkeypatch)
 
 
 def test_hardened_executor_container_kwargs(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     executor = ce.DockerContainerCodeExecutionProvider.build(
         {"AGENT_CODE_EXECUTION_DOCKER_IMAGE": "python:3.13-slim"}
     )
@@ -320,15 +237,15 @@ def test_hardened_executor_container_kwargs(clean_registry, monkeypatch):
 
 
 def test_hardened_executor_rejects_stateful(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     with pytest.raises(ValueError, match="stateful"):
         ce._hardened_executor_cls_get()(stateful=True)
 
 
 def test_hardened_executor_requires_image_or_docker_path(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     with pytest.raises(ValueError, match="image or docker_path"):
         ce._hardened_executor_cls_get()(image=None)
 
@@ -336,14 +253,14 @@ def test_hardened_executor_requires_image_or_docker_path(clean_registry, monkeyp
 def test_hardened_executor_timeout_kills_and_recovers(clean_registry, monkeypatch):
     import time
 
-    client = _FakeDockerClient()
+    client = FakeDockerClient()
 
     def hang(cmd):
         time.sleep(5)
-        return _FakeExecResult(0, (b"late", b""))
+        return FakeExecResult(0, (b"late", b""))
 
     client.exec_handler = hang
-    _install_fake_docker(monkeypatch, client)
+    install_fake_docker(monkeypatch, client)
     executor = ce._hardened_executor_cls_get()(timeout_seconds=1)
 
     result = executor.execute_code(None, _code_input("while True: pass"))
@@ -357,22 +274,22 @@ def test_hardened_executor_timeout_kills_and_recovers(clean_registry, monkeypatc
 
 
 def test_hardened_executor_next_call_after_timeout_works(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    client.exec_handler = lambda cmd: _FakeExecResult(0, (b"", b""))
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    client.exec_handler = lambda cmd: FakeExecResult(0, (b"", b""))
+    install_fake_docker(monkeypatch, client)
     executor = ce._hardened_executor_cls_get()(timeout_seconds=1)
 
     ok = executor.execute_code(None, _code_input("print('hi')"))
     assert ok.stdout == ""
-    client.exec_handler = lambda cmd: _FakeExecResult(0, (b"fresh\n", b""))
+    client.exec_handler = lambda cmd: FakeExecResult(0, (b"fresh\n", b""))
     again = executor.execute_code(None, _code_input("print('again')"))
     assert again.stdout == "fresh\n"
 
 
 def test_hardened_executor_streams_demuxed_output(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    client.exec_handler = lambda cmd: _FakeExecResult(0, (b"out-line\n", b"err-line\n"))
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    client.exec_handler = lambda cmd: FakeExecResult(0, (b"out-line\n", b"err-line\n"))
+    install_fake_docker(monkeypatch, client)
     executor = ce._hardened_executor_cls_get()(timeout_seconds=5)
 
     result = executor.execute_code(None, _code_input("print('x')"))
@@ -381,8 +298,8 @@ def test_hardened_executor_streams_demuxed_output(clean_registry, monkeypatch):
 
 
 def test_docker_provider_auto_detected(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     ce.register(ce.DockerContainerCodeExecutionProvider, auto=True)
     resolution = resolve_code_executor({}, model="m")
     assert resolution.strategy == "docker_container"
@@ -390,9 +307,9 @@ def test_docker_provider_auto_detected(clean_registry, monkeypatch):
 
 
 def test_docker_explicit_override_with_dead_daemon_raises(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
+    client = FakeDockerClient()
     client.ping_raises = ConnectionError("down")
-    _install_fake_docker(monkeypatch, client)
+    install_fake_docker(monkeypatch, client)
     ce.register(ce.DockerContainerCodeExecutionProvider)
     with pytest.raises(ProviderConfigurationError, match="docker_container"):
         resolve_code_executor({STRATEGY_ENV: "docker_container"}, model="m")
@@ -435,8 +352,8 @@ def test_gemini_build_returns_builtin_executor(clean_registry):
 
 
 def test_auto_detect_prefers_docker_over_gemini(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     ce.register(ce.DockerContainerCodeExecutionProvider, auto=True)
     ce.register(ce.GeminiBuiltInCodeExecutionProvider, auto=True)
     resolution = resolve_code_executor({}, model="gemini-2.0-flash")
@@ -473,8 +390,8 @@ def test_gemini_explicit_with_pre_2_0_model_raises(clean_registry):
 
 
 def test_unsafe_local_never_auto_selected(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     ce.register(ce.DockerContainerCodeExecutionProvider, auto=True)
     ce.register(ce.GeminiBuiltInCodeExecutionProvider, auto=True)
     ce.register(ce.UnsafeLocalCodeExecutionProvider)  # registered, never auto
@@ -549,29 +466,6 @@ def _register_real_chain():
     ce.register(ce.UnsafeLocalCodeExecutionProvider)
 
 
-def _install_fake_kubernetes(monkeypatch):
-    """Minimal kubernetes module graph for gke_code_executor's imports."""
-    k8s = types.ModuleType("kubernetes")
-    client_mod = types.ModuleType("kubernetes.client")
-    exceptions_mod = types.ModuleType("kubernetes.client.exceptions")
-    config_mod = types.ModuleType("kubernetes.config")
-    watch_mod = types.ModuleType("kubernetes.watch")
-    exceptions_mod.ApiException = type("ApiException", (Exception,), {})
-    watch_mod.Watch = type("Watch", (), {})
-    client_mod.exceptions = exceptions_mod
-    k8s.client = client_mod
-    k8s.config = config_mod
-    k8s.watch = watch_mod
-    for name, module in (
-        ("kubernetes", k8s),
-        ("kubernetes.client", client_mod),
-        ("kubernetes.client.exceptions", exceptions_mod),
-        ("kubernetes.config", config_mod),
-        ("kubernetes.watch", watch_mod),
-    ):
-        monkeypatch.setitem(sys.modules, name, module)
-
-
 def _stub_gcp_builds(monkeypatch):
     """Replace GCP providers' build() with sentinels.
 
@@ -589,8 +483,8 @@ def _stub_gcp_builds(monkeypatch):
 
 
 def test_gcp_resource_beats_reachable_docker(clean_registry, monkeypatch):
-    client = _FakeDockerClient()
-    _install_fake_docker(monkeypatch, client)
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
     _register_real_chain()
     _stub_gcp_builds(monkeypatch)
     resolution = resolve_code_executor(
@@ -602,7 +496,7 @@ def test_gcp_resource_beats_reachable_docker(clean_registry, monkeypatch):
 
 
 def test_agent_engine_beats_docker(clean_registry, monkeypatch):
-    _install_fake_docker(monkeypatch, _FakeDockerClient())
+    install_fake_docker(monkeypatch, FakeDockerClient())
     _register_real_chain()
     _stub_gcp_builds(monkeypatch)
     resolution = resolve_code_executor(
@@ -613,7 +507,7 @@ def test_agent_engine_beats_docker(clean_registry, monkeypatch):
 
 
 def test_gke_beats_docker_and_gemini(clean_registry, monkeypatch):
-    _install_fake_docker(monkeypatch, _FakeDockerClient())
+    install_fake_docker(monkeypatch, FakeDockerClient())
     _register_real_chain()
     _stub_gcp_builds(monkeypatch)
     resolution = resolve_code_executor(
@@ -672,7 +566,7 @@ def test_agent_engine_build_constructs_executor(clean_registry, monkeypatch):
 def test_gke_build_constructs_executor(clean_registry, monkeypatch):
     import google.adk.code_executors as ce_pkg
 
-    _install_fake_kubernetes(monkeypatch)  # let the lazy import chain resolve
+    install_fake_kubernetes(monkeypatch)  # let the lazy import chain resolve
 
     calls: dict[str, Any] = {}
 
@@ -689,3 +583,44 @@ def test_gke_build_constructs_executor(clean_registry, monkeypatch):
         }
     )
     assert calls == {"path": "/kube/config", "context": "sandbox-ctx"}
+
+
+def test_hardened_executor_exec_run_exception_returns_stderr(clean_registry, monkeypatch):
+    client = FakeDockerClient()
+
+    def explode(cmd):
+        raise RuntimeError("container died mid-exec")
+
+    client.exec_handler = explode
+    install_fake_docker(monkeypatch, client)
+    executor = ce._hardened_executor_cls_get()(timeout_seconds=5)
+
+    result = executor.execute_code(None, _code_input("print('boom')"))
+    assert "Execution failed" in result.stderr
+    assert "container died mid-exec" in result.stderr
+    assert result.stdout == ""
+
+
+def test_known_strategies_lists_registered_names(clean_registry):
+    assert ce.known_strategies() == ()
+    ce.register(ce.DockerContainerCodeExecutionProvider)
+    ce.register(ce.UnsafeLocalCodeExecutionProvider)
+    assert ce.known_strategies() == ("docker_container", "unsafe_local")
+
+
+def test_unknown_strategy_error_lists_known_names(clean_registry):
+    ce.register(ce.DockerContainerCodeExecutionProvider)
+    with pytest.raises(ProviderConfigurationError) as excinfo:
+        resolve_code_executor({STRATEGY_ENV: "nope"}, model="m")
+    assert "docker_container" in str(excinfo.value)
+
+
+def test_resolver_never_probes_unregistered_auto_name(clean_registry):
+    """A stale _AUTO_DETECT_ORDER entry (shouldn't happen) fails loudly,
+    not silently — guards the registry/chain invariant."""
+    ce._AUTO_DETECT_ORDER = ("ghost",)
+    try:
+        with pytest.raises(KeyError):
+            resolve_code_executor({}, model="m")
+    finally:
+        ce._AUTO_DETECT_ORDER = ()

@@ -173,6 +173,11 @@ def test_gated_prefix_veto():
     assert Gated().before_tool(make_tool("delete_file"), {}, ctx)["status"] == "blocked"
 
 
+def test_approval_veto_tolerates_broken_state():
+    ctx = SimpleNamespace(state=None)
+    assert ApprovalGateAgent().before_tool(make_tool("request_approval"), {}, ctx) is None
+
+
 # --- T2.2: perspective aggregation ---
 
 
@@ -188,6 +193,11 @@ def test_aggregation_ignores_non_matching_keys():
     ctx = SimpleNamespace(state=state)
     MultiPerspectiveAgent().after_run(ctx)
     assert state["aggregated_perspectives"] == [1]
+
+
+def test_aggregation_tolerates_broken_state():
+    ctx = SimpleNamespace(state=SimpleNamespace())
+    MultiPerspectiveAgent().after_run(ctx)  # should not raise
 
 
 # --- T2.3: registry ---

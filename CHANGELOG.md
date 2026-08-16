@@ -2,6 +2,29 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-16 — Test coverage: live_server and mcp_server, CI hardening
+
+- `live_server.py` (the Live WebSocket adapter — auth, rate limiting, session
+  binding, the full message loop) was 45% covered by isolated helper tests
+  and had no test exercising the `live()` endpoint end-to-end. Added 21
+  tests covering every auth path (disabled, header, first-message,
+  failures), session rejection, rate limiting, oversized/malformed
+  messages, disconnects, and runner event forwarding. Now 100% covered.
+- `mcp_server.py` was untested (0%). Added a test for `get_service_status()`;
+  now 90% (only the `if __name__ == "__main__"` stdio entry point is
+  untested, which needs a subprocess to exercise).
+- Closed two small defensive-tolerance gaps: `use_cases/multi_perspective.py`
+  and `use_cases/approval_gate.py` now 100% covered.
+- **Overall: 218 → 242 tests, 90% → 96% coverage.** Raised
+  `COVERAGE_THRESHOLD` in `.github/workflows/ci.yml` from 85 to 90 to lock
+  in the improvement.
+- CI: bumped three stale GitHub Actions pins — `astral-sh/setup-uv` v5→v10,
+  `actions/checkout` v4→v5, `actions/setup-python` v5→v6 (inputs unchanged,
+  confirmed via upstream docs). Left Docker/Trivy/Codecov/upload-artifact
+  pins untouched — those sit in the image build/push/verify/promote
+  pipeline and weren't confirmed stale or broken, so bumping them
+  unverified right before a push wasn't worth the risk.
+
 ## 2026-08-16 — Strategy/use-case cleanup: dead code, duplication, worker differentiation
 
 Follow-up to the project review below: a deep-dive on `strategies/` and

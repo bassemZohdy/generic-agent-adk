@@ -407,3 +407,338 @@ def test_ci_contains_locked_image_dependency_gate():
     assert "trivy-action" in workflow
     assert "uv lock --check" in verifier
     assert "tomllib" in verifier
+
+
+def _no_op_runner():
+    class _NoOpRunner:
+        async def run_live(self, **_kwargs):
+            return
+            yield  # pragma: no cover - unreachable, keeps this an async generator
+
+    return _NoOpRunner()
+
+
+def _mock_live_websocket(*, headers=None, query_params=None, frames=()):
+    return SimpleNamespace(
+        headers=headers or {},
+        query_params=query_params or {},
+        accept=AsyncMock(),
+        receive_text=AsyncMock(side_effect=list(frames)),
+        send_json=AsyncMock(),
+        close=AsyncMock(),
+    )
+
+
+def test_get_runner_builds_and_caches_singleton(monkeypatch):
+    from basic_agent import live_server
+
+    monkeypatch.setattr(live_server, "_runner", None)
+    first = live_server._get_runner()
+    second = live_server._get_runner()
+    assert first is second
+    assert isinstance(first, live_server.Runner)
+
+
+def test_session_returns_existing_session_for_known_id():
+    from basic_agent import live_server
+
+    async def _run():
+        created = await live_server.session_service.create_session(
+            app_name=live_server.APP_NAME, user_id="subject-a", session_id=None
+        )
+        found = await live_server._session("subject-a", created.id)
+        assert found.id == created.id
+
+    asyncio.run(_run())
+
+
+def test_forward_events_closes_on_oversized_payload(settings_patch):
+    from basic_agent import live_server
+
+    settings_patch(live_server, live_max_message_bytes=5)
+
+    class FakeRunner:
+        async def run_live(self, **_kwargs):
+            yield SimpleNamespace(model_dump=lambda **_kwargs: {"text": "this-is-too-long"})
+
+    websocket = SimpleNamespace(send_json=AsyncMock(), close=AsyncMock())
+    asyncio.run(
+        live_server._forward_events(
+            websocket, FakeRunner(), object(), user_id="subject-a", session_id="s1"
+        )
+    )
+    websocket.close.assert_awaited_once()
+    assert websocket.close.await_args.kwargs["code"] == 1009
+    websocket.send_json.assert_not_awaited()
+
+
+def test_forward_events_swallows_runner_exceptions():
+    from basic_agent import live_server
+
+    class FailingRunner:
+        async def run_live(self, **_kwargs):
+            raise RuntimeError("boom")
+            yield  # pragma: no cover - unreachable, keeps this an async generator
+
+    websocket = SimpleNamespace(send_json=AsyncMock(), close=AsyncMock())
+    asyncio.run(
+        live_server._forward_events(
+            websocket, FailingRunner(), object(), user_id="subject-a", session_id="s1"
+        )
+    )
+
+
+def test_forward_events_reraises_cancelled_error():
+    from basic_agent import live_server
+
+    class HangingRunner:
+        async def run_live(self, **_kwargs):
+            await asyncio.sleep(10)
+            yield  # pragma: no cover - unreachable
+
+    async def _run():
+        websocket = SimpleNamespace(send_json=AsyncMock(), close=AsyncMock())
+        task = asyncio.create_task(
+            live_server._forward_events(
+                websocket, HangingRunner(), object(), user_id="subject-a", session_id="s1"
+            )
+        )
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(_run())
+
+
+def test_rate_limit_evicts_timestamps_older_than_window(monkeypatch, settings_patch):
+    from basic_agent import live_server
+
+    settings_patch(live_server, live_max_messages_per_minute=5)
+    live_server._message_windows.clear()
+
+    times = iter([0.0, 100.0])
+    monkeypatch.setattr(live_server.time, "monotonic", lambda: next(times))
+
+    assert live_server._message_is_rate_limited("subject-evict") is False
+    assert live_server._message_is_rate_limited("subject-evict") is False
+    assert list(live_server._message_windows["subject-evict"]) == [100.0]
+
+
+def test_receive_json_message_returns_parsed_dict():
+    from basic_agent import live_server
+
+    websocket = SimpleNamespace(
+        receive_text=AsyncMock(return_value=json.dumps({"text": "hi"})),
+        close=AsyncMock(),
+    )
+    message = asyncio.run(live_server._receive_json_message(websocket))
+    assert message == {"text": "hi"}
+    websocket.close.assert_not_awaited()
+
+
+def test_live_endpoint_auth_disabled_full_message_loop(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=True)
+    settings_patch(live_server, auth_disabled=True)
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+
+    frames = [
+        json.dumps({"text": "hello"}),
+        json.dumps({"audio": {"data": "abcd", "mime_type": "audio/pcm;rate=16000"}}),
+        json.dumps({"activity": "start"}),
+        json.dumps({"activity": "end"}),
+        json.dumps({"close": True}),
+    ]
+    websocket = _mock_live_websocket(frames=frames)
+
+    asyncio.run(live_server.live(websocket))
+
+    websocket.accept.assert_awaited_once()
+    websocket.close.assert_not_awaited()
+    sent = [call.args[0] for call in websocket.send_json.await_args_list]
+    assert sent[0]["type"] == "session"
+
+
+def test_live_endpoint_header_auth_success(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+    monkeypatch.setattr(
+        live_server, "authenticate_websocket", lambda ws, required_roles=(): {"sub": "user-1"}
+    )
+
+    websocket = _mock_live_websocket(
+        headers={"authorization": "Bearer token"}, frames=[json.dumps({"close": True})]
+    )
+    asyncio.run(live_server.live(websocket))
+    websocket.accept.assert_awaited_once()
+    websocket.close.assert_not_awaited()
+
+
+def test_live_endpoint_first_message_auth_success(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+    monkeypatch.setattr(
+        live_server, "authenticate_websocket_token", lambda token: {"sub": "user-2"}
+    )
+
+    frames = [
+        json.dumps({"type": "auth", "access_token": "tok"}),
+        json.dumps({"close": True}),
+    ]
+    websocket = _mock_live_websocket(frames=frames)
+    asyncio.run(live_server.live(websocket))
+    websocket.accept.assert_awaited_once()
+    websocket.close.assert_not_awaited()
+
+
+def test_live_endpoint_first_message_invalid_type_closes_4401(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+
+    frames = [json.dumps({"type": "not-auth"})]
+    websocket = _mock_live_websocket(frames=frames)
+    asyncio.run(live_server.live(websocket))
+    websocket.close.assert_awaited_once()
+    assert websocket.close.await_args.kwargs["code"] == 4401
+
+
+def test_live_endpoint_header_auth_failure_closes_4401(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+    from fastapi import HTTPException
+
+    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
+
+    def _raise(*_args, **_kwargs):
+        raise HTTPException(status_code=401, detail="bad token")
+
+    monkeypatch.setattr(live_server, "authenticate_websocket", _raise)
+
+    websocket = _mock_live_websocket(headers={"authorization": "Bearer bad"})
+    asyncio.run(live_server.live(websocket))
+    websocket.close.assert_awaited_once()
+    assert websocket.close.await_args.kwargs["code"] == 4401
+
+
+def test_live_endpoint_auth_unexpected_error_closes_1011(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=False, keycloak_issuer="https://issuer.example")
+    settings_patch(live_server, auth_disabled=False, keycloak_issuer="https://issuer.example")
+
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(live_server, "authenticate_websocket", _raise)
+
+    websocket = _mock_live_websocket(headers={"authorization": "Bearer x"})
+    asyncio.run(live_server.live(websocket))
+    websocket.close.assert_awaited_once()
+    assert websocket.close.await_args.kwargs["code"] == 1011
+
+
+def test_live_endpoint_session_rejected_closes_4403(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+    from fastapi import HTTPException
+
+    settings_patch(auth, auth_disabled=True)
+    settings_patch(live_server, auth_disabled=True)
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+
+    async def _raise_session(*_args, **_kwargs):
+        raise HTTPException(status_code=403, detail="not yours")
+
+    monkeypatch.setattr(live_server, "_session", _raise_session)
+
+    websocket = _mock_live_websocket(query_params={"session_id": "someone-elses"})
+    asyncio.run(live_server.live(websocket))
+    websocket.close.assert_awaited_once()
+    assert websocket.close.await_args.kwargs["code"] == 4403
+
+
+def test_live_endpoint_rate_limit_exceeded_closes_4429(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=True)
+    settings_patch(live_server, auth_disabled=True)
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+    monkeypatch.setattr(live_server, "_message_is_rate_limited", lambda subject: True)
+
+    frames = [json.dumps({"text": "hi"})]
+    websocket = _mock_live_websocket(frames=frames)
+    asyncio.run(live_server.live(websocket))
+    websocket.close.assert_awaited_once()
+    assert websocket.close.await_args.kwargs["code"] == 4429
+
+
+@pytest.mark.parametrize(
+    "frame,expected_code",
+    [
+        (json.dumps({"text": 123}), 1003),
+        (json.dumps({"audio": {"mime_type": "x"}}), 1003),
+        (json.dumps({"unexpected": True}), 1003),
+    ],
+)
+def test_live_endpoint_message_loop_rejects_malformed_messages(
+    settings_patch, monkeypatch, frame, expected_code
+):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=True)
+    settings_patch(live_server, auth_disabled=True)
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+
+    websocket = _mock_live_websocket(frames=[frame])
+    asyncio.run(live_server.live(websocket))
+    websocket.close.assert_awaited_once()
+    assert websocket.close.await_args.kwargs["code"] == expected_code
+
+
+def test_live_endpoint_oversized_audio_closes_1009(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=True)
+    settings_patch(live_server, auth_disabled=True, live_max_audio_bytes=4)
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+
+    frame = json.dumps({"audio": {"data": "way-too-long-data"}})
+    websocket = _mock_live_websocket(frames=[frame])
+    asyncio.run(live_server.live(websocket))
+    websocket.close.assert_awaited_once()
+    assert websocket.close.await_args.kwargs["code"] == 1009
+
+
+def test_live_endpoint_disconnect_mid_loop_is_handled(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=True)
+    settings_patch(live_server, auth_disabled=True)
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+
+    websocket = _mock_live_websocket()
+    websocket.receive_text = AsyncMock(side_effect=live_server.WebSocketDisconnect(code=1000))
+    asyncio.run(live_server.live(websocket))
+    websocket.close.assert_not_awaited()
+
+
+def test_live_endpoint_unexpected_error_mid_loop_is_logged(settings_patch, monkeypatch):
+    from basic_agent import live_server, auth
+
+    settings_patch(auth, auth_disabled=True)
+    settings_patch(live_server, auth_disabled=True)
+    monkeypatch.setattr(live_server, "_get_runner", _no_op_runner)
+
+    websocket = _mock_live_websocket()
+    websocket.receive_text = AsyncMock(side_effect=RuntimeError("boom"))
+    asyncio.run(live_server.live(websocket))

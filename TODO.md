@@ -6,7 +6,8 @@ enough to be implemented in a fresh session without any other context — it
 includes verified facts, file paths, code sketches, tests, and a done-when
 checklist. Work in order; each patch lands as one commit.
 
-**Status:** P1–P5 ✅ complete; **P6 is next**. Branch `main`:
+**Status:** P1–P8 ✅ complete; **P9 in progress** (coverage-matrix run
+remains). Branch `main`:
 
 | Patch | Commit | Summary |
 |---|---|---|
@@ -15,16 +16,19 @@ checklist. Work in order; each patch lands as one commit.
 | P3 gemini_built_in | `774f519` | isinstance(str) + `is_gemini_eap_or_2_or_above` probe; 8 tests |
 | P4 unsafe_local | `16b1d4f` | explicit-override-only, `warn_on_select`; 3 tests |
 | P5 settings plumbing | `0aaf737` | 7 `code_execution_*` settings fields, `ExecutionCodeExecutionConfig` (YAML `execution.code_execution.*`), `.env.example`; 4 tests |
+| P6 agent wiring + tell-the-model | `98c2644` | `_build_runtime_context` resolves via `resolve_code_executor` (env + YAML overlay); RuntimeContext strategy/detail fields; instruction line per scenario; `inspect_runtime()` + `adk.capabilities` span entries; 9 tests |
+| P7 GCP providers | `a25600c` | vertex_ai / agent_engine_sandbox / gke identifier-presence probes (never `GCP_PROJECT` alone — regression-tested), consolidated registration = chain order, `gke` extra + lock; 10 tests |
+| P8 compose sandbox proxy | `4e4747e` | `code-exec-socket-proxy` behind `code-exec` profile (POST=1 master switch + CONTAINERS/EXEC/IMAGES/PING/VERSION), dedicated `code-exec` network, adk-api passthroughs; `docker compose config` gates verified |
 
 Baseline commit `5e747d0`: Skills support + ADR-004 + the previous
 13-task TODO (see git history, which also preserves the full original
-text of patches P1–P5). Old-task → patch mapping: 1→P1, 2+3→P2, 4→P3,
+text of patches P1–P8). Old-task → patch mapping: 1→P1, 2+3→P2, 4→P3,
 6→P4, 7→P5, 8+9→P6, 5→P7, 10→P8, 11→P9, 12→P10, 13→P11.
 
 **Gates for every patch** (CI runs these; coverage threshold is 90%):
 
 ```bash
-uv run pytest tests/ -q --tb=short          # all green (285 passing after P5)
+uv run pytest tests/ -q --tb=short          # all green (304 passing after P7)
 uv run pytest tests/ --cov=basic_agent --cov-fail-under=90
 uv lock && uv sync --quiet                   # REQUIRED after any pyproject.toml edit (CI uses --frozen)
 docker compose config -q                     # after docker-compose.yml edits
@@ -196,256 +200,6 @@ building one vs using an existing public image:
 - Compose (P8) keeps `IMAGES=1` so a missing image is auto-pulled on first
   use; hardened deployments may pre-pull + drop `IMAGES` to `0` (then a
   missing image fails fast at first execution instead of pulling).
-
----
-
-## P6 — Wire the resolver into `agent.py` + tell the model
-
-**Old tasks 8+9. Files:** `src/basic_agent/agent.py`,
-`src/basic_agent/strategies/base.py`, tests
-(`tests/test_runtime_wiring.py`, `tests/test_agent.py`).
-
-1. `strategies/base.py` — add sibling fields next to `code_executor`:
-
-   ```python
-   code_executor: Any = None
-   code_execution_strategy: str | None = None   # "docker_container" | … | "unavailable"
-   code_execution_detail: str = ""              # provenance, for logs/traces
-   ```
-
-   Defaults keep every existing `RuntimeContext(...)` construction working.
-
-2. `agent.py` — in `_build_runtime_context`, replace the hardcoded line
-   with:
-
-   ```python
-   resolution = None
-   if "code_execution" in configured:
-       overlay = {}
-       ce = execution.code_execution if execution else None
-       if ce:
-           for attr, env_name in (
-               ("strategy", "AGENT_CODE_EXECUTION_STRATEGY"),
-               ("docker_host", "AGENT_CODE_EXECUTION_DOCKER_HOST"),
-               ("docker_image", "AGENT_CODE_EXECUTION_DOCKER_IMAGE"),
-               ("vertex_resource", "AGENT_CODE_EXECUTION_VERTEX_RESOURCE"),
-               ("agent_engine_resource", "AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE"),
-               ("gke_kubeconfig_path", "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH"),
-               ("gke_kubeconfig_context", "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_CONTEXT"),
-           ):
-               value = getattr(ce, attr)
-               if value:
-                   overlay[env_name] = value
-       resolution = resolve_code_executor({**os.environ, **overlay}, model=model)
-       logger.info("code execution resolved: strategy=%s (%s)",
-                   resolution.strategy, resolution.detail)
-   ```
-
-   then pass `code_executor=resolution.executor if resolution else None`,
-   `code_execution_strategy=resolution.strategy if resolution else None`,
-   `code_execution_detail=resolution.detail if resolution else ""` into
-   `RuntimeContext`. Keep the module import of `BuiltInCodeExecutor` only
-   if still used elsewhere — otherwise drop it (check: it becomes unused
-   after this change).
-
-3. **Instruction line** (same pattern as the untrusted-content prefix —
-   appended right after it, before the operator instruction):
-
-   ```python
-   if resolution is not None:
-       if resolution.executor is not None:
-           instruction += (
-               f"\n\nCode execution runs in an isolated sandbox (`{resolution.strategy}`)."
-           )
-       else:
-           instruction += (
-               "\n\nCode execution was requested but no sandbox is currently "
-               "available; do not claim to execute code."
-           )
-   ```
-
-4. **Module-level resolution stash** for the two consumers below:
-
-   ```python
-   _code_execution_resolution: CodeExecutionResolution | None = None   # set in _build_runtime_context
-   ```
-
-5. **`inspect_runtime()`** — extend the capabilities dict (only when the
-   tool flag is enabled):
-
-   ```python
-   capabilities = {name: provider.strategy for name, provider in discover_capabilities().items()}
-   if _code_execution_resolution is not None:
-       capabilities["code_execution"] = _code_execution_resolution.strategy
-   ```
-
-6. **Trace attribute** — in `GenericAgentPlugin.before_run_callback`,
-   append the strategy to the existing `adk.capabilities` attribute:
-
-   ```python
-   parts = [f"{name}:{provider.strategy}" for name, provider in self.capabilities.items()]
-   if _code_execution_resolution is not None:
-       parts.append(f"code_execution:{_code_execution_resolution.strategy}")
-   span.set_attribute("adk.capabilities", ",".join(parts))
-   ```
-
-**Tests:**
-- `_build_runtime_context` integration matrix (monkeypatch
-  `resolve_code_executor` or the provider probes):
-  - docker available → `HardenedContainerCodeExecutor` instance +
-    instruction contains "isolated sandbox (`docker_container`)" +
-    `RuntimeContext.code_execution_strategy == "docker_container"`.
-  - nothing available → executor None + instruction contains "do not claim
-    to execute code" + strategy `"unavailable"`.
-  - explicit override (env `AGENT_CODE_EXECUTION_STRATEGY`) wins over
-    auto-detect; broken override raises `ProviderConfigurationError` out
-    of `_build_runtime_context`.
-  - `code_execution` NOT in tools → no instruction line,
-    `code_execution_strategy is None`.
-- `inspect_runtime()` JSON includes `capabilities.code_execution` when
-  resolved, absent otherwise.
-- Plugin span attribute carries `code_execution:<strategy>` (build a span
-  via the plugin with a stub invocation context; read back the attribute).
-
-**Done when:** old hardcoded `BuiltInCodeExecutor` line is gone; all
-scenarios above asserted; full suite + coverage green.
-
----
-
-## P7 — GCP-managed providers (`vertex_ai`, `agent_engine_sandbox`, `gke`)
-
-**Old task 5. Lower priority — ships after P1–P6. Files:**
-`code_execution.py`, `pyproject.toml` (+`uv lock`), `.env.example` (fields
-already added in P5), tests.
-
-Probes = "required identifiers present" only (no live probing — same rule
-as `autoconfig.py`'s cloud providers), keyed on **code-execution-specific
-fields only, never `GOOGLE_CLOUD_PROJECT`/`GCP_PROJECT` alone** (that var
-already drives `application_integration`; reusing it here would silently
-activate a sandbox for integration-only users):
-
-```python
-class VertexAiCodeExecutionProvider(_CodeExecutionProviderSpec):
-    strategy = "vertex_ai"
-    # probe: env AGENT_CODE_EXECUTION_VERTEX_RESOURCE non-empty
-    #        (full resource_name: projects/…/locations/…/extensions/…)
-    # build (deferred import): VertexAiCodeExecutor(resource_name=…)
-
-class AgentEngineSandboxCodeExecutionProvider(_CodeExecutionProviderSpec):
-    strategy = "agent_engine_sandbox"
-    # probe: AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE non-empty
-    # build (deferred import): AgentEngineSandboxCodeExecutor(
-    #     agent_engine_resource_name=…)   # verify exact kwarg against installed ADK
-
-class GkeCodeExecutionProvider(_CodeExecutionProviderSpec):
-    strategy = "gke"
-    # probe: AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH non-empty
-    #        (explicit kubeconfig only — in-cluster/default-kubeconfig are
-    #        never auto-detected; opting in means naming a file)
-    # build (deferred import; module-level `import kubernetes` raises
-    #        ImportError without the extra): GkeCodeExecutor(
-    #     kubeconfig_path=…, kubeconfig_context=… or None)
-```
-
-`_AUTO_DETECT_ORDER` becomes:
-`(vertex_ai, agent_engine_sandbox, gke, docker_container, gemini_built_in)`.
-
-`pyproject.toml`: add optional extra `gke = ["kubernetes>=29.0"]` (the
-executor's module import needs `kubernetes`). For `executor_type="sandbox"`
-it also imports `k8s_agent_sandbox` — **verify that package's exact PyPI
-name/version before pinning it** (only needed if you use sandbox mode; job
-mode is the default and doesn't import it). Vertex/AgentEngine need no new
-deps (Appendix A). `uv lock`.
-
-**Tests:** each probe true/false on identifier presence; probe false when
-only `GCP_PROJECT` is set (the regression case from ADR-004's Verification
-list); auto-detect order — GCP resource beats reachable Docker; build
-constructs the right executor class (deferred imports mocked).
-
----
-
-## P8 — `docker-compose.yml`: dedicated sandbox socket proxy
-
-**Old task 10 — with corrected v0.3.0 semantics (Appendix A: `POST=1` is
-required; `POST=0`+`ALLOW_*` does NOT work). Files:**
-`docker-compose.yml` (the `.env.example` entries, including the
-`tcp://code-exec-socket-proxy:2375` example, already landed in P5); README
-cross-ref lands in P10.
-
-```yaml
-  # Narrowly-scoped Docker API access for sandbox containers ONLY.
-  # NOT the Traefik proxy above — that one is read-only (POST=0) and must
-  # stay that way. v0.3.0 semantics (verified): POST is a master switch for
-  # ALL non-GET methods (create/start/exec/stop/DELETE); ALLOW_* alone is
-  # insufficient. POST=1 grants nothing by itself — sections below stay
-  # deny-by-default (AUTH/BUILD/COMMIT/NETWORKS/SECRETS/… all 0).
-  code-exec-socket-proxy:
-    <<: *resource-limits
-    profiles: ["code-exec"]
-    image: tecnativa/docker-socket-proxy:0.3.0
-    environment:
-      POST: "1"            # master switch: required for create/start/exec/DELETE
-      CONTAINERS: "1"      # create/start/stop/kill/inspect/exec endpoints
-      EXEC: "1"            # POST /exec/{id}/start (exec_run's second hop)
-      IMAGES: "1"          # GET image inspect + POST /images/create (auto-pull)
-      PING: "1"            # GET /_ping — the resolver's probe
-      VERSION: "1"
-      ALLOW_START: "1"     # belt-and-braces (only relevant if CONTAINERS=0)
-      ALLOW_STOP: "1"
-      ALLOW_RESTARTS: "1"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - code-exec
-    restart: unless-stopped
-```
-
-Top-level:
-
-```yaml
-networks:
-  code-exec: {}   # dedicated: EXEC=1 permits exec against EVERY container
-                  # on the daemon; network isolation is the only thing that
-                  # bounds it to this proxy's callers (see P11 review)
-```
-
-Wire `adk-api` (does NOT get a profile — it's core; it merely gains an
-extra, normally-empty network + env passthroughs):
-
-```yaml
-  adk-api:
-    ...
-    networks:
-      - default
-      - code-exec
-    environment:
-      ...
-      AGENT_CODE_EXECUTION_STRATEGY: ${AGENT_CODE_EXECUTION_STRATEGY:-}
-      AGENT_CODE_EXECUTION_DOCKER_HOST: ${AGENT_CODE_EXECUTION_DOCKER_HOST:-}
-      AGENT_CODE_EXECUTION_DOCKER_IMAGE: ${AGENT_CODE_EXECUTION_DOCKER_IMAGE:-}
-```
-
-Note: `adk-api` (like `auth-gateway`) currently relies on the implicit
-default network; once ANY service declares `networks:`, compose semantics
-require listing `default` explicitly for it — verify `docker compose
-config` shows `adk-api` still attached to `default` (Traefik routing,
-keycloak, service-api) plus `code-exec`.
-
-Operator usage (documented in P10): enable with
-`docker compose --profile code-exec up`, set
-`AGENT_CODE_EXECUTION_DOCKER_HOST=tcp://code-exec-socket-proxy:2375` in
-`.env`. Without the profile, nothing listens and the probe correctly
-resolves `unavailable` — never anything unsafe.
-
-**Pre-pull note (Appendix A/B):** with `POST=1`+`IMAGES=1` a missing
-`python:3.13-slim` is auto-pulled on first sandbox start. Hardened
-deployments may pre-pull (`docker pull python:3.13-slim`) and set
-`IMAGES: "0"` — then a missing image fails fast at first execution.
-
-**Done when:** `docker compose config -q` clean; `docker compose --profile
-code-exec config` shows the proxy on `code-exec` only and `adk-api` on
-`default+code-exec`; default (no profile) config still starts everything
-as today.
 
 ---
 

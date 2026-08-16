@@ -13,6 +13,13 @@ dependencies = [
     "PyJWT[crypto]>=2.8.0",
 ]
 
+[project.optional-dependencies]
+# Just the docker SDK for the docker_container code-execution strategy; the
+# ADK lazy-import chain only needs `import docker` to succeed, so the broad
+# google-adk[extensions] extra is deliberately not pulled in. Install with
+# `uv sync --extra docker`.
+docker = ["docker>=7.0.0"]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

@@ -395,3 +395,68 @@ def _code_input(code: str):
     from google.adk.code_executors.code_execution_utils import CodeExecutionInput
 
     return CodeExecutionInput(code=code)
+
+
+# ── P3: gemini_built_in provider ─────────────────────────────────────────────
+
+
+def test_gemini_probe_native_2plus_true(clean_registry):
+    probe = ce.GeminiBuiltInCodeExecutionProvider.probe
+    assert probe({}, model="gemini-2.0-flash")
+    assert probe({}, model="gemini-3.6-flash")  # repo default
+
+
+def test_gemini_probe_pre_2_0_false(clean_registry):
+    assert not ce.GeminiBuiltInCodeExecutionProvider.probe(
+        {}, model="gemini-1.5-flash"
+    )
+
+
+def test_gemini_probe_litellm_false(clean_registry):
+    from google.adk.models.lite_llm import LiteLlm
+
+    assert not ce.GeminiBuiltInCodeExecutionProvider.probe(
+        {}, model=LiteLlm(model="openai/gpt-4o")
+    )
+
+
+def test_gemini_build_returns_builtin_executor(clean_registry):
+    from google.adk.code_executors import BuiltInCodeExecutor
+
+    executor = ce.GeminiBuiltInCodeExecutionProvider.build({})
+    assert isinstance(executor, BuiltInCodeExecutor)
+
+
+def test_auto_detect_prefers_docker_over_gemini(clean_registry, monkeypatch):
+    client = _FakeDockerClient()
+    _install_fake_docker(monkeypatch, client)
+    ce.register(ce.DockerContainerCodeExecutionProvider, auto=True)
+    ce.register(ce.GeminiBuiltInCodeExecutionProvider, auto=True)
+    resolution = resolve_code_executor({}, model="gemini-2.0-flash")
+    assert resolution.strategy == "docker_container"
+
+
+def test_auto_detect_falls_back_to_gemini_when_no_docker(clean_registry, monkeypatch):
+    monkeypatch.setitem(sys.modules, "docker", None)
+    ce.register(ce.DockerContainerCodeExecutionProvider, auto=True)
+    ce.register(ce.GeminiBuiltInCodeExecutionProvider, auto=True)
+    resolution = resolve_code_executor({}, model="gemini-2.0-flash")
+    assert resolution.strategy == "gemini_built_in"
+    assert resolution.executor is not None
+
+
+def test_auto_detect_gemini_1_5_resolves_to_unavailable(clean_registry, monkeypatch):
+    monkeypatch.setitem(sys.modules, "docker", None)
+    ce.register(ce.DockerContainerCodeExecutionProvider, auto=True)
+    ce.register(ce.GeminiBuiltInCodeExecutionProvider, auto=True)
+    resolution = resolve_code_executor({}, model="gemini-1.5-flash")
+    assert resolution.strategy == "unavailable"
+    assert resolution.executor is None
+
+
+def test_gemini_explicit_with_pre_2_0_model_raises(clean_registry):
+    ce.register(ce.GeminiBuiltInCodeExecutionProvider)
+    with pytest.raises(ProviderConfigurationError, match="gemini_built_in"):
+        resolve_code_executor(
+            {STRATEGY_ENV: "gemini_built_in"}, model="gemini-1.5-flash"
+        )

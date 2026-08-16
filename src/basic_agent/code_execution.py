@@ -391,3 +391,45 @@ class DockerContainerCodeExecutionProvider(_CodeExecutionProviderSpec):
 
 
 register(DockerContainerCodeExecutionProvider, auto=True)
+
+
+# ── gemini_built_in strategy (TODO P3) ───────────────────────────────────────
+
+
+class GeminiBuiltInCodeExecutionProvider(_CodeExecutionProviderSpec):
+    """``gemini_built_in`` strategy: the model's own code-execution tool.
+
+    This is the pre-P6 behavior (``agent.py``'s hardcoded
+    ``BuiltInCodeExecutor()``), now one path among several.
+    """
+
+    strategy = "gemini_built_in"
+
+    @classmethod
+    def probe(cls, environment: Mapping[str, str], *, model: Any) -> bool:
+        if not isinstance(model, str):
+            # models.resolve_model() returns a LiteLlm instance for any
+            # provider-prefixed model; built-in execution is native-Gemini
+            # strings only.
+            return False
+        try:
+            from google.adk.utils.model_name_utils import (
+                is_gemini_eap_or_2_or_above,
+            )
+        except ImportError:
+            return False
+        # Mirror BuiltInCodeExecutor.process_llm_request's per-request gate:
+        # ADK raises ValueError mid-run for pre-2.0 Gemini, so evaluating the
+        # same predicate at resolution time turns that into a quiet
+        # fall-through (auto-detect) or a loud ProviderConfigurationError
+        # (explicit override) instead of a first-invocation crash.
+        return bool(is_gemini_eap_or_2_or_above(model))
+
+    @classmethod
+    def build(cls, environment: Mapping[str, str]) -> Any:
+        from google.adk.code_executors import BuiltInCodeExecutor  # eager, safe
+
+        return BuiltInCodeExecutor()
+
+
+register(GeminiBuiltInCodeExecutionProvider, auto=True)

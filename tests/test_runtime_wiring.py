@@ -124,7 +124,7 @@ agent:
 tools:
   enabled: [skills]
   skills:
-    dir: "{skills_root}"
+    dir: "{skills_root.as_posix()}"
 """,
         encoding="utf-8",
     )

@@ -95,7 +95,7 @@ def create_app():
     app = get_fast_api_app(
         agents_dir=str(Path(__file__).parent),
         session_service_uri=f"sqlite:///{data_dir / 'api-sessions.db'}",
-        artifact_service_uri=f"file://{artifact_dir}",
+        artifact_service_uri=artifact_dir.resolve().as_uri(),
         memory_service_uri="memory://",
         web=False,
         a2a=True,

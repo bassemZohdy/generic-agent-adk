@@ -74,7 +74,7 @@ A config file mounted at `/app/config/agent.yaml` is auto-detected (or set `AGEN
 
 ```bash
 # env: prefix syntax
-ADK_MODEL=openai/gpt-4o          # or anthropic/claude-sonnet-4-5, groq/llama-3.3-70b, ...
+ADK_MODEL=openai/gpt-4o          # or anthropic/claude-sonnet-5, groq/llama-3.3-70b, ...
 ADK_MODEL=ollama/llama3          # local; set OLLAMA_API_BASE=http://localhost:11434
 ```
 
@@ -102,7 +102,7 @@ Every use case runs behind the same three ADK interfaces; chat-like ones (`assis
 
 Each use case declares its fit in `interfaces` (see `list_use_cases()`); the catalog is the source of truth for tooling.
 
-Advanced variables (auth, MCP, OpenAPI, knowledge, telemetry) are listed in [.env.example](.env.example).
+Advanced variables (auth, MCP, OpenAPI, skills, knowledge, telemetry) are listed in [.env.example](.env.example).
 
 ### How YAML and env vars merge
 
@@ -141,6 +141,29 @@ position instead of name — `worker_0`, `worker_1`, … for `team_coordinator`;
 instruction identifying their place in the sequence (e.g. "worker 1 of 3").
 See [`examples/team-coordinator.yaml`](./examples/team-coordinator.yaml) and
 [`examples/pipeline.yaml`](./examples/pipeline.yaml).
+
+### Skills
+
+Add `skills` to `AGENT_TOOLS` (or `tools.enabled` in YAML) to give the agent
+[Agent Skills](https://agentskills.io/specification) — folders of
+instructions and optional `references/`, `assets/`, `scripts/` that extend
+its capabilities for specialized tasks, loaded on demand via ADK's built-in
+`SkillToolset`. Point `AGENT_SKILLS_DIR` (or `tools.skills.dir` in YAML) at a
+directory of skill folders, each containing a `SKILL.md`:
+
+```bash
+docker run \
+  -v ./skills:/app/skills \
+  -e AGENT_TOOLS=knowledge,search,skills,approval,runtime,structured_output \
+  -e AGENT_SKILLS_DIR=/app/skills \
+  -e GOOGLE_API_KEY=your-key \
+  ghcr.io/your-org/adk:latest
+```
+
+See [`skills/status-check/SKILL.md`](./skills/status-check/SKILL.md) for a
+minimal example. Scripts in a skill's `scripts/` directory need
+`code_execution` also enabled in `AGENT_TOOLS` — skills don't get their own
+executor, they share the agent's.
 
 ## Extending: custom use cases
 
@@ -254,6 +277,7 @@ OpenTelemetry (OTLP/gRPC) → Grafana stack (Loki logs, Tempo traces, Prometheus
 - [ADR-001 — Generic runtime architecture](./docs/ADR-001-generic-runtime-architecture.md)
 - [ADR-002 — Use-case taxonomy & consolidation](./docs/ADR-002-use-case-taxonomy.md)
 - [ADR-003 — ADK Workflow migration spike](./docs/ADR-003-adk-workflow-migration.md)
+- [ADR-004 — Pluggable code-execution sandbox selection](./docs/ADR-004-pluggable-code-execution.md) (design accepted, implementation tracked in TODO.md)
 - [CHANGELOG](./CHANGELOG.md) — dated record of completed work
 - [CI/CD guide](./.github/CI-CD-INTEGRATION.md) · [Publishing guide](./.github/PUBLISHING.md)
 

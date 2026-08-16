@@ -105,3 +105,35 @@ model:
     assert isinstance(built, LlmAgent)
     assert isinstance(built.model, LiteLlm)
     assert built.model.model == "openai/gpt-4o"
+
+
+def test_yaml_skills_tool_loads_configured_skill_directory(tmp_path, monkeypatch):
+    skills_root = tmp_path / "skills"
+    skill_dir = skills_root / "demo-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: demo-skill\ndescription: A demo skill for tests.\n---\n\nFollow these steps.",
+        encoding="utf-8",
+    )
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text(
+        f"""
+agent:
+  use_case: assistant
+tools:
+  enabled: [skills]
+  skills:
+    dir: "{skills_root}"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AGENT_CONFIG_FILE", str(config_file))
+
+    config = resolve_agent_config()
+    runtime = agent_module._build_runtime_context(config)
+
+    from google.adk.tools.skill_toolset import SkillToolset
+
+    skill_toolsets = [t for t in runtime.tools if isinstance(t, SkillToolset)]
+    assert len(skill_toolsets) == 1
+    assert [s.name for s in skill_toolsets[0].skills] == ["demo-skill"]

@@ -74,6 +74,7 @@ class Settings:
     enable_search: bool
     enable_code_execution: bool
     enable_mcp: bool
+    enable_skills: bool
     enable_openapi: bool
     enable_application_integration: bool
     enable_structured_output: bool
@@ -83,6 +84,8 @@ class Settings:
     specialists: tuple[str, ...]
     mcp_tools: tuple[str, ...]
     mcp_tool_prefix: str
+    skills_dir: str
+    skills_tool_prefix: str
     openapi_url: str
     openapi_path: str
     openapi_title: str
@@ -147,6 +150,7 @@ def load_settings() -> Settings:
         enable_search="search" in enabled_tools,
         enable_code_execution="code_execution" in enabled_tools,
         enable_mcp="mcp" in enabled_tools,
+        enable_skills="skills" in enabled_tools,
         enable_openapi="openapi" in enabled_tools,
         enable_application_integration="application_integration" in enabled_tools,
         enable_structured_output="structured_output" in enabled_tools,
@@ -156,6 +160,8 @@ def load_settings() -> Settings:
         specialists=_roles("AGENT_SPECIALISTS", "research,solution,risk"),
         mcp_tools=_roles("AGENT_MCP_TOOLS", "get_service_status"),
         mcp_tool_prefix=_env("AGENT_MCP_TOOL_PREFIX", "mcp_"),
+        skills_dir=_env("AGENT_SKILLS_DIR"),
+        skills_tool_prefix=_env("AGENT_SKILLS_TOOL_PREFIX"),
         openapi_url=_env("AGENT_OPENAPI_URL", "http://127.0.0.1:8001"),
         openapi_path=_env("AGENT_OPENAPI_PATH", "/status"),
         openapi_title=_env("AGENT_OPENAPI_TITLE", "Configured Service API"),

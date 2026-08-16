@@ -42,6 +42,7 @@ class ToolsConfig:
     enabled: list[str] = field(default_factory=list)
     mcp: ToolsMcpConfig | None = None
     openapi: ToolsOpenApiConfig | None = None
+    skills: ToolsSkillsConfig | None = None
 
 
 @dataclass
@@ -62,6 +63,15 @@ class ToolsOpenApiConfig:
     path: str = "/status"
     title: str = "Service API"
     prefix: str = "api_"
+
+
+@dataclass
+class ToolsSkillsConfig:
+    """Skills tools configuration."""
+
+    enabled: bool = False
+    dir: str = ""
+    prefix: str = ""
 
 
 @dataclass
@@ -490,10 +500,20 @@ def _parse_agent_config(data: dict) -> AgentConfig:
                 prefix=openapi_data.get("prefix", "api_"),
             )
 
+        skills_data = tools_data.get("skills")
+        skills_config = None
+        if skills_data:
+            skills_config = ToolsSkillsConfig(
+                enabled=skills_data.get("enabled", False),
+                dir=skills_data.get("dir", ""),
+                prefix=skills_data.get("prefix", ""),
+            )
+
         tools_config = ToolsConfig(
             enabled=tools_data.get("enabled", []),
             mcp=mcp_config,
             openapi=openapi_config,
+            skills=skills_config,
         )
 
     execution_data = data.get("execution", {})

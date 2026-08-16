@@ -2,6 +2,24 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-16 — Native ADK Skills support
+
+- `google-adk` 2.6.3 ships a native Agent Skills system (`google.adk.skills`,
+  `SkillToolset`) — SKILL.md-format skill folders with instructions,
+  references, assets, and scripts, loaded on demand by the LLM via
+  `list_skills`/`load_skill`/`load_skill_resource`/`run_skill_script` tools.
+  Wired it in as a new `skills` tool, following the same
+  config-driven pattern as `mcp`/`openapi`: `AGENT_TOOLS=...,skills` +
+  `AGENT_SKILLS_DIR` (env) or `tools.skills.dir` (YAML) point at a directory
+  of skill folders. Opt-in (not in the default `AGENT_TOOLS` list) and
+  empty-safe when unconfigured, matching `AGENT_KNOWLEDGE_FILE`'s pattern.
+  `run_skill_script` reuses the agent's existing `code_execution` executor —
+  no separate wiring needed, just enable both tools together.
+- Added `skills/status-check/SKILL.md` as a minimal, runnable example
+  (mount-only, like `examples/*.yaml` — never baked into the Docker image).
+- Updated the stale `anthropic/claude-sonnet-4-5` example in README's model
+  docs to `anthropic/claude-sonnet-5`.
+
 ## 2026-08-16 — Test coverage: live_server and mcp_server, CI hardening
 
 - `live_server.py` (the Live WebSocket adapter — auth, rate limiting, session

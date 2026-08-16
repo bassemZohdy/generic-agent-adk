@@ -17,6 +17,7 @@ from basic_agent.live_server import LIVE_MODEL, app
 from basic_agent.service_api import get_service_status
 from basic_agent.telemetry import tracer
 from google.adk.agents import LlmAgent
+import logging
 import pytest
 from starlette.requests import Request
 
@@ -91,6 +92,45 @@ def test_external_knowledge_file_is_loaded_and_ranked(tmp_path, settings_patch):
     assert result.startswith("<untrusted_external_knowledge>")
     assert "[Beta]" in result
     assert "Alpha" not in result
+
+
+def test_skills_toolset_is_empty_when_unconfigured():
+    from basic_agent.agent import _build_skill_toolset
+    from basic_agent.config_loader import AgentConfig
+
+    toolset = _build_skill_toolset(AgentConfig(use_case="assistant"))
+    assert toolset.skills == []
+
+
+def test_skills_are_loaded_from_configured_directory(tmp_path, settings_patch):
+    skill_dir = tmp_path / "example-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: example-skill\ndescription: A test skill.\n---\n\nDo the thing.",
+        encoding="utf-8",
+    )
+    from basic_agent import agent
+    from basic_agent.config_loader import AgentConfig
+
+    settings_patch(agent, skills_dir=str(tmp_path))
+    toolset = agent._build_skill_toolset(AgentConfig(use_case="assistant"))
+
+    assert [s.name for s in toolset.skills] == ["example-skill"]
+
+
+def test_skills_directory_skips_invalid_skill(tmp_path, settings_patch, caplog):
+    bad_dir = tmp_path / "broken-skill"
+    bad_dir.mkdir()  # no SKILL.md -> invalid, must be skipped, not raise
+    from basic_agent import agent
+    from basic_agent.config_loader import AgentConfig
+
+    settings_patch(agent, skills_dir=str(tmp_path))
+    caplog.set_level(logging.WARNING, logger="basic_agent.agent")
+
+    toolset = agent._build_skill_toolset(AgentConfig(use_case="assistant"))
+
+    assert toolset.skills == []
+    assert "Skipping invalid skill" in caplog.text
 
 
 def test_generic_status_payload_is_not_domain_specific():

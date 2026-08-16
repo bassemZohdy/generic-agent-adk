@@ -128,7 +128,9 @@ jobs:
 
       - name: Upload coverage to Codecov (optional)
         if: matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v5
+        # v7 = Node 24 runtime (v6 bumped the bundled actions/github-script
+        # to a Node-24 build); best-effort upload, fail_ci_if_error=false.
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
           flags: unittests

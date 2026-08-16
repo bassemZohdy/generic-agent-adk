@@ -137,3 +137,224 @@ tools:
     skill_toolsets = [t for t in runtime.tools if isinstance(t, SkillToolset)]
     assert len(skill_toolsets) == 1
     assert [s.name for s in skill_toolsets[0].skills] == ["demo-skill"]
+
+
+# ── P6: code-execution resolution wired into _build_runtime_context ─────────
+
+import asyncio
+import json
+import sys
+import types
+from types import SimpleNamespace
+
+from basic_agent.autoconfig import ProviderConfigurationError
+from basic_agent.code_execution import CodeExecutionResolution
+from basic_agent.config_loader import (
+    AgentConfig,
+    ExecutionConfig,
+    ExecutionCodeExecutionConfig,
+    InstructionsConfig,
+    ModelConfig,
+    ToolsConfig,
+)
+
+_CODE_EXEC_ENV_VARS = (
+    "AGENT_CODE_EXECUTION_STRATEGY",
+    "AGENT_CODE_EXECUTION_DOCKER_HOST",
+    "AGENT_CODE_EXECUTION_DOCKER_IMAGE",
+    "AGENT_CODE_EXECUTION_VERTEX_RESOURCE",
+    "AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE",
+    "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH",
+    "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_CONTEXT",
+)
+
+
+def _ce_config(model_name: str = "gemini-3.6-flash", tools=("code_execution",),
+               code_execution: ExecutionCodeExecutionConfig | None = None):
+    return AgentConfig(
+        use_case="assistant",
+        model=ModelConfig(provider="google", name=model_name),
+        instructions=InstructionsConfig(value="Operator instruction."),
+        tools=ToolsConfig(enabled=list(tools)),
+        execution=ExecutionConfig(code_execution=code_execution),
+    )
+
+
+class _RecordingClient:
+    def __init__(self):
+        self.constructor_kwargs: list[dict] = []
+
+    def ping(self):
+        return True
+
+    @property
+    def containers(self):
+        client = self
+
+        class _Containers:
+            def run(self, **kwargs):
+                container = SimpleNamespace(
+                    id="sandbox-1",
+                    exec_run=lambda cmd, demux=False: SimpleNamespace(
+                        exit_code=0, output=(b"/usr/local/bin/python3\n", b"")
+                    ),
+                    stop=lambda: None,
+                    remove=lambda: None,
+                )
+                return container
+
+        return _Containers()
+
+
+def _install_fake_docker(monkeypatch):
+    client = _RecordingClient()
+    docker_mod = types.ModuleType("docker")
+    client_mod = types.ModuleType("docker.client")
+    models_mod = types.ModuleType("docker.models")
+    containers_mod = types.ModuleType("docker.models.containers")
+
+    def _constructor(**kwargs):
+        client.constructor_kwargs.append(kwargs)
+        return client
+
+    docker_mod.DockerClient = _constructor
+    docker_mod.from_env = _constructor
+    client_mod.DockerClient = _constructor
+    containers_mod.Container = object
+    docker_mod.client = client_mod
+    docker_mod.models = models_mod
+    models_mod.containers = containers_mod
+    for name, module in (
+        ("docker", docker_mod),
+        ("docker.client", client_mod),
+        ("docker.models", models_mod),
+        ("docker.models.containers", containers_mod),
+    ):
+        monkeypatch.setitem(sys.modules, name, module)
+    return client
+
+
+@pytest.fixture
+def clean_code_exec_env(monkeypatch):
+    for var in _CODE_EXEC_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(agent_module, "_code_execution_resolution", None)
+
+
+def test_runtime_context_resolves_docker_strategy(monkeypatch, clean_code_exec_env):
+    _install_fake_docker(monkeypatch)
+    runtime = agent_module._build_runtime_context(_ce_config())
+
+    assert runtime.code_execution_strategy == "docker_container"
+    assert runtime.code_executor is not None
+    assert "isolated sandbox (`docker_container`)" in runtime.instruction
+
+
+def test_runtime_context_unavailable_tells_the_model(monkeypatch, clean_code_exec_env):
+    monkeypatch.setitem(sys.modules, "docker", None)
+    runtime = agent_module._build_runtime_context(
+        _ce_config(model_name="gemini-1.5-flash")
+    )
+
+    assert runtime.code_execution_strategy == "unavailable"
+    assert runtime.code_executor is None
+    assert "do not claim to execute code" in runtime.instruction
+
+
+def test_runtime_context_falls_back_to_gemini_builtin(monkeypatch, clean_code_exec_env):
+    from google.adk.code_executors import BuiltInCodeExecutor
+
+    monkeypatch.setitem(sys.modules, "docker", None)
+    runtime = agent_module._build_runtime_context(_ce_config())
+
+    assert runtime.code_execution_strategy == "gemini_built_in"
+    assert isinstance(runtime.code_executor, BuiltInCodeExecutor)
+    assert "isolated sandbox (`gemini_built_in`)" in runtime.instruction
+
+
+def test_runtime_context_explicit_override_from_env(monkeypatch, clean_code_exec_env):
+    monkeypatch.setitem(sys.modules, "docker", None)
+    monkeypatch.setenv("AGENT_CODE_EXECUTION_STRATEGY", "unsafe_local")
+    runtime = agent_module._build_runtime_context(_ce_config())
+
+    assert runtime.code_execution_strategy == "unsafe_local"
+    assert "IN-PROCESS" in runtime.instruction and "NO isolation" in runtime.instruction
+
+
+def test_runtime_context_broken_override_raises(monkeypatch, clean_code_exec_env):
+    monkeypatch.setitem(sys.modules, "docker", None)
+    monkeypatch.setenv("AGENT_CODE_EXECUTION_STRATEGY", "docker_container")
+    with pytest.raises(ProviderConfigurationError, match="docker_container"):
+        agent_module._build_runtime_context(_ce_config())
+
+
+def test_runtime_context_yaml_overlay_reaches_resolver(monkeypatch, clean_code_exec_env):
+    monkeypatch.setitem(sys.modules, "docker", None)
+    runtime = agent_module._build_runtime_context(
+        _ce_config(
+            code_execution=ExecutionCodeExecutionConfig(strategy="gemini_built_in")
+        )
+    )
+
+    assert runtime.code_execution_strategy == "gemini_built_in"
+
+
+def test_runtime_context_without_tool_skips_resolution(monkeypatch, clean_code_exec_env):
+    client = _install_fake_docker(monkeypatch)
+    runtime = agent_module._build_runtime_context(
+        _ce_config(tools=("knowledge",), model_name="gemini-2.0-flash")
+    )
+
+    assert runtime.code_execution_strategy is None
+    assert runtime.code_executor is None
+    assert "sandbox" not in runtime.instruction
+    assert client.constructor_kwargs == []
+
+
+def test_inspect_runtime_reports_code_execution_strategy(monkeypatch, clean_code_exec_env):
+    monkeypatch.setattr(
+        agent_module,
+        "_code_execution_resolution",
+        CodeExecutionResolution(executor=None, strategy="unavailable", detail="test"),
+    )
+    payload = json.loads(agent_module.inspect_runtime())
+    assert payload["capabilities"]["code_execution"] == "unavailable"
+
+    monkeypatch.setattr(agent_module, "_code_execution_resolution", None)
+    payload = json.loads(agent_module.inspect_runtime())
+    assert "code_execution" not in payload["capabilities"]
+
+
+def test_plugin_span_carries_code_execution_strategy(monkeypatch, clean_code_exec_env):
+    class _RecordingSpan:
+        def __init__(self, attributes):
+            self.attributes = dict(attributes)
+
+        def set_attribute(self, key, value):
+            self.attributes[key] = value
+
+        def end(self):
+            pass
+
+    spans: list[_RecordingSpan] = []
+
+    class _RecordingTracer:
+        def start_span(self, name, attributes=None):
+            span = _RecordingSpan(attributes or {})
+            spans.append(span)
+            return span
+
+    monkeypatch.setattr(agent_module, "tracer", _RecordingTracer())
+    plugin = agent_module.GenericAgentPlugin()
+    monkeypatch.setattr(
+        agent_module,
+        "_code_execution_resolution",
+        CodeExecutionResolution(executor=object(), strategy="docker_container", detail="t"),
+    )
+    context = SimpleNamespace(invocation_id="inv-1", app_name="basic_agent")
+
+    asyncio.run(plugin.before_run_callback(invocation_context=context))
+
+    attr = spans[0].attributes.get("adk.capabilities", "")
+    assert "code_execution:docker_container" in attr
+    plugin._spans.clear()

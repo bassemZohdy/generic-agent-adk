@@ -30,6 +30,8 @@ class RuntimeContext:
     tools: list[Any]
     description: str
     code_executor: Any = None
+    code_execution_strategy: str | None = None  # "docker_container" | … | "unavailable"
+    code_execution_detail: str = ""  # provenance, for logs/traces
     state_schema: type | None = None
     output_schema: type | None = None
     output_key: str | None = None

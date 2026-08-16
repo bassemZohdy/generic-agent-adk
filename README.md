@@ -102,7 +102,7 @@ Every use case runs behind the same three ADK interfaces; chat-like ones (`assis
 
 Each use case declares its fit in `interfaces` (see `list_use_cases()`); the catalog is the source of truth for tooling.
 
-Advanced variables (auth, MCP, OpenAPI, skills, knowledge, telemetry) are listed in [.env.example](.env.example).
+Advanced variables (auth, MCP, OpenAPI, skills, code execution, knowledge, telemetry) are listed in [.env.example](.env.example).
 
 ### How YAML and env vars merge
 
@@ -164,6 +164,52 @@ See [`skills/status-check/SKILL.md`](./skills/status-check/SKILL.md) for a
 minimal example. Scripts in a skill's `scripts/` directory need
 `code_execution` also enabled in `AGENT_TOOLS` — skills don't get their own
 executor, they share the agent's.
+
+### Code execution
+
+Add `code_execution` to `AGENT_TOOLS` and the agent resolves a sandbox at
+startup — auto-detecting the best available strategy rather than assuming
+one, and telling the model plainly when none is available ("do not claim
+to execute code") instead of failing mid-run:
+
+```bash
+docker run \
+  -e AGENT_TOOLS=knowledge,search,code_execution,approval,runtime,structured_output \
+  -e GOOGLE_API_KEY=your-key \
+  ghcr.io/your-org/adk:latest
+```
+
+| Strategy | When it's chosen | What runs the code |
+|---|---|---|
+| `vertex_ai` | `AGENT_CODE_EXECUTION_VERTEX_RESOURCE` set | Vertex Code Interpreter Extension |
+| `agent_engine_sandbox` | `AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE` set | Vertex AI Agent Engine sandbox |
+| `gke` | `AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH` set | gVisor-sandboxed Pods on GKE |
+| `docker_container` | Docker daemon reachable (`AGENT_CODE_EXECUTION_DOCKER_HOST` or `DOCKER_HOST`) | Hardened local container |
+| `gemini_built_in` | Native Gemini 2.0+ model (model-side tool) | Gemini itself |
+| `unsafe_local` | **Never auto-selected** — explicit opt-in only | In-process on the host, no isolation |
+| `unavailable` | Nothing above matched | Nothing; the model is told so |
+
+Pin a strategy with `AGENT_CODE_EXECUTION_STRATEGY` (or
+`execution.code_execution.strategy` in YAML) — a pinned strategy that
+can't be satisfied fails startup loudly instead of silently falling back.
+
+**Tradeoffs:** Docker needs the daemon reachable from the agent container —
+in Compose, enable the sandbox proxy with
+`docker compose --profile code-exec up` and set
+`AGENT_CODE_EXECUTION_DOCKER_HOST=tcp://code-exec-socket-proxy:2375` (the
+proxy is scoped to container lifecycle endpoints only, on a dedicated
+network). `unsafe_local` executes model-generated code directly on the
+host and is never auto-detected; naming it is the same kind of deliberate
+opt-in as `AUTH_DISABLED=true`.
+
+The Docker sandbox runs `python:3.13-slim` by default (override with
+`AGENT_CODE_EXECUTION_DOCKER_IMAGE`) under explicit limits — 512 MB RAM,
+1 CPU, 128 pids, read-only rootfs with a small `/tmp` tmpfs, no network,
+no capabilities, `no-new-privileges`, and a wall-clock execution timeout
+that kills and restarts the container on overrun. For production,
+digest-pin the image (e.g. `python@sha256:ffb752e1…`); `python:3.13-alpine`
+works too and is smaller, at the cost of musl wheel compatibility (moot
+while the sandbox has no network for `pip`).
 
 ## Extending: custom use cases
 

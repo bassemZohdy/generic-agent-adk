@@ -184,6 +184,18 @@ auto-pull (`POST /images/create`) or the image must be pre-pulled into the
 daemon, both need verification against the proxy's current version during
 implementation — not assumed from this ADR.
 
+> **Verified during implementation (proxy v0.3.0, from its `haproxy.cfg`
+> and its own test suite):** the frontend's first ACL rule is
+> `deny unless METH_GET || { env(POST) -m bool }` — `POST=1` is a **master
+> switch** evaluated before every `ALLOW_*` rule and gates all non-GET
+> methods (create/start/exec/DELETE). The knob list above therefore also
+> needs `POST: "1"`; with `POST=0` the `ALLOW_*` flags admit nothing for
+> writes. `POST=1` alone grants nothing either — sections stay
+> deny-by-default. Auto-pull (`POST /images/create`) **is** admitted by
+> `POST=1` + `IMAGES=1`; pre-pulling remains a hardening/latency choice,
+> not a functional requirement. Landed in `docker-compose.yml` as
+> `code-exec-socket-proxy` behind the `code-exec` profile.
+
 This second proxy must sit on a **dedicated network with only the agent
 service attached to it**. `EXEC=1` combined with `ALLOW_RESTARTS=1` grants
 exec/create/kill against *every* container reachable on the daemon the
@@ -271,28 +283,49 @@ actively recovered.
 
 ## Verification
 
-Not yet implemented — tracked as numbered tasks in `TODO.md`. Update this
-section once the following are implemented and verified end-to-end, not
-just unit-tested:
+Implemented as patch series P1–P11 in `TODO.md` (see the status table
+there for commits). Verified so far, item by item:
 
-- Docker probe: success, unreachable daemon, `docker` package not
+- ✅ Docker probe: success, unreachable daemon, `docker` package not
   installed — none of the three raise, only the last two differ in log
-  detail.
-- Explicit-override fail-fast: an unknown or unreachable explicitly-selected
+  detail. Unit-tested (P2) and live-probed on Docker 29.6.2.
+- ✅ Explicit-override fail-fast: an unknown or unreachable explicitly-selected
   strategy raises `ProviderConfigurationError` from the resolver, not from
-  `probe()`.
-- Gemini detection rejects a native-but-pre-2.0 Gemini model string instead
+  `probe()`. Unit-tested (P1/P2/P3).
+- ✅ Gemini detection rejects a native-but-pre-2.0 Gemini model string instead
   of resolving to `gemini_built_in` and failing mid-invocation.
-- GCP-managed providers never activate from `GCP_PROJECT` alone without
+  Unit-tested (P3) using ADK's own predicate.
+- ✅ GCP-managed providers never activate from `GCP_PROJECT` alone without
   their own resource identifier also set (regression test against
   `_build_application_integration_toolset`'s existing use of the same var).
-- Instruction-text injection for both the available and unavailable cases,
+  Unit-tested (P7).
+- ✅ Instruction-text injection for both the available and unavailable cases,
   and the `code_execution` entry appearing in both `inspect_runtime()`'s
   capabilities dict and the `adk.capabilities` span attribute.
-- A started sandbox container actually carries the hardened limits —
-  inspect real `docker inspect` output, don't trust the code path (task 13).
-- The `code-exec` socket-proxy network genuinely can't reach containers
-  outside the sandbox's own — verified by attempting (and failing) to exec
-  into an unrelated container through the proxy.
-- A deliberately-hung script triggers the timeout path and the container is
-  usable again on the next call in the same session, not left corrupted.
+  Unit-tested (P6); a third variant (honest no-isolation wording) covers
+  `unsafe_local`.
+- ✅ A started sandbox container actually carries the hardened limits —
+  verified against live `docker inspect` output (commit `a321312`):
+  `Memory=536870912`, `NanoCpus=1000000000`, `PidsLimit=128`,
+  `ReadonlyRootfs=true`, `CapDrop=["ALL"]`,
+  `SecurityOpt=["no-new-privileges"]`, `Config.NetworkDisabled=true`
+  (note: the disabled network surfaces as `Config.NetworkDisabled`, *not*
+  as `NetworkMode: "none"`), plus an in-sandbox `socket.create_connection`
+  to 1.1.1.1:53 raising `OSError`.
+- ⏳ The `code-exec` socket-proxy network genuinely can't reach containers
+  outside the sandbox's own — proxy + network landed (P8, commit
+  `4e4747e`); the live attempted-exec-into-an-unrelated-container check
+  remains (P11).
+- ⏳ A deliberately-hung script triggers the timeout path and the container
+  is usable again on the next call in the same session — unit-tested (P2);
+  the live run remains (P11).
+
+### Corrections recorded during implementation research
+
+1. ADK's Gemini-version predicate `is_gemini_eap_or_2_or_above` lives in
+   `google.adk.utils.model_name_utils` (where
+   `built_in_code_executor.py` imports it from), **not** in
+   `code_execution_utils` as §2's original note implied.
+2. §4's open question is answered above: proxy v0.3.0 requires `POST=1`
+   (master switch before every `ALLOW_*` rule), and `POST=1`+`IMAGES=1`
+   admits image auto-pull.

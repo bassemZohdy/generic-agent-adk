@@ -2,6 +2,51 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-16 — Pluggable code-execution sandbox (ADR-004)
+
+- The `code_execution` tool flag now resolves a sandbox at agent startup
+  instead of unconditionally attaching ADK's `BuiltInCodeExecutor`:
+  explicit `AGENT_CODE_EXECUTION_STRATEGY` override (fails loudly when
+  unsatisfiable), else auto-detect in order `vertex_ai` →
+  `agent_engine_sandbox` → `gke` → `docker_container` → `gemini_built_in`,
+  else a graceful `unavailable` with no executor.
+- New `src/basic_agent/code_execution.py`: provider specs with a
+  pure-bool never-raise `probe()` contract (the *resolver* decides when a
+  False is a loud `ProviderConfigurationError`, and only on the explicit
+  path); `unsafe_local` is explicit-override-only, never auto-detected,
+  and warns on every selection.
+- `docker_container` builds `HardenedContainerCodeExecutor` (defined via
+  cached lazy factory so Docker-less deployments import cleanly):
+  mem_limit 512m, 1 CPU, pids_limit 128, read-only rootfs + `/tmp` tmpfs
+  on top of ADK's network_disabled/cap_drop/no-new-privileges, plus a
+  wall-clock `execute_code` timeout with kill/restart recovery of the
+  reused container. Default sandbox image `python:3.13-slim` (ADK ships
+  none); `docker` optional extra added (`uv sync --extra docker`).
+- `gemini_built_in` probes with ADK's own `is_gemini_eap_or_2_or_above`
+  (from `google.adk.utils.model_name_utils`), so a native-but-pre-2.0
+  model resolves away at startup rather than crashing on first
+  invocation.
+- GCP providers probe on code-execution-specific identifiers only — never
+  `GCP_PROJECT` alone (that var drives application integration and must
+  not silently activate a sandbox); `gke` opt-in means naming an explicit
+  kubeconfig. `gke` optional extra added (`kubernetes>=29.0`).
+- Settings/YAML plumbing: `AGENT_CODE_EXECUTION_*` env vars +
+  `execution.code_execution.*` in YAML converge on one config shape.
+- The resolution is surfaced three ways: `RuntimeContext`
+  `code_execution_strategy`/`detail` fields, a generated instruction line
+  (sandbox named / "do not claim to execute code" / honest no-isolation
+  wording for `unsafe_local`), and a `code_execution` entry in
+  `inspect_runtime()`'s capabilities plus the `adk.capabilities` span
+  attribute.
+- Compose: new `code-exec-socket-proxy` behind the `code-exec` profile
+  (`POST=1` master switch + `CONTAINERS/EXEC/IMAGES/PING/VERSION` only)
+  on a dedicated `code-exec` network with just `adk-api` attached;
+  Traefik's read-only proxy untouched.
+- Corrections recorded vs the original plan/ADR: socket-proxy v0.3.0
+  evaluates `deny unless METH_GET || POST` before every `ALLOW_*` rule,
+  so `POST=1` is required (the planned `POST=0`+`ALLOW_*` admits
+  nothing) and auto-pull is admitted by `POST=1`+`IMAGES=1`.
+
 ## 2026-08-16 — Native ADK Skills support
 
 - `google-adk` 2.6.3 ships a native Agent Skills system (`google.adk.skills`,

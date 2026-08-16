@@ -199,13 +199,26 @@ uv run pytest tests/ -v
 docker build -t adk:local .
 docker run -p 8002:8002 -e GOOGLE_API_KEY=... adk:local
 
-# Full stack (api, live, status, auth-gateway, keycloak, grafana)
+# Compose: authenticated API behind Keycloak + Traefik (default)
 cp .env.example .env
-# Set non-empty KEYCLOAK_ADMIN_PASSWORD and GRAFANA_ADMIN_PASSWORD in .env.
+# Set a non-empty KEYCLOAK_ADMIN_PASSWORD in .env.
 docker compose up --build
+
+# Add optional profiles as needed
+docker compose --profile live --profile observability --profile demo up --build
 ```
 
-Services: REST API `:8002/docs` · Live WebSocket `:8003/live` · Status `:8001/status` · Grafana `:3000` · Keycloak `:8080`
+`docker compose up` with no `--profile` flags starts only `keycloak`, `auth-gateway`,
+`api-proxy`, `docker-socket-proxy`, and `adk-api` — the minimum needed for a working,
+authenticated REST API. Three services are opt-in via Compose profiles:
+
+| Profile | Adds | Needs |
+|---|---|---|
+| `live` | `live-api` (Live WebSocket) | — |
+| `observability` | `otel-lgtm` (Grafana/Loki/Tempo/Prometheus) | non-empty `GRAFANA_ADMIN_PASSWORD` |
+| `demo` | `service-api` (example OpenAPI-tool backend) | — |
+
+Services: REST API `:8002/docs` · Live WebSocket `:8003/live` (`live` profile) · Status `:8001/status` (`demo` profile) · Grafana `:3000` (`observability` profile) · Keycloak `:8080`
 
 ## Authentication
 

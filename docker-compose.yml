@@ -14,6 +14,7 @@ x-resource-limits: &resource-limits
 services:
   otel-lgtm:
     <<: *resource-limits
+    profiles: ["observability"]
     image: grafana/otel-lgtm:0.28.0
     ports:
       - "${GRAFANA_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
@@ -163,8 +164,6 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: basic-adk-api
     depends_on:
-      - service-api
-      - otel-lgtm
       - keycloak
     labels:
       traefik.enable: "true"
@@ -177,6 +176,7 @@ services:
 
   service-api:
     <<: [*app-image, *resource-limits]
+    profiles: ["demo"]
     command: ["uvicorn", "basic_agent.service_api:app", "--host", "0.0.0.0", "--port", "8001", "--limit-concurrency", "50"]
     ports:
       - "${AGENT_SERVICE_API_PORT:-8001}:8001"
@@ -205,6 +205,7 @@ services:
 
   live-api:
     <<: [*app-image, *resource-limits]
+    profiles: ["live"]
     command: ["uvicorn", "basic_agent.live_server:app", "--host", "0.0.0.0", "--port", "8003", "--limit-concurrency", "50"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
@@ -247,7 +248,6 @@ services:
       LIVE_API_ROLES: ${LIVE_API_ROLES:-agent-user}
     restart: unless-stopped
     depends_on:
-      - otel-lgtm
       - keycloak
     labels:
       traefik.enable: "true"

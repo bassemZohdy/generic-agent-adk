@@ -6,6 +6,7 @@ import importlib
 import importlib.util
 import logging
 import sys
+import types
 from typing import Any, Callable
 
 import pytest
@@ -497,3 +498,188 @@ def test_unsafe_local_explicit_warns_and_builds(clean_registry, caplog):
     assert resolution.detail == "explicit override"
     assert isinstance(resolution.executor, UnsafeLocalCodeExecutor)
     assert "NO isolation" in caplog.text
+
+
+# ── P7: GCP-managed providers (vertex_ai / agent_engine_sandbox / gke) ──────
+
+
+def test_vertex_probe_requires_resource_identifier(clean_registry):
+    probe = ce.VertexAiCodeExecutionProvider.probe
+    assert not probe({}, model="m")
+    assert not probe({"GCP_PROJECT": "proj", "GOOGLE_CLOUD_PROJECT": "proj"}, model="m")
+    assert probe(
+        {"AGENT_CODE_EXECUTION_VERTEX_RESOURCE": "projects/p/locations/l/extensions/e"},
+        model="m",
+    )
+
+
+def test_agent_engine_probe_requires_resource_identifier(clean_registry):
+    probe = ce.AgentEngineSandboxCodeExecutionProvider.probe
+    assert not probe({}, model="m")
+    assert not probe({"GCP_PROJECT": "proj"}, model="m")
+    assert probe(
+        {"AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE": "projects/p/locations/l/reasoningEngines/r"},
+        model="m",
+    )
+
+
+def test_gke_probe_requires_kubeconfig_path(clean_registry):
+    probe = ce.GkeCodeExecutionProvider.probe
+    assert not probe({}, model="m")
+    assert not probe({"GCP_PROJECT": "proj"}, model="m")
+    assert not probe({"AGENT_CODE_EXECUTION_GKE_KUBECONFIG_CONTEXT": "ctx"}, model="m")
+    assert probe({"AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH": "/kube/config"}, model="m")
+
+
+def _register_real_chain():
+    """Re-register the module's real providers (clean_registry wipes them).
+
+    Order mirrors the module-level registration = the auto-detect chain."""
+    ce.register(ce.VertexAiCodeExecutionProvider, auto=True)
+    ce.register(ce.AgentEngineSandboxCodeExecutionProvider, auto=True)
+    ce.register(ce.GkeCodeExecutionProvider, auto=True)
+    ce.register(ce.DockerContainerCodeExecutionProvider, auto=True)
+    ce.register(ce.GeminiBuiltInCodeExecutionProvider, auto=True)
+    ce.register(ce.UnsafeLocalCodeExecutionProvider)
+
+
+def _install_fake_kubernetes(monkeypatch):
+    """Minimal kubernetes module graph for gke_code_executor's imports."""
+    k8s = types.ModuleType("kubernetes")
+    client_mod = types.ModuleType("kubernetes.client")
+    exceptions_mod = types.ModuleType("kubernetes.client.exceptions")
+    config_mod = types.ModuleType("kubernetes.config")
+    watch_mod = types.ModuleType("kubernetes.watch")
+    exceptions_mod.ApiException = type("ApiException", (Exception,), {})
+    watch_mod.Watch = type("Watch", (), {})
+    client_mod.exceptions = exceptions_mod
+    k8s.client = client_mod
+    k8s.config = config_mod
+    k8s.watch = watch_mod
+    for name, module in (
+        ("kubernetes", k8s),
+        ("kubernetes.client", client_mod),
+        ("kubernetes.client.exceptions", exceptions_mod),
+        ("kubernetes.config", config_mod),
+        ("kubernetes.watch", watch_mod),
+    ):
+        monkeypatch.setitem(sys.modules, name, module)
+
+
+def _stub_gcp_builds(monkeypatch):
+    """Replace GCP providers' build() with sentinels.
+
+    The real constructors perform live SDK work (vertexai import, extension
+    lookup); ordering assertions only exercise probe sequencing.
+    """
+    for provider in (
+        ce.VertexAiCodeExecutionProvider,
+        ce.AgentEngineSandboxCodeExecutionProvider,
+        ce.GkeCodeExecutionProvider,
+    ):
+        monkeypatch.setattr(
+            provider, "build", classmethod(lambda cls, environment: object())
+        )
+
+
+def test_gcp_resource_beats_reachable_docker(clean_registry, monkeypatch):
+    client = _FakeDockerClient()
+    _install_fake_docker(monkeypatch, client)
+    _register_real_chain()
+    _stub_gcp_builds(monkeypatch)
+    resolution = resolve_code_executor(
+        {"AGENT_CODE_EXECUTION_VERTEX_RESOURCE": "projects/p/locations/l/extensions/e"},
+        model="m",
+    )
+    assert resolution.strategy == "vertex_ai"
+    assert client.constructor_kwargs == []  # docker never probed
+
+
+def test_agent_engine_beats_docker(clean_registry, monkeypatch):
+    _install_fake_docker(monkeypatch, _FakeDockerClient())
+    _register_real_chain()
+    _stub_gcp_builds(monkeypatch)
+    resolution = resolve_code_executor(
+        {"AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE": "projects/p/locations/l/reasoningEngines/r"},
+        model="gemini-1.5-flash",
+    )
+    assert resolution.strategy == "agent_engine_sandbox"
+
+
+def test_gke_beats_docker_and_gemini(clean_registry, monkeypatch):
+    _install_fake_docker(monkeypatch, _FakeDockerClient())
+    _register_real_chain()
+    _stub_gcp_builds(monkeypatch)
+    resolution = resolve_code_executor(
+        {"AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH": "/kube/config"},
+        model="gemini-2.0-flash",
+    )
+    assert resolution.strategy == "gke"
+
+
+def test_auto_detect_order_full_chain(clean_registry, monkeypatch):
+    monkeypatch.setitem(sys.modules, "docker", None)
+    _register_real_chain()
+    _stub_gcp_builds(monkeypatch)
+    resolution = resolve_code_executor(
+        {
+            "AGENT_CODE_EXECUTION_VERTEX_RESOURCE": "v",
+            "AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE": "a",
+            "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH": "/kube/config",
+        },
+        model="gemini-2.0-flash",
+    )
+    assert resolution.strategy == "vertex_ai"
+
+
+def test_vertex_build_constructs_executor(clean_registry, monkeypatch):
+    import google.adk.code_executors as ce_pkg
+
+    class _FakeVertex:
+        def __init__(self, resource_name=None):
+            self.resource_name = resource_name
+
+    monkeypatch.setattr(ce_pkg, "VertexAiCodeExecutor", _FakeVertex, raising=False)
+    executor = ce.VertexAiCodeExecutionProvider.build(
+        {"AGENT_CODE_EXECUTION_VERTEX_RESOURCE": "projects/p/locations/l/extensions/e"}
+    )
+    assert isinstance(executor, _FakeVertex)
+    assert executor.resource_name == "projects/p/locations/l/extensions/e"
+
+
+def test_agent_engine_build_constructs_executor(clean_registry, monkeypatch):
+    import google.adk.code_executors as ce_pkg
+
+    class _FakeAgentEngine:
+        def __init__(self, agent_engine_resource_name=None, **kwargs):
+            self.agent_engine_resource_name = agent_engine_resource_name
+
+    monkeypatch.setattr(
+        ce_pkg, "AgentEngineSandboxCodeExecutor", _FakeAgentEngine, raising=False
+    )
+    executor = ce.AgentEngineSandboxCodeExecutionProvider.build(
+        {"AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE": "projects/p/reasoningEngines/r"}
+    )
+    assert executor.agent_engine_resource_name == "projects/p/reasoningEngines/r"
+
+
+def test_gke_build_constructs_executor(clean_registry, monkeypatch):
+    import google.adk.code_executors as ce_pkg
+
+    _install_fake_kubernetes(monkeypatch)  # let the lazy import chain resolve
+
+    calls: dict[str, Any] = {}
+
+    class _FakeGke:
+        def __init__(self, kubeconfig_path=None, kubeconfig_context=None, **kwargs):
+            calls["path"] = kubeconfig_path
+            calls["context"] = kubeconfig_context
+
+    monkeypatch.setattr(ce_pkg, "GkeCodeExecutor", _FakeGke, raising=False)
+    ce.GkeCodeExecutionProvider.build(
+        {
+            "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH": "/kube/config",
+            "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_CONTEXT": "sandbox-ctx",
+        }
+    )
+    assert calls == {"path": "/kube/config", "context": "sandbox-ctx"}

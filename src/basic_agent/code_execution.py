@@ -31,6 +31,15 @@ from .autoconfig import ProviderConfigurationError
 
 logger = logging.getLogger(__name__)
 
+#: Optional GCP-managed sandbox resource identifiers (TODO P7). Probes key
+#: on these fields ONLY — never on ``GCP_PROJECT``/``GOOGLE_CLOUD_PROJECT``
+#: alone, which already drive application integration and must not
+#: incidentally activate a code-execution strategy.
+VERTEX_RESOURCE_ENV = "AGENT_CODE_EXECUTION_VERTEX_RESOURCE"
+AGENT_ENGINE_RESOURCE_ENV = "AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE"
+GKE_KUBECONFIG_PATH_ENV = "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH"
+GKE_KUBECONFIG_CONTEXT_ENV = "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_CONTEXT"
+
 #: Environment variable holding an explicit strategy override.
 STRATEGY_ENV = "AGENT_CODE_EXECUTION_STRATEGY"
 
@@ -176,7 +185,79 @@ def resolve_code_executor(
     return CodeExecutionResolution(None, UNAVAILABLE, "no provider probe succeeded")
 
 
-# ── docker_container strategy (TODO P2) ──────────────────────────────────────
+# ── GCP-managed strategies (TODO P7) ─────────────────────────────────────────
+#
+# Probes are identifier-presence only — no live probing, same rule as
+# autoconfig.py's other cloud providers. Auto-detect order puts these ahead
+# of docker_container/gemini_built_in (see the registration block at the
+# bottom of this module).
+
+
+class VertexAiCodeExecutionProvider(_CodeExecutionProviderSpec):
+    """``vertex_ai`` strategy: Vertex Code Interpreter Extension."""
+
+    strategy = "vertex_ai"
+
+    @classmethod
+    def probe(cls, environment: Mapping[str, str], *, model: Any) -> bool:
+        return bool((environment.get(VERTEX_RESOURCE_ENV) or "").strip())
+
+    @classmethod
+    def build(cls, environment: Mapping[str, str]) -> Any:
+        from google.adk.code_executors import VertexAiCodeExecutor  # deferred
+
+        return VertexAiCodeExecutor(
+            resource_name=environment.get(VERTEX_RESOURCE_ENV)
+        )
+
+
+class AgentEngineSandboxCodeExecutionProvider(_CodeExecutionProviderSpec):
+    """``agent_engine_sandbox`` strategy: Vertex AI Agent Engine sandbox."""
+
+    strategy = "agent_engine_sandbox"
+
+    @classmethod
+    def probe(cls, environment: Mapping[str, str], *, model: Any) -> bool:
+        return bool((environment.get(AGENT_ENGINE_RESOURCE_ENV) or "").strip())
+
+    @classmethod
+    def build(cls, environment: Mapping[str, str]) -> Any:
+        from google.adk.code_executors import (  # deferred
+            AgentEngineSandboxCodeExecutor,
+        )
+
+        return AgentEngineSandboxCodeExecutor(
+            agent_engine_resource_name=environment.get(AGENT_ENGINE_RESOURCE_ENV)
+        )
+
+
+class GkeCodeExecutionProvider(_CodeExecutionProviderSpec):
+    """``gke`` strategy: gVisor-sandboxed Pods on GKE.
+
+    Opt-in means naming an explicit kubeconfig file — in-cluster and
+    default ``~/.kube/config`` auth are never auto-detected, mirroring the
+    "identifier present" rule of the other GCP providers.
+    """
+
+    strategy = "gke"
+
+    @classmethod
+    def probe(cls, environment: Mapping[str, str], *, model: Any) -> bool:
+        return bool((environment.get(GKE_KUBECONFIG_PATH_ENV) or "").strip())
+
+    @classmethod
+    def build(cls, environment: Mapping[str, str]) -> Any:
+        from google.adk.code_executors import GkeCodeExecutor  # deferred
+
+        return GkeCodeExecutor(
+            kubeconfig_path=environment.get(GKE_KUBECONFIG_PATH_ENV),
+            kubeconfig_context=(environment.get(GKE_KUBECONFIG_CONTEXT_ENV) or None),
+        )
+
+
+# Registration happens at the bottom of this module, after all classes are
+# defined — the order of those calls defines the auto-detect chain.
+
 
 _hardened_executor_cls: type | None = None
 
@@ -390,9 +471,6 @@ class DockerContainerCodeExecutionProvider(_CodeExecutionProviderSpec):
         )
 
 
-register(DockerContainerCodeExecutionProvider, auto=True)
-
-
 # ── gemini_built_in strategy (TODO P3) ───────────────────────────────────────
 
 
@@ -432,9 +510,6 @@ class GeminiBuiltInCodeExecutionProvider(_CodeExecutionProviderSpec):
         return BuiltInCodeExecutor()
 
 
-register(GeminiBuiltInCodeExecutionProvider, auto=True)
-
-
 # ── unsafe_local strategy (TODO P4) ──────────────────────────────────────────
 
 
@@ -464,4 +539,14 @@ class UnsafeLocalCodeExecutionProvider(_CodeExecutionProviderSpec):
         return UnsafeLocalCodeExecutor()
 
 
+# ── Registration: this order IS the auto-detect chain (ADR-004 §2):
+# GCP-managed sandboxes first (explicit identifiers present), then the
+# local Docker daemon, then the model's built-in execution. unsafe_local is
+# deliberately last and NOT auto — explicit-override-only.
+
+register(VertexAiCodeExecutionProvider, auto=True)
+register(AgentEngineSandboxCodeExecutionProvider, auto=True)
+register(GkeCodeExecutionProvider, auto=True)
+register(DockerContainerCodeExecutionProvider, auto=True)
+register(GeminiBuiltInCodeExecutionProvider, auto=True)
 register(UnsafeLocalCodeExecutionProvider)

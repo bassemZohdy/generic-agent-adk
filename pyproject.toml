@@ -19,6 +19,11 @@ dependencies = [
 # google-adk[extensions] extra is deliberately not pulled in. Install with
 # `uv sync --extra docker`.
 docker = ["docker>=7.0.0"]
+# kubernetes SDK for the gke code-execution strategy (gke_code_executor has
+# a hard module-level `import kubernetes`). Job mode (default) needs nothing
+# else; executor_type="sandbox" additionally imports k8s_agent_sandbox,
+# whose PyPI name/version is unverified — pin it if you adopt sandbox mode.
+gke = ["kubernetes>=29.0"]
 
 [build-system]
 requires = ["setuptools>=68"]

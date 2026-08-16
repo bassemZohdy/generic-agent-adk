@@ -163,6 +163,12 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4317}
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: basic-adk-api
+      AGENT_CODE_EXECUTION_STRATEGY: ${AGENT_CODE_EXECUTION_STRATEGY:-}
+      AGENT_CODE_EXECUTION_DOCKER_HOST: ${AGENT_CODE_EXECUTION_DOCKER_HOST:-}
+      AGENT_CODE_EXECUTION_DOCKER_IMAGE: ${AGENT_CODE_EXECUTION_DOCKER_IMAGE:-}
+    networks:
+      - default
+      - code-exec
     depends_on:
       - keycloak
     labels:
@@ -260,6 +266,9 @@ services:
       traefik.http.middlewares.live-rate-limit.ratelimit.period: 1s
       traefik.http.middlewares.live-rate-limit.ratelimit.burst: "10"
 
+  # Traefik's read-only Docker discovery proxy. MUST stay POST=0 — it feeds
+  # container discovery only, and is deliberately NOT reused for sandbox
+  # container creation (see code-exec-socket-proxy below).
   docker-socket-proxy:
     <<: *resource-limits
     image: tecnativa/docker-socket-proxy:0.3.0
@@ -277,6 +286,41 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
 
+  # Narrowly-scoped Docker API access for sandbox containers ONLY (ADR-004 §4).
+  # NOT a reuse of the Traefik proxy above — that one is read-only (POST=0)
+  # and must stay that way; container creation is a materially different
+  # trust boundary. v0.3.0 semantics (verified against its haproxy.cfg): POST
+  # is a master switch evaluated before every ALLOW_* rule, gating ALL
+  # non-GET methods (create/start/exec/DELETE) — ALLOW_* alone admits
+  # nothing. POST=1 grants nothing by itself either; every section below
+  # stays deny-by-default (AUTH/BUILD/COMMIT/NETWORKS/SECRETS/… all 0).
+  code-exec-socket-proxy:
+    <<: *resource-limits
+    profiles: ["code-exec"]
+    image: tecnativa/docker-socket-proxy:0.3.0
+    environment:
+      POST: "1"            # master switch: required for create/start/exec/DELETE
+      CONTAINERS: "1"      # container create/start/stop/kill/inspect/exec endpoints
+      EXEC: "1"            # POST /exec/{id}/start — exec_run's second hop
+      IMAGES: "1"          # image inspect + POST /images/create (auto-pull)
+      PING: "1"            # GET /_ping — the code-execution resolver's probe
+      VERSION: "1"
+      ALLOW_START: "1"     # belt-and-braces (only relevant if CONTAINERS=0)
+      ALLOW_STOP: "1"
+      ALLOW_RESTARTS: "1"  # stop/restart/kill — the sandbox timeout recovery path
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - code-exec
+    restart: unless-stopped
+
 
 volumes:
   otel-lgtm-data:
+
+networks:
+  # Dedicated network for Docker-API access from the agent. EXEC=1 on the
+  # proxy permits exec against EVERY container on the daemon; network
+  # isolation is the only boundary that scopes it to this proxy's callers —
+  # only adk-api is attached here (TODO P11 security review).
+  code-exec: {}

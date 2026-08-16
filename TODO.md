@@ -6,7 +6,7 @@ enough to be implemented in a fresh session without any other context — it
 includes verified facts, file paths, code sketches, tests, and a done-when
 checklist. Work in order; each patch lands as one commit.
 
-**Status:** P1–P9 ✅ complete; **P10 is next**. Branch `main`:
+**Status:** **P1–P11 all ✅ complete — series finished.** Branch `main`:
 
 | Patch | Commit | Summary |
 |---|---|---|
@@ -19,10 +19,12 @@ checklist. Work in order; each patch lands as one commit.
 | P7 GCP providers | `a25600c` | vertex_ai / agent_engine_sandbox / gke identifier-presence probes (never `GCP_PROJECT` alone — regression-tested), consolidated registration = chain order, `gke` extra + lock; 10 tests |
 | P8 compose sandbox proxy | `4e4747e` | `code-exec-socket-proxy` behind `code-exec` profile (POST=1 master switch + CONTAINERS/EXEC/IMAGES/PING/VERSION), dedicated `code-exec` network, adk-api passthroughs; `docker compose config` gates verified |
 | P9 test consolidation | `2328a1e`+ | full checklist verified against named tests; coverage 95.90% both with `--extra docker` (303 passed, 1 skip) and without (304 passed); remaining uncovered lines in `code_execution.py` are defensive branches only |
+| P10 docs | `41029ed` | README "Code execution" section (strategy table, tradeoffs, image note), CHANGELOG series entry, ADR-004 §4 verified-proxy note + Verification check-off + corrections |
+| P11 security review | `2d80e2f` | Live: proxy ACL 403s on build/auth/commit/networks/secrets/swarm with 200/201 positive controls; proxy unresolvable off the `code-exec` network; timeout-recovery verified (5.5s for a 5s timeout after fixing stop()→kill(), 15.6s before); README production-checklist paragraph; all 8 ADR-004 Verification items ✅ |
 
 Baseline commit `5e747d0`: Skills support + ADR-004 + the previous
 13-task TODO (see git history, which also preserves the full original
-text of patches P1–P9). Old-task → patch mapping: 1→P1, 2+3→P2, 4→P3,
+text of patches P1–P11). Old-task → patch mapping: 1→P1, 2+3→P2, 4→P3,
 6→P4, 7→P5, 8+9→P6, 5→P7, 10→P8, 11→P9, 12→P10, 13→P11.
 
 **Gates for every patch** (CI runs these; coverage threshold is 90%):
@@ -203,76 +205,11 @@ building one vs using an existing public image:
 
 ---
 
-## P10 — Docs
-
-**Old task 12. Files:** `README.md`, `CHANGELOG.md`,
-`docs/ADR-004-pluggable-code-execution.md`.
-
-- **README** — new "Code execution" section mirroring the Skills section:
-  concrete example (`AGENT_TOOLS=…,code_execution` + optional
-  `AGENT_CODE_EXECUTION_STRATEGY`), the strategy table (docker_container /
-  gemini_built_in / vertex_ai / agent_engine_sandbox / gke / unsafe_local /
-  unavailable), the tradeoff callout (Docker needs the daemon or the
-  `code-exec` proxy; `unsafe_local` runs in-process and is never
-  auto-selected), the sandbox image note (default `python:3.13-slim`,
-  override + digest pinning, alpine variant), and the compose `code-exec`
-  profile quick-start.
-- **CHANGELOG** — one entry covering the whole feature series.
-- **ADR-004** — update the Verification section item-by-item as things are
-  actually verified end-to-end, and record the two corrections found
-  during implementation research (Appendix A): the Gemini predicate lives
-  in `google.adk.utils.model_name_utils` (not `code_execution_utils`), and
-  §4's `POST=0`+`ALLOW_*` assumption is wrong for proxy v0.3.0 — `POST=1`
-  is required and auto-pull is admitted by `POST=1`+`IMAGES=1`.
-
----
-
-## P11 — Security review pass before shipping
-
-**Old task 13. Run with a live Docker daemon; record results in ADR-004's
-Verification section.**
-
-1. **Proxy scope** (with `--profile code-exec` up; the proxy has no host
-   port mapping — probe it from a throwaway container on the `code-exec`
-   network):
-   - `docker run --rm --network <project>_code-exec curlimages/curl -sS
-     -o /dev/null -w '%{http_code}' -X POST
-     http://code-exec-socket-proxy:2375/build` → `403` (BUILD=0); same for
-     `/auth`, `/commit`, `/networks/create`, `/secrets`, `/swarm`.
-   - Positive control in the same harness: `-X POST
-     …/containers/create` (with a minimal JSON body) must **not** 403, and
-     `GET /_ping` must 200 — proves the denials above are ACL denials, not
-     connectivity noise.
-   - From inside `adk-api`: exec into an *unrelated* container (e.g.
-     keycloak) through the proxy fails — it isn't reachable on the
-     `code-exec` network (that's the isolation guarantee; the daemon-side
-     ACL can't provide it, only network topology can).
-   - Confirm Traefik's original `docker-socket-proxy` still has `POST=0`.
-2. **Hardened limits on a real container** — start the sandbox (e.g. via a
-   one-shot script constructing `HardenedContainerCodeExecutor`), then on
-   the running container `docker inspect` and verify **all** of:
-   `HostConfig.Memory` (536870912), `HostConfig.NanoCpus` (1000000000),
-   `HostConfig.PidsLimit` (128), `HostConfig.ReadonlyRootfs` (true),
-   `HostConfig.CapDrop` (["ALL"]), `HostConfig.SecurityOpt`
-   (["no-new-privileges"]), `Config.NetworkDisabled` (true — the disabled
-   network surfaces here, NOT as `NetworkMode: "none"`).
-   Don't trust the code path — read the daemon's own answer.
-   ✅ Done during P2 (commit `a321312`): live `docker inspect` confirmed
-   every value above, and an in-sandbox `socket.create_connection` to
-   1.1.1.1:53 raised `OSError`. Item 3 (timeout-recovery live run)
-   remains.
-3. **Timeout recovery** — execute a deliberately hung snippet
-   (`while True: pass`), assert the call returns within
-   `timeout_seconds`+slack with the timeout stderr, and the *next*
-   execution in the same session succeeds on the restarted container.
-4. **README production checklist** — add a paragraph on the new attack
-   surface: the `code-exec` proxy grants container create/exec on the
-   host daemon; it must stay on its dedicated network, the sandbox image
-   should be digest-pinned, `IMAGES=0`+pre-pull is the hardened default,
-   and resource limits must be re-verified after any ADK upgrade (the
-   subclass mirrors ADK-private init code — Appendix A).
-
----
+**All patches P1–P11 are complete.** Final commits: P10 `41029ed`
+(README/CHANGELOG/ADR-004 docs), P11 `2d80e2f` (live security review:
+proxy ACL scope + isolation verified, timeout-recovery defect found and
+fixed, README production-checklist paragraph; all eight ADR-004
+Verification items now ✅ with live evidence).
 
 Completed work is recorded in [CHANGELOG.md](CHANGELOG.md). Design
 decisions are recorded as ADRs in [docs/](docs/).

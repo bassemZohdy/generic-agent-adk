@@ -312,13 +312,25 @@ there for commits). Verified so far, item by item:
   (note: the disabled network surfaces as `Config.NetworkDisabled`, *not*
   as `NetworkMode: "none"`), plus an in-sandbox `socket.create_connection`
   to 1.1.1.1:53 raising `OSError`.
-- ⏳ The `code-exec` socket-proxy network genuinely can't reach containers
-  outside the sandbox's own — proxy + network landed (P8, commit
-  `4e4747e`); the live attempted-exec-into-an-unrelated-container check
-  remains (P11).
-- ⏳ A deliberately-hung script triggers the timeout path and the container
-  is usable again on the next call in the same session — unit-tested (P2);
-  the live run remains (P11).
+- ✅ The `code-exec` socket-proxy network genuinely can't reach containers
+  outside the sandbox's own — verified live (P11, proxy v0.3.0 behind the
+  `code-exec` profile): attempted-exec endpoints all denied with 403
+  (`POST /build`, `/auth`, `/commit`, `/networks/create`, `GET /secrets`,
+  `POST /swarm/init`) while positive controls succeeded on the same
+  harness (`GET /_ping` → 200, `POST /containers/create` → 201 — proving
+  the denials are ACL denials, not connectivity noise); from the default
+  bridge network the proxy does not even resolve, so only `code-exec`-
+  attached containers (adk-api alone) can reach it; Traefik's original
+  proxy still renders `POST=0`.
+- ✅ A deliberately-hung script triggers the timeout path and the container
+  is usable again on the next call in the same session — verified live
+  (P11): `while True: pass` under `timeout_seconds=5` returned in 5.5s
+  wall with the timeout stderr, and the subsequent execution in the same
+  session succeeded on the restarted container. (This review pass also
+  found and fixed a real defect: recovery originally routed through
+  docker-py's graceful `stop()` with its 10s default grace period —
+  15.6s wall for the 5s timeout; `_recover_container` now SIGKILLs.
+  Commit `2d80e2f`.)
 
 ### Corrections recorded during implementation research
 

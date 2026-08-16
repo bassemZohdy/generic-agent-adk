@@ -341,5 +341,6 @@ OpenTelemetry (OTLP/gRPC) → Grafana stack (Loki logs, Tempo traces, Prometheus
 3. Keep `AUTH_DISABLED=false`, `DEMO_MODE=false`, and configure Cloud Run IAM/ingress
 4. Configure external storage and monitoring
 5. Keep the locked dependency, pip-audit, gitleaks, and Trivy CI gates enabled
+6. If code execution is enabled, treat the sandbox path as its own attack surface: the `code-exec` socket-proxy grants container create/exec on the host daemon — keep it on its dedicated `code-exec` network (never expose it beyond the agent service), digest-pin the sandbox image (`python@sha256:…`), prefer pre-pulling the image with `IMAGES=0` on the proxy so pulls can't introduce unexpected images, and re-verify the container resource limits (`docker inspect`: memory/CPU/pids/read-only-rootfs/cap-drop) after any `google-adk` upgrade — the hardened executor subclasses ADK-private initialization and upstream changes can silently alter what the defaults mean. Never enable `AGENT_CODE_EXECUTION_STRATEGY=unsafe_local` in production; model-generated code then runs in-process on the host
 
 See `deploy/cloudrun/service.yaml` for a Cloud Run starter manifest.

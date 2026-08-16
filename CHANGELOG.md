@@ -2,6 +2,23 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-16 — End-user README + architecture doc
+
+- README restructured for *using* the application: the deep architecture
+  section moved out; the internals (module map, config pipeline, runtime
+  wiring, use-case→strategy mapping, code-execution resolution, request
+  path, observability, CI/CD overview) now live in
+  `docs/ARCHITECTURE.md` aimed at contributors and operators.
+- README examples now reference the actually-published image
+  (`ghcr.io/bassemzohdy/generic-agent-adk`) instead of a placeholder org;
+  the Interfaces table's compose service name corrected to `adk-api`;
+  the Docker profiles table gained the `code-exec` row with its
+  `AGENT_CODE_EXECUTION_DOCKER_HOST` prerequisite.
+- Stale bits fixed: test badge 242 → 311 passing; ADR-004's
+  "implementation tracked in TODO.md" note replaced (it shipped).
+- Custom-use-case section trimmed to essentials with a pointer to the
+  architecture doc.
+
 ## 2026-08-16 — Test & CI hardening follow-up (post code-execution series)
 
 - Shared test doubles: `tests/fakes.py` now holds the single canonical

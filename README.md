@@ -2,7 +2,7 @@
 
 One Docker image, eight generic use cases. Pick what you want the agent to do, configure it with environment variables or YAML, run it.
 
-[![Tests](https://img.shields.io/badge/tests-242%20passing-brightgreen)](./tests/)
+[![Tests](https://img.shields.io/badge/tests-311%20passing-brightgreen)](./tests/)
 [![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](./tests/)
 <!-- Test count/coverage badges are updated by hand; re-check with
      `uv run pytest tests/ -q --cov=src --cov-report=term-missing` before
@@ -35,7 +35,7 @@ docker run \
   -e OPENAI_API_KEY=your-key \
   -e AGENT_USE_CASE=assistant \
   -e ADK_MODEL=openai/gpt-4o \
-  ghcr.io/your-org/adk:latest
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 That's it for agent construction — every use case runs with sane defaults. HTTP
@@ -48,7 +48,7 @@ access still requires Keycloak, or the explicit local-only opt-out:
 docker run \
   -v ./examples/expert-dispatch.yaml:/app/config/agent.yaml \
   -e GOOGLE_API_KEY=your-key \
-  ghcr.io/your-org/adk:latest
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 A config file mounted at `/app/config/agent.yaml` is auto-detected (or set `AGENT_CONFIG_FILE`). YAML unlocks per-role instructions, models, and tools via the `roles:` section — see [`examples/expert-dispatch.yaml`](./examples/expert-dispatch.yaml).
@@ -95,7 +95,7 @@ Every use case runs behind the same three ADK interfaces; chat-like ones (`assis
 
 | Interface | How | Fit |
 |---|---|---|
-| REST / A2A API | `adk api_server` (compose service `api`, port 8002, Swagger at `/docs`) | all use cases |
+| REST / A2A API | `adk api_server` (compose service `adk-api`, port 8002, Swagger at `/docs`) | all use cases |
 | Web UI | `adk web` | all use cases — best for `approval_gate` (human approval UX) |
 | Interactive CLI | `adk run` | all use cases |
 | Live WebSocket | compose service `live`, port 8003 | `assistant` |
@@ -157,7 +157,7 @@ docker run \
   -e AGENT_TOOLS=knowledge,search,skills,approval,runtime,structured_output \
   -e AGENT_SKILLS_DIR=/app/skills \
   -e GOOGLE_API_KEY=your-key \
-  ghcr.io/your-org/adk:latest
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 See [`skills/status-check/SKILL.md`](./skills/status-check/SKILL.md) for a
@@ -176,7 +176,7 @@ to execute code") instead of failing mid-run:
 docker run \
   -e AGENT_TOOLS=knowledge,search,code_execution,approval,runtime,structured_output \
   -e GOOGLE_API_KEY=your-key \
-  ghcr.io/your-org/adk:latest
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 | Strategy | When it's chosen | What runs the code |
@@ -215,35 +215,11 @@ while the sandbox has no network for `pip`).
 
 Technical users can add use cases without forking the runtime:
 
-1. Subclass `BaseUseCaseAgent` ([`src/basic_agent/use_cases/base.py`](./src/basic_agent/use_cases/base.py)), set its metadata and underlying strategy, and optionally override runtime hooks: `before_run`, `after_run`, `before_tool`, `after_tool` — wired automatically as ADK callbacks on the composed agent tree.
-2. Point `AGENT_USE_CASE_MODULE=/path/to/your_module.py` at your module; `BaseUseCaseAgent` subclasses found in it register automatically. In production, also set `AGENT_USE_CASE_MODULE_ALLOWLIST` to one or more approved directories (separated by the platform path separator).
+1. Subclass `BaseUseCaseAgent`, set its metadata and underlying strategy.
+2. Point `AGENT_USE_CASE_MODULE=/path/to/your_module.py` at your module; your classes register automatically. In production, also set `AGENT_USE_CASE_MODULE_ALLOWLIST` to one or more approved directories.
 
-## Architecture
-
-Two layers, one dependency direction — `use_cases` → `strategies`, never reverse:
-
-```
-YAML / env vars
-      │
-      ▼
-use_cases (public)          what the user picks + runtime behavior
-  • one class per use case    (metadata, defaults, before/after hooks)
-  • registry + alias catalog
-      │
-      ▼
-strategies (internal)       how the ADK agent tree is shaped
-  • pluggable builders        (LlmAgent / SequentialAgent /
-  • shared llm() builder       ParallelAgent / LoopAgent)
-  • per-role config
-      │
-      ▼
-Google ADK agent tree
-```
-
-- **`use_cases/`** — the public surface. Metadata (key, title, when-to-use, defaults, aliases) lives only here; the registry catalog drives config validation errors and the decision table above.
-- **`strategies/`** — internal composition. Registry pattern, no hard-coded conditionals; shared builders keep the 10 strategy files small.
-
-Design records: [ADR-001](./docs/ADR-001-generic-runtime-architecture.md) · [ADR-002 use-case taxonomy](./docs/ADR-002-use-case-taxonomy.md)
+How the pieces fit internally (module map, config pipeline, request path) is
+documented in [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 
 ## Local development
 
@@ -286,6 +262,7 @@ authenticated REST API. Three services are opt-in via Compose profiles:
 | `live` | `live-api` (Live WebSocket) | — |
 | `observability` | `otel-lgtm` (Grafana/Loki/Tempo/Prometheus) | non-empty `GRAFANA_ADMIN_PASSWORD` |
 | `demo` | `service-api` (example OpenAPI-tool backend) | — |
+| `code-exec` | `code-exec-socket-proxy` (sandboxed code execution; see [Code execution](#code-execution)) | set `AGENT_CODE_EXECUTION_DOCKER_HOST=tcp://code-exec-socket-proxy:2375` |
 
 Services: REST API `:8002/docs` · Live WebSocket `:8003/live` (`live` profile) · Status `:8001/status` (`demo` profile) · Grafana `:3000` (`observability` profile) · Keycloak `:8080`
 
@@ -320,10 +297,11 @@ OpenTelemetry (OTLP/gRPC) → Grafana stack (Loki logs, Tempo traces, Prometheus
 
 ## Documentation
 
+- [Architecture](./docs/ARCHITECTURE.md) — module map, config pipeline, request path, deployment topology
 - [ADR-001 — Generic runtime architecture](./docs/ADR-001-generic-runtime-architecture.md)
 - [ADR-002 — Use-case taxonomy & consolidation](./docs/ADR-002-use-case-taxonomy.md)
 - [ADR-003 — ADK Workflow migration spike](./docs/ADR-003-adk-workflow-migration.md)
-- [ADR-004 — Pluggable code-execution sandbox selection](./docs/ADR-004-pluggable-code-execution.md) (design accepted, implementation tracked in TODO.md)
+- [ADR-004 — Pluggable code-execution sandbox selection](./docs/ADR-004-pluggable-code-execution.md)
 - [CHANGELOG](./CHANGELOG.md) — dated record of completed work
 - [CI/CD guide](./.github/CI-CD-INTEGRATION.md) · [Publishing guide](./.github/PUBLISHING.md)
 

@@ -99,6 +99,13 @@ class Settings:
     live_max_message_bytes: int
     live_max_audio_bytes: int
     live_max_messages_per_minute: int
+    code_execution_strategy: str
+    code_execution_docker_host: str
+    code_execution_docker_image: str
+    code_execution_vertex_resource: str
+    code_execution_agent_engine_resource: str
+    code_execution_gke_kubeconfig_path: str
+    code_execution_gke_kubeconfig_context: str
 
 
 def load_settings() -> Settings:
@@ -179,6 +186,19 @@ def load_settings() -> Settings:
         live_max_audio_bytes=_int("LIVE_MAX_AUDIO_BYTES", 786_432, minimum=1),
         live_max_messages_per_minute=_int(
             "LIVE_MAX_MESSAGES_PER_MINUTE", 60, minimum=1
+        ),
+        code_execution_strategy=_env("AGENT_CODE_EXECUTION_STRATEGY"),
+        code_execution_docker_host=_env("AGENT_CODE_EXECUTION_DOCKER_HOST"),
+        code_execution_docker_image=_env("AGENT_CODE_EXECUTION_DOCKER_IMAGE"),
+        code_execution_vertex_resource=_env("AGENT_CODE_EXECUTION_VERTEX_RESOURCE"),
+        code_execution_agent_engine_resource=_env(
+            "AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE"
+        ),
+        code_execution_gke_kubeconfig_path=_env(
+            "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH"
+        ),
+        code_execution_gke_kubeconfig_context=_env(
+            "AGENT_CODE_EXECUTION_GKE_KUBECONFIG_CONTEXT"
         ),
     )
 

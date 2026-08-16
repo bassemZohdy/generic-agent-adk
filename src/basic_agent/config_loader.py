@@ -83,6 +83,24 @@ class ExecutionConfig:
     steps: int | None = None
     workers: int | None = None
     specialists: list[str] = field(default_factory=list)
+    code_execution: "ExecutionCodeExecutionConfig | None" = None
+
+
+@dataclass
+class ExecutionCodeExecutionConfig:
+    """Code-execution sandbox configuration (ADR-004).
+
+    Strategy names and semantics live in ``basic_agent.code_execution``;
+    these fields are pure transport until the resolver consumes them (P6).
+    """
+
+    strategy: str = ""
+    docker_host: str = ""
+    docker_image: str = ""
+    vertex_resource: str = ""
+    agent_engine_resource: str = ""
+    gke_kubeconfig_path: str = ""
+    gke_kubeconfig_context: str = ""
 
 
 @dataclass
@@ -327,6 +345,15 @@ def load_config_from_env() -> AgentConfig:
         execution=ExecutionConfig(
             max_iterations=_positive_int(max_iterations, "execution.max_iterations"),
             specialists=specialists,
+            code_execution=ExecutionCodeExecutionConfig(
+                strategy=settings.code_execution_strategy,
+                docker_host=settings.code_execution_docker_host,
+                docker_image=settings.code_execution_docker_image,
+                vertex_resource=settings.code_execution_vertex_resource,
+                agent_engine_resource=settings.code_execution_agent_engine_resource,
+                gke_kubeconfig_path=settings.code_execution_gke_kubeconfig_path,
+                gke_kubeconfig_context=settings.code_execution_gke_kubeconfig_context,
+            ),
         ),
         output=OutputConfig(
             schema="GenericAgentResponse" if settings.enable_structured_output else None,
@@ -438,6 +465,37 @@ def apply_env_overrides(
     return config
 
 
+def _parse_code_execution_config(execution_data: dict) -> "ExecutionCodeExecutionConfig | None":
+    """Parse the ``execution.code_execution`` mapping; None when absent."""
+    data = execution_data.get("code_execution")
+    if not data:
+        return None
+    fields = (
+        "strategy",
+        "docker_host",
+        "docker_image",
+        "vertex_resource",
+        "agent_engine_resource",
+        "gke_kubeconfig_path",
+        "gke_kubeconfig_context",
+    )
+    for name in fields:
+        value = data.get(name, "")
+        if value is not None and not isinstance(value, str):
+            raise ValueError(
+                f"execution.code_execution.{name} must be a string, got {type(value).__name__}"
+            )
+    return ExecutionCodeExecutionConfig(
+        strategy=data.get("strategy", ""),
+        docker_host=data.get("docker_host", ""),
+        docker_image=data.get("docker_image", ""),
+        vertex_resource=data.get("vertex_resource", ""),
+        agent_engine_resource=data.get("agent_engine_resource", ""),
+        gke_kubeconfig_path=data.get("gke_kubeconfig_path", ""),
+        gke_kubeconfig_context=data.get("gke_kubeconfig_context", ""),
+    )
+
+
 def _parse_agent_config(data: dict) -> AgentConfig:
     """Parse raw dictionary into AgentConfig.
 
@@ -536,6 +594,7 @@ def _parse_agent_config(data: dict) -> AgentConfig:
                 else None
             ),
             specialists=execution_data.get("specialists", []),
+            code_execution=_parse_code_execution_config(execution_data),
         )
 
     output_data = data.get("output", {})

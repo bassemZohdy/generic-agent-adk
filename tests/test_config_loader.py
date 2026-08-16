@@ -505,3 +505,103 @@ def test_provenance_log_line(monkeypatch, base_config, caplog):
         "config: yaml=/tmp/agent.yaml, use_case=assistant, env overrides: ADK_MODEL"
         in caplog.text
     )
+
+
+# ── P5: execution.code_execution plumbing ────────────────────────────────────
+
+
+def test_load_config_with_code_execution_configuration(tmp_path):
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text("""
+agent:
+  use_case: assistant
+
+model:
+  provider: google
+  name: gemini-2.0-flash
+
+execution:
+  max_iterations: 4
+  code_execution:
+    strategy: docker_container
+    docker_host: tcp://code-exec-socket-proxy:2375
+    docker_image: python:3.13-slim
+    vertex_resource: projects/p/locations/us-central1/extensions/e
+    agent_engine_resource: projects/p/locations/us-central1/reasoningEngines/r
+    gke_kubeconfig_path: /etc/sandbox/kubeconfig
+    gke_kubeconfig_context: sandbox-ctx
+""")
+    config = load_config_from_yaml(config_file)
+
+    ce = config.execution.code_execution
+    assert ce is not None
+    assert ce.strategy == "docker_container"
+    assert ce.docker_host == "tcp://code-exec-socket-proxy:2375"
+    assert ce.docker_image == "python:3.13-slim"
+    assert ce.vertex_resource == "projects/p/locations/us-central1/extensions/e"
+    assert (
+        ce.agent_engine_resource
+        == "projects/p/locations/us-central1/reasoningEngines/r"
+    )
+    assert ce.gke_kubeconfig_path == "/etc/sandbox/kubeconfig"
+    assert ce.gke_kubeconfig_context == "sandbox-ctx"
+
+
+def test_yaml_execution_without_code_execution_keeps_none(tmp_path):
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text("""
+agent:
+  use_case: assistant
+
+model:
+  provider: google
+  name: gemini-2.0-flash
+
+execution:
+  max_iterations: 3
+""")
+    config = load_config_from_yaml(config_file)
+
+    assert config.execution.code_execution is None
+
+
+def test_env_builder_code_execution_defaults(monkeypatch):
+    from basic_agent.config_loader import ExecutionCodeExecutionConfig
+
+    config = load_config_from_env()
+
+    ce = config.execution.code_execution
+    assert isinstance(ce, ExecutionCodeExecutionConfig)
+    assert ce.strategy == ""
+    assert ce.docker_host == ""
+    assert ce.docker_image == ""
+    assert ce.vertex_resource == ""
+    assert ce.agent_engine_resource == ""
+    assert ce.gke_kubeconfig_path == ""
+    assert ce.gke_kubeconfig_context == ""
+
+
+def test_env_builder_code_execution_from_settings(settings_patch):
+    import basic_agent.config as config_module
+
+    settings_patch(
+        config_module,
+        code_execution_strategy="gemini_built_in",
+        code_execution_docker_host="tcp://proxy:2375",
+        code_execution_docker_image="python:3.13-alpine",
+        code_execution_vertex_resource="projects/p/locations/l/extensions/x",
+        code_execution_agent_engine_resource="projects/p/locations/l/reasoningEngines/y",
+        code_execution_gke_kubeconfig_path="/kube/config",
+        code_execution_gke_kubeconfig_context="ctx-1",
+    )
+
+    config = load_config_from_env()
+
+    ce = config.execution.code_execution
+    assert ce.strategy == "gemini_built_in"
+    assert ce.docker_host == "tcp://proxy:2375"
+    assert ce.docker_image == "python:3.13-alpine"
+    assert ce.vertex_resource == "projects/p/locations/l/extensions/x"
+    assert ce.agent_engine_resource == "projects/p/locations/l/reasoningEngines/y"
+    assert ce.gke_kubeconfig_path == "/kube/config"
+    assert ce.gke_kubeconfig_context == "ctx-1"

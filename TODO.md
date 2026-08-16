@@ -6,8 +6,7 @@ enough to be implemented in a fresh session without any other context — it
 includes verified facts, file paths, code sketches, tests, and a done-when
 checklist. Work in order; each patch lands as one commit.
 
-**Status:** P1–P8 ✅ complete; **P9 in progress** (coverage-matrix run
-remains). Branch `main`:
+**Status:** P1–P9 ✅ complete; **P10 is next**. Branch `main`:
 
 | Patch | Commit | Summary |
 |---|---|---|
@@ -19,10 +18,11 @@ remains). Branch `main`:
 | P6 agent wiring + tell-the-model | `98c2644` | `_build_runtime_context` resolves via `resolve_code_executor` (env + YAML overlay); RuntimeContext strategy/detail fields; instruction line per scenario; `inspect_runtime()` + `adk.capabilities` span entries; 9 tests |
 | P7 GCP providers | `a25600c` | vertex_ai / agent_engine_sandbox / gke identifier-presence probes (never `GCP_PROJECT` alone — regression-tested), consolidated registration = chain order, `gke` extra + lock; 10 tests |
 | P8 compose sandbox proxy | `4e4747e` | `code-exec-socket-proxy` behind `code-exec` profile (POST=1 master switch + CONTAINERS/EXEC/IMAGES/PING/VERSION), dedicated `code-exec` network, adk-api passthroughs; `docker compose config` gates verified |
+| P9 test consolidation | `2328a1e`+ | full checklist verified against named tests; coverage 95.90% both with `--extra docker` (303 passed, 1 skip) and without (304 passed); remaining uncovered lines in `code_execution.py` are defensive branches only |
 
 Baseline commit `5e747d0`: Skills support + ADR-004 + the previous
 13-task TODO (see git history, which also preserves the full original
-text of patches P1–P8). Old-task → patch mapping: 1→P1, 2+3→P2, 4→P3,
+text of patches P1–P9). Old-task → patch mapping: 1→P1, 2+3→P2, 4→P3,
 6→P4, 7→P5, 8+9→P6, 5→P7, 10→P8, 11→P9, 12→P10, 13→P11.
 
 **Gates for every patch** (CI runs these; coverage threshold is 90%):
@@ -200,31 +200,6 @@ building one vs using an existing public image:
 - Compose (P8) keeps `IMAGES=1` so a missing image is auto-pulled on first
   use; hardened deployments may pre-pull + drop `IMAGES` to `0` (then a
   missing image fails fast at first execution instead of pulling).
-
----
-
-## P9 — Tests consolidation + coverage check
-
-**Old task 11. Most tests were written alongside P1–P7; this patch is the
-consolidation pass.** Files: `tests/test_code_execution.py` (+ any gaps in
-`tests/test_runtime_wiring.py`).
-
-Final checklist (every line asserted somewhere):
-
-- [ ] Docker probe: success / unreachable / package-missing — none raise.
-- [ ] Explicit override: unknown name → `ProviderConfigurationError` from
-      the *resolver* (probe stays pure-bool).
-- [ ] Explicit override: known name, probe False → loud error.
-- [ ] Auto-detect order: GCP → docker → gemini → unavailable.
-- [ ] `unsafe_local` never auto-selected under any environment; warns on
-      explicit selection.
-- [ ] Native-but-pre-2.0 Gemini (`gemini-1.5-flash`) resolves away from
-      `gemini_built_in`.
-- [ ] `_build_runtime_context`: executor type AND instruction text for
-      available / unavailable / explicit-override scenarios.
-- [ ] `inspect_runtime()` capabilities entry; plugin span attribute.
-- [ ] Coverage ≥ 90% (`--cov-fail-under=90`) with and without
-      `--extra docker`.
 
 ---
 

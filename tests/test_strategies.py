@@ -137,6 +137,23 @@ def test_parallel_strategy_builds_parallel_agent():
     assert isinstance(agent, ParallelAgent)
 
 
+@pytest.mark.parametrize("bad_workers", [0, -1, True, "two", 1.5])
+def test_parallel_strategy_rejects_invalid_workers(bad_workers):
+    strategy = ParallelAgentStrategy()
+    runtime = RuntimeContext(
+        model="test-model",
+        instruction="Test instruction",
+        tools=[],
+        description="Test agent",
+    )
+    context = AgentStrategyContext(
+        agent_type="PARALLEL", runtime=runtime, extra_config={"workers": bad_workers}
+    )
+
+    with pytest.raises(ValueError, match="workers.*must be an integer"):
+        strategy.build(context)
+
+
 def test_loop_strategy_validates_max_iterations():
     strategy = LoopAgentStrategy()
     runtime = RuntimeContext(

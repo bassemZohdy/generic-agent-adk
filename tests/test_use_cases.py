@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from google.adk.agents import LlmAgent, SequentialAgent
 
-from basic_agent.strategies import RuntimeContext
+from basic_agent.strategies import DirectStrategy, RuntimeContext
 from basic_agent.use_cases import (
     ApprovalGateAgent,
     AssistantAgent,
@@ -360,8 +360,6 @@ def test_register_duplicate_key_raises():
 
 
 def test_register_duplicate_alias_raises():
-    from basic_agent.strategies import DirectStrategy
-
     class FirstAgent(BaseUseCaseAgent):
         use_case = "first_agent"
         title = "First"
@@ -380,3 +378,171 @@ def test_register_duplicate_alias_raises():
     registry.register(FirstAgent())
     with pytest.raises(ValueError, match="already registered for"):
         registry.register(SecondAgent())
+
+
+# --- T2.7: hook-chaining semantics (base._chain / _chain_before_tool / _chain_after_tool) ---
+
+
+def test_chain_short_circuits_and_always_runs_second():
+    from basic_agent.use_cases.base import _chain
+
+    calls = []
+
+    def first_cb(ctx):
+        calls.append("first")
+        return {"vetoed": True}
+
+    def unreached_cb(ctx):
+        calls.append("unreached")
+        return None
+
+    def hook(ctx):
+        calls.append("hook")
+        return None
+
+    chained = _chain([first_cb, unreached_cb], hook)
+    result = chained(SimpleNamespace())
+
+    assert calls == ["first", "hook"]
+    assert result == {"vetoed": True}
+
+
+def test_chain_falls_through_to_second_result_when_first_is_none():
+    from basic_agent.use_cases.base import _chain
+
+    chained = _chain(None, lambda ctx: "hook-result")
+    assert chained(SimpleNamespace()) == "hook-result"
+
+
+def test_chain_before_tool_veto_short_circuits_second():
+    from basic_agent.use_cases.base import _chain_before_tool
+
+    calls = []
+
+    def veto(tool, args, ctx):
+        calls.append("veto")
+        return {"status": "blocked"}
+
+    def hook(tool, args, ctx):
+        calls.append("hook")
+        return None
+
+    chained = _chain_before_tool(veto, hook)
+    result = chained(None, {}, None)
+
+    assert result == {"status": "blocked"}
+    assert calls == ["veto"]
+
+
+def test_chain_before_tool_falls_through_when_first_is_none():
+    from basic_agent.use_cases.base import _chain_before_tool
+
+    chained = _chain_before_tool(None, lambda tool, args, ctx: {"proceed": True})
+    assert chained(None, {}, None) == {"proceed": True}
+
+
+def test_chain_after_tool_prefers_hooks_non_none_result():
+    from basic_agent.use_cases.base import _chain_after_tool
+
+    def first(tool, args, ctx, result):
+        return {"from": "first"}
+
+    def hook(tool, args, ctx, result):
+        return {"from": "hook"}
+
+    chained = _chain_after_tool(first, hook)
+    assert chained(None, {}, None, {}) == {"from": "hook"}
+
+
+def test_chain_after_tool_falls_back_to_first_when_hook_returns_none():
+    from basic_agent.use_cases.base import _chain_after_tool
+
+    def first(tool, args, ctx, result):
+        return {"from": "first"}
+
+    def hook(tool, args, ctx, result):
+        return None
+
+    chained = _chain_after_tool(first, hook)
+    assert chained(None, {}, None, {}) == {"from": "first"}
+
+
+# --- T2.8: after_tool hook wiring end-to-end ---
+
+
+def test_after_tool_hook_attached_and_invoked():
+    class AfterToolAgent(AssistantAgent):
+        def after_tool(self, tool, args, tool_context, result):
+            return {"wrapped": result}
+
+    root = AfterToolAgent().build(MINIMAL_RUNTIME)
+    llm_agents = [n for n in walk(root) if isinstance(n, LlmAgent)]
+    assert llm_agents
+    for node in llm_agents:
+        assert node.after_tool_callback is not None
+    result = llm_agents[0].after_tool_callback(None, {}, None, {"original": True})
+    assert result == {"wrapped": {"original": True}}
+
+
+# --- T2.9: resolve_runtime merge/override rules for roles/model/instruction/tools ---
+
+
+class DefaultsAgent(BaseUseCaseAgent):
+    """Custom use case exercising the roles/model/instruction/tools default branches."""
+
+    use_case = "defaults_test"
+    title = "Defaults Test"
+    when_to_use = "Test-only."
+    aliases = ()
+    strategy = DirectStrategy()
+    defaults = {
+        "roles": {"billing": "billing-default"},
+        "model": "default-model",
+        "instruction": "default instruction",
+        "tools": ["default_tool"],
+        "description": "default description",
+    }
+
+
+def test_resolve_runtime_merges_roles_caller_entries_win_per_key():
+    rt = RuntimeContext(
+        model="gemini-2.0-flash",
+        instruction="test",
+        tools=[],
+        description="test",
+        roles={"billing": "caller-billing", "technical": "caller-technical"},
+    )
+    resolved = DefaultsAgent().resolve_runtime(rt)
+    assert resolved.roles == {
+        "billing": "caller-billing",
+        "technical": "caller-technical",
+    }
+
+
+def test_resolve_runtime_keeps_caller_model_instruction_tools_when_set():
+    rt = RuntimeContext(
+        model="caller-model",
+        instruction="caller instruction",
+        tools=["caller_tool"],
+        description="test",
+    )
+    resolved = DefaultsAgent().resolve_runtime(rt)
+    assert resolved.model == "caller-model"
+    assert resolved.instruction == "caller instruction"
+    assert resolved.tools == ["caller_tool"]
+
+
+def test_resolve_runtime_applies_defaults_when_caller_left_them_empty():
+    rt = RuntimeContext(model="", instruction="", tools=[], description="test")
+    resolved = DefaultsAgent().resolve_runtime(rt)
+    assert resolved.model == "default-model"
+    assert resolved.instruction == "default instruction"
+    assert resolved.tools == ["default_tool"]
+
+
+def test_resolve_runtime_applies_unconditional_default_for_other_keys():
+    # Keys outside the roles/dataclass-default/model-instruction-tools special
+    # cases (e.g. "description") apply unconditionally, caller value or not.
+    rt = RuntimeContext(model="m", instruction="i", tools=[], description="caller description")
+    resolved = DefaultsAgent().resolve_runtime(rt)
+    assert resolved.description == "default description"

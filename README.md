@@ -2,8 +2,8 @@
 
 One Docker image, eight generic use cases. Pick what you want the agent to do, configure it with environment variables or YAML, run it.
 
-[![Tests](https://img.shields.io/badge/tests-199%20passing-brightgreen)](./tests/)
-[![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](./tests/)
+[![Tests](https://img.shields.io/badge/tests-215%20passing-brightgreen)](./tests/)
+[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen)](./tests/)
 <!-- Test count/coverage badges are updated by hand; re-check with
      `uv run pytest tests/ -q --cov=src --cov-report=term-missing` before
      editing them, since they silently drift from the enforced CI gate

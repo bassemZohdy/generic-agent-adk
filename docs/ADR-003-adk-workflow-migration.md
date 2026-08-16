@@ -37,7 +37,11 @@ minimum locked ADK version:
 3. Before/after agent and tool callbacks, approval confirmation, and branch
    aggregation have equivalent hooks.
 4. A compatibility test matrix passes for all eight built-in use cases and the
-   example YAML files without deprecation warnings.
+   example YAML files without deprecation warnings. This cannot be true until
+   gates 1–3 are; the deprecation warnings from `SequentialAgent`,
+   `ParallelAgent`, and `LoopAgent` are expected in the meantime and are
+   silenced in `pyproject.toml`'s `filterwarnings` (with a pointer back to
+   this ADR) rather than worked around in the strategies themselves.
 
 ## Follow-up
 

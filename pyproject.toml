@@ -28,3 +28,10 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+filterwarnings = [
+    # Known, tracked, and expected to persist until ADK ships Workflow as an
+    # LlmAgent sub-agent (see docs/ADR-003-adk-workflow-migration.md's
+    # migration gate). Not a warning we can act on yet; silence the noise
+    # without hiding unrelated deprecations.
+    "ignore:.*is deprecated in favor of Workflow.*:DeprecationWarning",
+]

@@ -1,277 +1,99 @@
 # Generic Agent Runtime (ADK)
 
-One Docker image, eight generic use cases. Pick what you want the agent to do, configure it with environment variables or YAML, run it.
+One Docker image, eight use cases. Configure with env vars or YAML, run it.
 
 [![Tests](https://img.shields.io/badge/tests-311%20passing-brightgreen)](./tests/)
 [![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](./tests/)
-<!-- Test count/coverage badges are updated by hand; re-check with
-     `uv run pytest tests/ -q --cov=src --cov-report=term-missing` before
-     editing them, since they silently drift from the enforced CI gate
-     (COVERAGE_THRESHOLD in .github/workflows/ci.yml) otherwise. -->
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-production%20ready-green)](.)
 
-## What do you want to build?
-
-Start from what you need, not from architecture names:
-
-| I want an agent that… | Use case | Example config |
-|---|---|---|
-| Answers questions directly; investigates when tools are enabled | `assistant` | [`examples/assistant.yaml`](./examples/assistant.yaml) |
-| Runs fixed steps in order (fetch → analyze → summarize) | `pipeline` | [`examples/pipeline.yaml`](./examples/pipeline.yaml) |
-| Gets several independent takes and aggregates them | `multi_perspective` | [`examples/multi-perspective.yaml`](./examples/multi-perspective.yaml) |
-| Keeps improving its output until it's good enough | `refine_until_good` | [`examples/refine-until-good.yaml`](./examples/refine-until-good.yaml) |
-| Sends each question to the right specialist | `expert_dispatch` | [`examples/expert-dispatch.yaml`](./examples/expert-dispatch.yaml) |
-| Coordinates a team of workers on complex work | `team_coordinator` | [`examples/team-coordinator.yaml`](./examples/team-coordinator.yaml) |
-| Makes a plan first, then executes it | `plan_and_execute` | [`examples/plan-and-execute.yaml`](./examples/plan-and-execute.yaml) |
-| Proposes actions and waits for my approval | `approval_gate` | [`examples/approval-gate.yaml`](./examples/approval-gate.yaml) |
-
-With no tools enabled, `assistant` answers in one shot; with tools (search, knowledge, code) it iterates over them — one use case, two behaviors, driven purely by tool config.
-
-### Run with environment variables only (minimal)
+## Quick start
 
 ```bash
+# Minimal — env vars only
 docker run \
   -e OPENAI_API_KEY=your-key \
   -e AGENT_USE_CASE=assistant \
   -e ADK_MODEL=openai/gpt-4o \
+  -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
-```
 
-That's it for agent construction — every use case runs with sane defaults. HTTP
-access still requires Keycloak, or the explicit local-only opt-out:
-`AUTH_DISABLED=true`.
-
-### Run with a YAML config (full control)
-
-```bash
+# Full control — mount a YAML config
 docker run \
   -v ./examples/expert-dispatch.yaml:/app/config/agent.yaml \
   -e GOOGLE_API_KEY=your-key \
+  -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
-A config file mounted at `/app/config/agent.yaml` is auto-detected (or set `AGENT_CONFIG_FILE`). YAML unlocks per-role instructions, models, and tools via the `roles:` section — see [`examples/expert-dispatch.yaml`](./examples/expert-dispatch.yaml).
+## Use cases
+
+| I want an agent that… | Use case |
+|---|---|
+| Answers questions; investigates when tools are enabled | `assistant` |
+| Runs fixed steps in order | `pipeline` |
+| Gets several independent takes and aggregates them | `multi_perspective` |
+| Keeps improving until it's good enough | `refine_until_good` |
+| Routes questions to the right specialist | `expert_dispatch` |
+| Coordinates a team of workers | `team_coordinator` |
+| Plans first, then executes | `plan_and_execute` |
+| Proposes actions, waits for approval | `approval_gate` |
+
+See [`examples/`](./examples/) for YAML configs.
 
 ## Configuration
 
-### Minimal environment variables
-
-| Variable | Required | Default | Applies to |
-|---|---|---|---|
-| `GOOGLE_API_KEY` | ✅ (Gemini) | — | Gemini models |
-| provider key (e.g. `OPENAI_API_KEY`) | ✅ (non-Gemini) | — | see Models below |
-| `AGENT_USE_CASE` | — | `assistant` | all |
-| `ADK_MODEL` | — | `gemini-3.6-flash` | all; accepts `provider/model` prefixes |
-| `AGENT_INSTRUCTION` | — | built-in generic prompt | all |
-| `AGENT_TOOLS` | — | `knowledge,search,mcp,openapi,approval,runtime,structured_output` | all; code execution is opt-in |
-| `AGENT_MAX_ITERATIONS` | — | `3` | `refine_until_good`, `plan_and_execute` |
-| `AGENT_SPECIALISTS` | — | `research,solution,risk` | `expert_dispatch` |
-
-### Models: any provider
-
-`model.name` starting with a provider prefix routes through LiteLLM — OpenAI-compatible APIs, Anthropic, Ollama, vLLM, Groq, DeepSeek, Mistral, and everything else LiteLLM supports. No prefix (or `provider: google`) stays on native Gemini.
-
-```bash
-# env: prefix syntax
-ADK_MODEL=openai/gpt-4o          # or anthropic/claude-sonnet-5, groq/llama-3.3-70b, ...
-ADK_MODEL=ollama/llama3          # local; set OLLAMA_API_BASE=http://localhost:11434
-```
-
-```yaml
-# YAML: provider field or prefix; api_key/base_url pass through
-model:
-  provider: openai               # or anthropic, ollama, hosted_vllm, ...
-  name: gpt-4o
-  api_key: "${OPENAI_API_KEY}"
-  base_url: "${OLLAMA_API_BASE}" # for local/self-hosted OpenAI-compatible servers
-```
-
-Common provider env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPSEEK_API_KEY`, `OLLAMA_API_BASE` (base URL, no key needed).
-
-### Interfaces
-
-Every use case runs behind the same three ADK interfaces; chat-like ones (`assistant`) also support the Live WebSocket:
-
-| Interface | How | Fit |
+| Variable | Default | Notes |
 |---|---|---|
-| REST / A2A API | `adk api_server` (compose service `adk-api`, port 8002, Swagger at `/docs`) | all use cases |
-| Web UI | `adk web` | all use cases — best for `approval_gate` (human approval UX) |
-| Interactive CLI | `adk run` | all use cases |
-| Live WebSocket | compose service `live`, port 8003 | `assistant` |
+| `GOOGLE_API_KEY` | — | Required for Gemini models |
+| `OPENAI_API_KEY` | — | Required for OpenAI (or `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, etc.) |
+| `AGENT_USE_CASE` | `assistant` | Any use case from the table above |
+| `ADK_MODEL` | `gemini-3.6-flash` | `provider/model` prefix for LiteLLM routing |
+| `AGENT_INSTRUCTION` | built-in prompt | Custom instruction for the agent |
+| `AGENT_TOOLS` | `knowledge,search,mcp,openapi,approval,runtime,structured_output` | Comma-separated tool list |
+| `AGENT_MAX_ITERATIONS` | `3` | For `refine_until_good`, `plan_and_execute` |
+| `AGENT_SPECIALISTS` | `research,solution,risk` | For `expert_dispatch` |
+| `AUTH_DISABLED` | `false` | Set `true` for local dev without Keycloak |
 
-Each use case declares its fit in `interfaces` (see `list_use_cases()`); the catalog is the source of truth for tooling.
+All variables listed in [.env.example](.env.example). YAML config supports `${VAR:default}` substitution and per-role overrides — see [examples/](./examples/).
 
-Advanced variables (auth, MCP, OpenAPI, skills, code execution, knowledge, telemetry) are listed in [.env.example](.env.example).
+## Tools
 
-### How YAML and env vars merge
+**Skills** — add `skills` to `AGENT_TOOLS`, set `AGENT_SKILLS_DIR` to a folder of `SKILL.md` directories. See [`skills/status-check/SKILL.md`](./skills/status-check/SKILL.md).
 
-1. The YAML file (auto-detected `/app/config/agent.yaml`, or `AGENT_CONFIG_FILE`) is the base. `${VAR:default}` substitution runs inside it.
-2. Then the **7 documented env vars above** override — but only the ones explicitly set. Env always wins for these keys.
-3. No file → env-only configuration.
-4. Startup logs one provenance line: `config: yaml=/app/config/agent.yaml, use_case=expert_dispatch, env overrides: ADK_MODEL`.
+**Code execution** — add `code_execution` to `AGENT_TOOLS`. The agent auto-detects the best sandbox strategy:
 
-### YAML reference
+| Strategy | Trigger |
+|---|---|
+| `vertex_ai` | `AGENT_CODE_EXECUTION_VERTEX_RESOURCE` set |
+| `agent_engine_sandbox` | `AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE` set |
+| `gke` | `AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH` set |
+| `docker_container` | Docker daemon reachable |
+| `gemini_built_in` | Native Gemini 2.0+ model |
+| `unsafe_local` | Explicit opt-in only — **no isolation** |
 
-```yaml
-agent:
-  use_case: expert_dispatch        # a key from the table above
-  description: "Customer support dispatcher"
+Pin with `AGENT_CODE_EXECUTION_STRATEGY`. In Compose, enable `--profile code-exec` and set `AGENT_CODE_EXECUTION_DOCKER_HOST=tcp://code-exec-socket-proxy:2375`. Default sandbox: `python:3.13-slim` (512 MB RAM, 1 CPU, read-only rootfs, no network).
 
-model:
-  name: "${ADK_MODEL:gemini-3.6-flash}"
-
-roles:                              # per-role overrides (YAML only)
-  billing:
-    instruction: "You answer billing and invoice questions precisely."
-  technical:
-    instruction: "You answer technical troubleshooting questions."
-    model: "${ADK_MODEL:gemini-3.6-flash}"
-
-tools:
-  enabled: [knowledge, search]
-
-execution:
-  max_iterations: 5                # refine_until_good, plan_and_execute
-```
-
-`team_coordinator` and `pipeline` accept the same `roles:` block keyed by
-position instead of name — `worker_0`, `worker_1`, … for `team_coordinator`;
-`step_0`, `step_1`, … for `pipeline`. Unset positions get an auto-generated
-instruction identifying their place in the sequence (e.g. "worker 1 of 3").
-See [`examples/team-coordinator.yaml`](./examples/team-coordinator.yaml) and
-[`examples/pipeline.yaml`](./examples/pipeline.yaml).
-
-### Skills
-
-Add `skills` to `AGENT_TOOLS` (or `tools.enabled` in YAML) to give the agent
-[Agent Skills](https://agentskills.io/specification) — folders of
-instructions and optional `references/`, `assets/`, `scripts/` that extend
-its capabilities for specialized tasks, loaded on demand via ADK's built-in
-`SkillToolset`. Point `AGENT_SKILLS_DIR` (or `tools.skills.dir` in YAML) at a
-directory of skill folders, each containing a `SKILL.md`:
+## Docker Compose
 
 ```bash
-docker run \
-  -v ./skills:/app/skills \
-  -e AGENT_TOOLS=knowledge,search,skills,approval,runtime,structured_output \
-  -e AGENT_SKILLS_DIR=/app/skills \
-  -e GOOGLE_API_KEY=your-key \
-  ghcr.io/bassemzohdy/generic-agent-adk:latest
-```
-
-See [`skills/status-check/SKILL.md`](./skills/status-check/SKILL.md) for a
-minimal example. Scripts in a skill's `scripts/` directory need
-`code_execution` also enabled in `AGENT_TOOLS` — skills don't get their own
-executor, they share the agent's.
-
-### Code execution
-
-Add `code_execution` to `AGENT_TOOLS` and the agent resolves a sandbox at
-startup — auto-detecting the best available strategy rather than assuming
-one, and telling the model plainly when none is available ("do not claim
-to execute code") instead of failing mid-run:
-
-```bash
-docker run \
-  -e AGENT_TOOLS=knowledge,search,code_execution,approval,runtime,structured_output \
-  -e GOOGLE_API_KEY=your-key \
-  ghcr.io/bassemzohdy/generic-agent-adk:latest
-```
-
-| Strategy | When it's chosen | What runs the code |
-|---|---|---|
-| `vertex_ai` | `AGENT_CODE_EXECUTION_VERTEX_RESOURCE` set | Vertex Code Interpreter Extension |
-| `agent_engine_sandbox` | `AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE` set | Vertex AI Agent Engine sandbox |
-| `gke` | `AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH` set | gVisor-sandboxed Pods on GKE |
-| `docker_container` | Docker daemon reachable (`AGENT_CODE_EXECUTION_DOCKER_HOST` or `DOCKER_HOST`) | Hardened local container |
-| `gemini_built_in` | Native Gemini 2.0+ model (model-side tool) | Gemini itself |
-| `unsafe_local` | **Never auto-selected** — explicit opt-in only | In-process on the host, no isolation |
-| `unavailable` | Nothing above matched | Nothing; the model is told so |
-
-Pin a strategy with `AGENT_CODE_EXECUTION_STRATEGY` (or
-`execution.code_execution.strategy` in YAML) — a pinned strategy that
-can't be satisfied fails startup loudly instead of silently falling back.
-
-**Tradeoffs:** Docker needs the daemon reachable from the agent container —
-in Compose, enable the sandbox proxy with
-`docker compose --profile code-exec up` and set
-`AGENT_CODE_EXECUTION_DOCKER_HOST=tcp://code-exec-socket-proxy:2375` (the
-proxy is scoped to container lifecycle endpoints only, on a dedicated
-network). `unsafe_local` executes model-generated code directly on the
-host and is never auto-detected; naming it is the same kind of deliberate
-opt-in as `AUTH_DISABLED=true`.
-
-The Docker sandbox runs `python:3.13-slim` by default (override with
-`AGENT_CODE_EXECUTION_DOCKER_IMAGE`) under explicit limits — 512 MB RAM,
-1 CPU, 128 pids, read-only rootfs with a small `/tmp` tmpfs, no network,
-no capabilities, `no-new-privileges`, and a wall-clock execution timeout
-that kills and restarts the container on overrun. For production,
-digest-pin the image (e.g. `python@sha256:ffb752e1…`); `python:3.13-alpine`
-works too and is smaller, at the cost of musl wheel compatibility (moot
-while the sandbox has no network for `pip`).
-
-## Extending: custom use cases
-
-Technical users can add use cases without forking the runtime:
-
-1. Subclass `BaseUseCaseAgent`, set its metadata and underlying strategy.
-2. Point `AGENT_USE_CASE_MODULE=/path/to/your_module.py` at your module; your classes register automatically. In production, also set `AGENT_USE_CASE_MODULE_ALLOWLIST` to one or more approved directories.
-
-How the pieces fit internally (module map, config pipeline, request path) is
-documented in [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
-
-## Local development
-
-```bash
-# Setup
-uv sync
 cp .env.example .env
-export GOOGLE_API_KEY=your-key
-
-# Run
-uv run adk api_server src/basic_agent    # REST API at http://localhost:8002/docs
-uv run adk web src/basic_agent           # Web UI
-
-# Test
-uv run pytest tests/ -v
-```
-
-## Docker
-
-```bash
-# Build locally
-docker build -t adk:local .
-docker run -p 8002:8002 -e GOOGLE_API_KEY=... adk:local
-
-# Compose: authenticated API behind Keycloak + Traefik (default)
-cp .env.example .env
-# Set a non-empty KEYCLOAK_ADMIN_PASSWORD in .env.
+# Set KEYCLOAK_ADMIN_PASSWORD in .env
 docker compose up --build
-
-# Add optional profiles as needed
-docker compose --profile live --profile observability --profile demo up --build
 ```
 
-`docker compose up` with no `--profile` flags starts only `keycloak`, `auth-gateway`,
-`api-proxy`, `docker-socket-proxy`, and `adk-api` — the minimum needed for a working,
-authenticated REST API. Three services are opt-in via Compose profiles:
+| Profile | Adds |
+|---|---|
+| `live` | Live WebSocket (`:8003`) |
+| `observability` | Grafana/Loki/Tempo/Prometheus (`:3000`) |
+| `demo` | Example service API (`:8001`) |
+| `code-exec` | Sandbox code-execution proxy |
 
-| Profile | Adds | Needs |
-|---|---|---|
-| `live` | `live-api` (Live WebSocket) | — |
-| `observability` | `otel-lgtm` (Grafana/Loki/Tempo/Prometheus) | non-empty `GRAFANA_ADMIN_PASSWORD` |
-| `demo` | `service-api` (example OpenAPI-tool backend) | — |
-| `code-exec` | `code-exec-socket-proxy` (sandboxed code execution; see [Code execution](#code-execution)) | set `AGENT_CODE_EXECUTION_DOCKER_HOST=tcp://code-exec-socket-proxy:2375` |
-
-Services: REST API `:8002/docs` · Live WebSocket `:8003/live` (`live` profile) · Status `:8001/status` (`demo` profile) · Grafana `:3000` (`observability` profile) · Keycloak `:8080`
+REST API at `:8002/docs`, Keycloak at `:8080`.
 
 ## Authentication
 
-Keycloak (OIDC) with role-based access control. The imported production-safe
-realm has no demo user and disables password grants. For local development only,
-set `DEMO_MODE=true` in `.env` to import the separate dev realm, then use
-`demo` / `demo`. Never enable that mode outside a disposable development stack.
+Keycloak OIDC. Set `DEMO_MODE=true` in `.env` for local dev with `demo`/`demo` credentials. Production: set `KEYCLOAK_ISSUER`, disable `DEMO_MODE`.
 
 ```bash
 # Get a token
@@ -282,43 +104,34 @@ curl -X POST http://localhost:8080/realms/basic-agent/protocol/openid-connect/to
 curl -H "Authorization: Bearer <token>" http://localhost:8002/status
 ```
 
-Roles: `agent-user` (API access, default required), `agent-operator` (approvals). Override with `KEYCLOAK_REQUIRED_ROLES`, `AGENT_SERVICE_API_ROLES`, `LIVE_API_ROLES`. `KEYCLOAK_AUDIENCE` defaults to `basic-agent` and is always verified. Service API keys have no default and are granted only the configured `AGENT_SERVICE_API_ROLES`.
+## Local development
 
-The REST and Live adapters bind session identity to the validated token subject;
-client-supplied `user_id` values cannot select another user's session. Live
-authentication uses the Authorization header, a WebSocket subprotocol, or the
-first `auth` message—never an `access_token` query parameter. Live frames are
-size- and rate-limited. Omit `session_id` for a new Live session and reuse only
-the server-issued ID returned in the first session message.
+```bash
+uv sync
+cp .env.example .env
+export GOOGLE_API_KEY=your-key
 
-## Observability
-
-OpenTelemetry (OTLP/gRPC) → Grafana stack (Loki logs, Tempo traces, Prometheus metrics). Span attributes include the resolved use case and configuration. Included in `docker compose up` — visit Grafana at `http://localhost:3000`.
+uv run adk api_server src/basic_agent    # REST API
+uv run adk web src/basic_agent           # Web UI
+uv run pytest tests/ -v                  # Tests
+```
 
 ## Documentation
 
-- [Architecture](./docs/ARCHITECTURE.md) — module map, config pipeline, request path, deployment topology
-- [ADR-001 — Generic runtime architecture](./docs/ADR-001-generic-runtime-architecture.md)
-- [ADR-002 — Use-case taxonomy & consolidation](./docs/ADR-002-use-case-taxonomy.md)
-- [ADR-003 — ADK Workflow migration spike](./docs/ADR-003-adk-workflow-migration.md)
-- [ADR-004 — Pluggable code-execution sandbox selection](./docs/ADR-004-pluggable-code-execution.md)
-- [CHANGELOG](./CHANGELOG.md) — dated record of completed work
-- [CI/CD guide](./.github/CI-CD-INTEGRATION.md) · [Publishing guide](./.github/PUBLISHING.md)
+- [Architecture](./docs/ARCHITECTURE.md) — module map, config pipeline, request path
+- [ADR-001](./docs/ADR-001-generic-runtime-architecture.md) · [ADR-002](./docs/ADR-002-use-case-taxonomy.md) · [ADR-003](./docs/ADR-003-adk-workflow-migration.md) · [ADR-004](./docs/ADR-004-pluggable-code-execution.md)
+- [CHANGELOG](./CHANGELOG.md) · [CI/CD guide](./.github/CI-CD-INTEGRATION.md) · [Publishing guide](./.github/PUBLISHING.md)
 
 ## Troubleshooting
 
-- **Import errors in tests** → `uv sync --upgrade`
-- **Docker build fails** → check `.dockerignore`, `docker build --progress=plain .`
-- **Keycloak won't start** → ensure port 8080 free, wait 30s, `docker compose logs keycloak`
-- **Wrong agent behavior** → check the startup provenance log line for which config source and use case resolved
+- **Import errors** → `uv sync --upgrade`
+- **Keycloak won't start** → check port 8080 is free, wait 30s
+- **Wrong agent behavior** → check startup provenance log for resolved config
 
 ## Production checklist
 
-1. Replace the local Keycloak starter with a managed identity provider
-2. Set `KEYCLOAK_ISSUER`, `KEYCLOAK_AUDIENCE`, and production secrets via the deployment secret manager
-3. Keep `AUTH_DISABLED=false`, `DEMO_MODE=false`, and configure Cloud Run IAM/ingress
-4. Configure external storage and monitoring
-5. Keep the locked dependency, pip-audit, gitleaks, and Trivy CI gates enabled
-6. If code execution is enabled, treat the sandbox path as its own attack surface: the `code-exec` socket-proxy grants container create/exec on the host daemon — keep it on its dedicated `code-exec` network (never expose it beyond the agent service), digest-pin the sandbox image (`python@sha256:…`), prefer pre-pulling the image with `IMAGES=0` on the proxy so pulls can't introduce unexpected images, and re-verify the container resource limits (`docker inspect`: memory/CPU/pids/read-only-rootfs/cap-drop) after any `google-adk` upgrade — the hardened executor subclasses ADK-private initialization and upstream changes can silently alter what the defaults mean. Never enable `AGENT_CODE_EXECUTION_STRATEGY=unsafe_local` in production; model-generated code then runs in-process on the host
-
-See `deploy/cloudrun/service.yaml` for a Cloud Run starter manifest.
+1. Replace Keycloak starter with a managed identity provider
+2. Set `KEYCLOAK_ISSUER`, `KEYCLOAK_AUDIENCE`, production secrets
+3. Keep `AUTH_DISABLED=false`, `DEMO_MODE=false`
+4. Keep CI gates enabled (pip-audit, gitleaks, Trivy)
+5. If code execution enabled: keep `code-exec` proxy on dedicated network, digest-pin sandbox image, verify resource limits after ADK upgrades, never use `unsafe_local` in production

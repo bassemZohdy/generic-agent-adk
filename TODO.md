@@ -6,15 +6,16 @@ enough to be implemented in a fresh session without any other context — it
 includes verified facts, file paths, code sketches, tests, and a done-when
 checklist. Work in order; each patch lands as one commit.
 
-**Status:** nothing implemented yet. Baseline commit `5e747d0` (branch
-`main`): Skills support + ADR-004 + the previous 13-task TODO (see git
-history). Old-task → patch mapping: 1→P1, 2+3→P2, 4→P3, 6→P4, 7→P5,
-8+9→P6, 5→P7, 10→P8, 11→P9, 12→P10, 13→P11.
+**Status:** P1 ✅ (commit `dcf35b4`) and P2 ✅ (commit `a321312`)
+implemented; P3 next. Baseline commit `5e747d0` (branch `main`): Skills
+support + ADR-004 + the previous 13-task TODO (see git history).
+Old-task → patch mapping: 1→P1, 2+3→P2, 4→P3, 6→P4, 7→P5, 8+9→P6,
+5→P7, 10→P8, 11→P9, 12→P10, 13→P11.
 
 **Gates for every patch** (CI runs these; coverage threshold is 90%):
 
 ```bash
-uv run pytest tests/ -q --tb=short          # all green (246 passing at baseline)
+uv run pytest tests/ -q --tb=short          # all green (270 passing after P2)
 uv run pytest tests/ --cov=basic_agent --cov-fail-under=90
 uv lock && uv sync --quiet                   # REQUIRED after any pyproject.toml edit (CI uses --frozen)
 docker compose config -q                     # after docker-compose.yml edits
@@ -967,8 +968,13 @@ Verification section.**
    `HostConfig.Memory` (536870912), `HostConfig.NanoCpus` (1000000000),
    `HostConfig.PidsLimit` (128), `HostConfig.ReadonlyRootfs` (true),
    `HostConfig.CapDrop` (["ALL"]), `HostConfig.SecurityOpt`
-   (["no-new-privileges"]), `NetworkMode` ("none").
+   (["no-new-privileges"]), `Config.NetworkDisabled` (true — the disabled
+   network surfaces here, NOT as `NetworkMode: "none"`).
    Don't trust the code path — read the daemon's own answer.
+   ✅ Done during P2 (commit `a321312`): live `docker inspect` confirmed
+   every value above, and an in-sandbox `socket.create_connection` to
+   1.1.1.1:53 raised `OSError`. Item 3 (timeout-recovery live run)
+   remains.
 3. **Timeout recovery** — execute a deliberately hung snippet
    (`while True: pass`), assert the call returns within
    `timeout_seconds`+slack with the timeout stderr, and the *next*

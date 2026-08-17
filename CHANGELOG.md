@@ -2,6 +2,20 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-17 — Image CVE fix: apply Debian security upgrades in build
+
+- The previous push failed the CI Trivy gate (9 × HIGH, all one CVE):
+  CVE-2026-53615 in the util-linux family (`bsdutils`, `libblkid1`,
+  `libmount1`, `login`, `mount`, …) as shipped by the `python:3.13-slim`
+  snapshot — time-drift between yesterday's green run and the advisory
+  landing in the Trivy DB, not a regression.
+- `Dockerfile` now runs `apt-get update && apt-get upgrade` before the
+  hardening step, so base-image packages pick up Debian security fixes
+  without waiting for an upstream python image rebuild. Verified locally:
+  all flagged packages report `2.41.5-0+deb13u1` (the Trivy-published
+  fixed version) and the built image still boots with the default CMD
+  (`/docs` → 200).
+
 ## 2026-08-17 — Docs accuracy pass + broken default CMD fix
 
 - **Fixed broken image CMD**: `Dockerfile` still launched

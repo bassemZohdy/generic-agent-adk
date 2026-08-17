@@ -9,6 +9,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
+# Apply Debian security updates to base-image packages. CI gates on Trivy
+# HIGH/CRITICAL findings; the python:3.13-slim snapshot can ship vulnerable
+# packages (e.g. CVE-2026-53615 in util-linux 2.41-5, fixed in 2.41.5-0+deb13u1)
+# between upstream base-image rebuilds.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Harden the base image: remove the bundled pip/ensurepip and any pre-existing
 # setuptools/wheel packages so scanners only see the freshly installed versions.
 RUN rm -rf \

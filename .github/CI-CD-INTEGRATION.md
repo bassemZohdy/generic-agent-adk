@@ -147,6 +147,17 @@ permissions:
 | Push with `v*` tag | ✅ | ✅  | ✅ (push staging tag) | ✅ | ✅ |
 | Pull request    | ✅   | ✅   | ✅ (local only, verified in-job) | — | — |
 
+### Scheduled verification (separate workflow)
+
+[`verify-published-image.yml`](workflows/verify-published-image.yml) runs weekly
+(and on manual `workflow_dispatch`) against the **published** `:latest` tag —
+outside the push pipeline, so it catches drift push-time CI can't: a new
+base-image CVE surfacing after the last green build, or a `:latest` that no
+longer boots with its default `CMD`. It logs in, pulls `:latest`, Trivy-scans
+it (HIGH/CRITICAL gate), and boots it with its real entrypoint, polling
+`/docs` to 200. It lives in its own workflow so the `schedule` trigger never
+re-runs `build`/`promote-image`.
+
 ## Common Issues & Solutions
 
 **Tests fail** — reproduce locally: `uv run pytest tests/ -v --tb=short`.

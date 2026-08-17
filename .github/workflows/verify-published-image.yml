@@ -1,0 +1,59 @@
+name: Verify Published Image
+
+# Standalone from ci.yml so a schedule doesn't re-run build/promote. This
+# exists to catch drift that push-time CI cannot see:
+#   - a new CVE in the published image's base packages (e.g. CVE-2026-53615
+#     landed in Trivy's DB a day after the last green build), and
+#   - a `latest` tag that no longer boots with its default CMD (the 2026-08-17
+#     incident, where the refactor renamed `api_server` -> `interfaces.rest`
+#     and the dead module shipped to `latest` because push smoke tests
+#     overrode the container command).
+on:
+  schedule:
+    # Weekly, Monday 09:00 UTC.
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: bassemzohdy/generic-agent-adk
+
+jobs:
+  verify-published:
+    name: Boot & scan published :latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull published image
+        run: docker pull "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+
+      - name: Scan published image for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: table
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+      - name: Boot published image with its default CMD
+        run: |
+          cid=$(docker run -d --rm -p 18002:8002 -e GOOGLE_API_KEY=ci-smoke -e AUTH_DISABLED=true "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest")
+          trap 'docker rm -f $cid >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:18002/docs >/dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -fsS http://localhost:18002/docs >/dev/null && echo "published :latest serves /docs OK"
+          docker rm -f "$cid" >/dev/null

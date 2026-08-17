@@ -1,4 +1,4 @@
-"""End-to-end tests for the /status endpoint's auth wiring in service_api.py."""
+"""End-to-end tests for the /status endpoint's auth wiring."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def client():
 
 
 def _patch_both(settings_patch, **changes):
-    """Keep basic_agent.auth.settings and basic_agent.service_api.settings in sync."""
+    """Keep the auth and service adapter settings in sync."""
     settings_patch(auth.core, **changes)
     return settings_patch(service_api, **changes)
 

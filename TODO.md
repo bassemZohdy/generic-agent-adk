@@ -36,6 +36,11 @@ decisions are recorded as ADRs in [docs/](docs/).
 
 ---
 
+## Cleanup completed — 2026-08-17
+
+- [x] Removed the stale `TODO P11 security review` marker from the
+  `code-exec` network definition in `docker-compose.yml`; P11 is complete.
+
 ## Open items — 2026-08-17
 
 Verified against the current tree after the docs/CMD/CVE fix series. The
@@ -60,9 +65,6 @@ remains:
   3. Keep the legacy path as rollback for one release, then remove it and
      drop the `"ignore:.*is deprecated in favor of Workflow.*"` line from
      `pyproject.toml`'s `filterwarnings`.
-- [ ] **O2 — Remove stale `TODO P11 security review` comment** in
-  `docker-compose.yml` (code-exec network block, ~line 325). P11 is
-  complete; the comment is a leftover marker, not an open task.
 - [ ] **O3 — Pin `k8s_agent_sandbox` if adopting `gke` sandbox mode**
   (`pyproject.toml` `gke` extra comment, lines 24–26). The PyPI name/version
   is unverified; executor_type="sandbox" imports it, job mode does not.

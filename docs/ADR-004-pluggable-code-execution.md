@@ -1,8 +1,15 @@
 # ADR-004 — Pluggable code-execution sandbox selection
 
-**Status:** Accepted (design); implementation pending — see `TODO.md`
+**Status:** Accepted; implementation complete (P1–P11)
 **Date:** 2026-08-16
-**Scope:** `src/basic_agent/code_execution.py` (new), `agent.py`, `config.py`, `config_loader.py`, `docker-compose.yml`
+**Scope:** code-execution resolution, runtime wiring, configuration, and
+Docker Compose sandbox integration.
+
+> Implementation note: this ADR was written before the 2026-08-16 source
+> reorganization. The current implementation lives in
+> `src/basic_agent/execution/resolver.py`, `src/basic_agent/agent.py`,
+> `src/basic_agent/config/loader.py`, and `docker-compose.yml`; historical
+> module names in the design narrative are retained for traceability.
 
 ## Context
 

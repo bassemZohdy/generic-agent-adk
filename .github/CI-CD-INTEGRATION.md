@@ -50,7 +50,8 @@ only after `verify-image` succeeds.
 `docker compose config` validation, secret scanning via
 `gitleaks/gitleaks-action`.
 
-**Triggers**: every push, PR, tag. **Duration**: ~5 minutes.
+**Triggers**: pushes to `main` or version tags, and pull requests.
+**Duration**: ~5 minutes.
 
 ### 2. Test Job (Python 3.10–3.13)
 
@@ -60,11 +61,12 @@ only after `verify-image` succeeds.
 3. `pytest tests/ -v --tb=short --cov=basic_agent --cov-report=term-missing --cov-report=xml --cov-report=html`
 4. Upload coverage artifacts (Python 3.13 run only)
 5. Re-run with `--cov-fail-under=${{ env.COVERAGE_THRESHOLD }}` (currently
-   **85%**) as a hard gate
+   **90%**) as a hard gate
 6. Optional, non-blocking Codecov upload
 
-**Triggers**: every push, PR, tag. **Duration**: ~15 minutes per Python
-version, matrix runs in parallel with `fail-fast: false`.
+**Triggers**: pushes to `main` or version tags, and pull requests.
+**Duration**: ~15 minutes per Python version, matrix runs in parallel with
+`fail-fast: false`.
 
 ### 3. Build Docker Image Job
 
@@ -97,8 +99,8 @@ version, matrix runs in parallel with `fail-fast: false`.
    the image must match `uv.lock` exactly (via `uv lock --check` plus a
    `uv pip freeze` diff)
 3. Trivy scan (`HIGH,CRITICAL`, `ignore-unfixed: true`, `exit-code: '1'`) —
-   this **fails the workflow** on any match; it is a hard gate, not
-   informational
+   this **fails the workflow** on any fixed HIGH/CRITICAL finding; unfixed
+   findings are ignored. It is a hard gate, not informational.
 4. Startup smoke test: imports `root_agent` for the `assistant` use case and
    for `examples/approval-gate.yaml`, asserting the expected agent type
 
@@ -124,9 +126,9 @@ events — if `verify-image` or `promote-image` didn't succeed.
 ## Environment Variables
 
 ```yaml
-COVERAGE_THRESHOLD: 85               # Minimum coverage percentage required
+COVERAGE_THRESHOLD: 90               # Minimum coverage percentage required
 REGISTRY: ghcr.io                    # Container registry
-IMAGE_NAME: ${{ github.repository }} # image owner/repo-name
+IMAGE_NAME: bassemzohdy/generic-agent-adk # lower-case owner/repo for GHCR
 ```
 
 ## GitHub Permissions
@@ -163,7 +165,7 @@ re-runs `build`/`promote-image`.
 **Tests fail** — reproduce locally: `uv run pytest tests/ -v --tb=short`.
 
 **Coverage below threshold** — reproduce locally:
-`uv run pytest --cov=basic_agent --cov-report=term-missing --cov-fail-under=85`,
+`uv run pytest --cov=basic_agent --cov-report=term-missing --cov-fail-under=90`,
 then add tests for the reported missing lines.
 
 **Docker build fails** — check `Dockerfile` and dependency changes; reproduce
@@ -196,5 +198,6 @@ git push origin v1.0.0
 ```
 
 This runs the full pipeline; once Verify Staged Image passes, Promote
-Verified Image attaches `v1.0.0`, `1.0`, and `latest` to the verified digest.
-Confirm with `docker pull ghcr.io/<owner>/adk:v1.0.0`.
+Verified Image attaches `v1.0.0` and `1.0` to the verified digest. The
+`latest` tag remains on the most recent verified `main` build.
+Confirm with `docker pull ghcr.io/bassemzohdy/generic-agent-adk:v1.0.0`.

@@ -31,7 +31,7 @@ from ..autoconfig import ProviderConfigurationError
 
 logger = logging.getLogger(__name__)
 
-#: Optional GCP-managed sandbox resource identifiers (TODO P7). Probes key
+#: Optional GCP-managed sandbox resource identifiers (ADR-004 P7). Probes key
 #: on these fields ONLY — never on ``GCP_PROJECT``/``GOOGLE_CLOUD_PROJECT``
 #: alone, which already drive application integration and must not
 #: incidentally activate a code-execution strategy.
@@ -60,10 +60,10 @@ CE_FIELD_ENV_MAP: tuple[tuple[str, str], ...] = (
 #: Optional Docker daemon endpoint; falls back to ``DOCKER_HOST``.
 DOCKER_HOST_ENV = "AGENT_CODE_EXECUTION_DOCKER_HOST"
 
-#: Optional sandbox image override (TODO Appendix B).
+#: Optional sandbox image override (ADR-004 Appendix B).
 DOCKER_IMAGE_ENV = "AGENT_CODE_EXECUTION_DOCKER_IMAGE"
 
-#: Default sandbox image. ADK publishes none (TODO Appendix B): official
+#: Default sandbox image. ADK publishes none (ADR-004 Appendix B): official
 #: python images are maintained, scanned, and verified to run under the
 #: full hardened constraint set (read-only rootfs + tmpfs + no caps).
 DEFAULT_SANDBOX_IMAGE = "python:3.13-slim"
@@ -199,7 +199,7 @@ def resolve_code_executor(
     return CodeExecutionResolution(None, UNAVAILABLE, "no provider probe succeeded")
 
 
-# ── GCP-managed strategies (TODO P7) ─────────────────────────────────────────
+# ── GCP-managed strategies (ADR-004 P7) ───────────────────────────────────────
 #
 # Probes are identifier-presence only — no live probing, same rule as
 # autoconfig.py's other cloud providers. Auto-detect order puts these ahead
@@ -503,7 +503,7 @@ class DockerContainerCodeExecutionProvider(_CodeExecutionProviderSpec):
         )
 
 
-# ── gemini_built_in strategy (TODO P3) ───────────────────────────────────────
+# ── gemini_built_in strategy (ADR-004 P3) ─────────────────────────────────────
 
 
 class GeminiBuiltInCodeExecutionProvider(_CodeExecutionProviderSpec):
@@ -542,7 +542,7 @@ class GeminiBuiltInCodeExecutionProvider(_CodeExecutionProviderSpec):
         return BuiltInCodeExecutor()
 
 
-# ── unsafe_local strategy (TODO P4) ──────────────────────────────────────────
+# ── unsafe_local strategy (ADR-004 P4) ────────────────────────────────────────
 
 
 class UnsafeLocalCodeExecutionProvider(_CodeExecutionProviderSpec):

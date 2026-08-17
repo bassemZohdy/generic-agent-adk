@@ -33,7 +33,7 @@ The workflow automatically generates multiple tags:
 
 | Type | Condition | Examples |
 |------|-----------|----------|
-| Branch | Push to branch | `main`, `develop` |
+| Branch | Push to a configured workflow branch | `main` |
 | Semantic Version | Push version tag | `v1.0.0`, `v1.2.0` |
 | Major.Minor | Version tag | `v1.0`, `v1.2` |
 | Commit SHA | All pushes | `main-abc123def456` |
@@ -48,7 +48,7 @@ The workflow automatically generates multiple tags:
 ### 2. Test Job
 - Runs pytest across Python 3.10, 3.11, 3.12, 3.13
 - `pip-audit --strict` against locked dependencies
-- Enforces the coverage gate (`COVERAGE_THRESHOLD`, currently 85%)
+- Enforces the coverage gate (`COVERAGE_THRESHOLD`, currently 90%)
 
 ### 3. Build Job
 - Sets up Docker Buildx
@@ -64,8 +64,9 @@ The workflow automatically generates multiple tags:
 - Pulls the staging tag from GHCR
 - Runs `scripts/verify-image-dependencies.sh` (confirms installed packages
   match `uv.lock` exactly)
-- Scans the staging tag with Trivy (`HIGH,CRITICAL`, fails the build on any
-  unfixed match — this is a hard gate, not informational)
+- Scans the staging tag with Trivy (`HIGH,CRITICAL`, ignores unfixed findings
+  and fails the build on fixed findings — this is a hard gate, not
+  informational)
 - Runs a startup smoke test for two use cases
 
 ### 5. Promote Verified Image Job (non-PR only)
@@ -141,7 +142,9 @@ This triggers:
 4. Promote Verified Image to attach the release tags, only once verified:
    - `ghcr.io/bassemzohdy/generic-agent-adk:v1.0.0`
    - `ghcr.io/bassemzohdy/generic-agent-adk:1.0`
-   - `ghcr.io/bassemzohdy/generic-agent-adk:latest`
+
+The `latest` tag is updated only by a verified push to the default `main`
+branch; version-tag pushes do not move it.
 
 ## Monitoring
 

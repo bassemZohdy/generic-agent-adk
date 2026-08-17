@@ -322,5 +322,5 @@ networks:
   # Dedicated network for Docker-API access from the agent. EXEC=1 on the
   # proxy permits exec against EVERY container on the daemon; network
   # isolation is the only boundary that scopes it to this proxy's callers —
-  # only adk-api is attached here (TODO P11 security review).
+  # only adk-api is attached here (verified in ADR-004).
   code-exec: {}

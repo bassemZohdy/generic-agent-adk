@@ -87,4 +87,10 @@ Follow-up cleanup after a codebase review:
 
 ## Verification
 
-`uv run pytest` (169 tests); docker smoke matrix per `TODO.md` Phase 8 (no-config default, mounted YAML, env-only, alias back-compat, env-over-YAML merge, hook behavior, custom module).
+At acceptance, `uv run pytest` reported 169 tests, with the Docker smoke
+matrix covering the no-config default, mounted YAML, env-only configuration,
+environment-over-YAML merging, hooks, and custom modules. Those counts are a
+historical snapshot; the current tree is verified by the CI workflow.
+
+Current snapshot (2026-08-17): `uv run pytest tests/` reports 311 passing tests
+and 96% coverage.

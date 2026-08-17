@@ -1,4 +1,4 @@
-"""Tests for code-execution provider resolution (ADR-004, TODO P1)."""
+"""Tests for code-execution provider resolution (ADR-004 P1)."""
 
 from __future__ import annotations
 

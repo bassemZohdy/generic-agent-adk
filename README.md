@@ -65,12 +65,12 @@ docker run -e AGENT_USE_CASE=pipeline \
 
 ## Choose and configure your AI model
 
-Gemini uses ADK's native model integration. Other providers are resolved
-through ADK's `LiteLlm` connector, which delegates authentication and
-provider-specific routing to LiteLLM. Use a provider-prefixed model name:
-`provider/model`.
+Gemini uses ADK's native model integration. To use LiteLLM as the model
+provider, set `model.provider` to `litellm` in YAML and put LiteLLM's
+underlying provider/model string in `model.name`. For environment-only
+configuration, put that same `provider/model` string in `ADK_MODEL`.
 
-| Provider | `ADK_MODEL` format | Typical environment variables |
+| Underlying provider | LiteLLM model string | Typical environment variables |
 |---|---|---|
 | OpenAI | `openai/<model>` | `OPENAI_API_KEY` |
 | Anthropic | `anthropic/<model>` | `ANTHROPIC_API_KEY` |
@@ -103,26 +103,27 @@ docker run \
   -e OPENROUTER_API_KEY=...
 ```
 
-For a YAML configuration, `model.provider`, `model.name`, `model.api_key`,
-and `model.base_url` are supported. `api_key` and `base_url` are forwarded to
-LiteLLM; keep secrets in environment variables rather than committing them.
+For a YAML configuration, set `model.provider: litellm`. The
+`model.name`, `model.api_key`, and `model.base_url` values are passed to
+LiteLLM. Keep secrets in environment variables rather than committing them.
 
 ```yaml
 agent:
   use_case: assistant
 
 model:
-  provider: openai
-  name: gpt-4o
+  provider: litellm
+  name: openai/gpt-4o
   api_key: "${OPENAI_API_KEY}"
   # Useful for an OpenAI-compatible gateway or self-hosted endpoint.
   base_url: "${OPENAI_API_BASE:https://api.openai.com/v1}"
 ```
 
-When `model.name` already contains `/`, its provider prefix takes precedence
-over `model.provider`. With environment-only configuration, set `ADK_MODEL`
-to the complete `provider/model` value; the provider's standard LiteLLM
-environment variables are then used automatically. See the [ADK LiteLLM
+When using LiteLLM, keep the underlying provider prefix in `model.name` (for
+example, `openai/gpt-4o`); `name: gpt-4o` with `provider: litellm` would resolve
+to the invalid `litellm/gpt-4o` route. With environment-only configuration,
+set `ADK_MODEL` to the complete `provider/model` value; the provider's
+standard LiteLLM environment variables are then used automatically. See the [ADK LiteLLM
 guide](https://adk.dev/agents/models/litellm/) and [LiteLLM provider
 catalog](https://docs.litellm.ai/docs/providers) for provider-specific model
 names and credentials.

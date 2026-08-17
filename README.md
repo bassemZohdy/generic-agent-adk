@@ -63,9 +63,24 @@ docker run -e AGENT_USE_CASE=pipeline \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
-## Choose your AI model
+## Choose and configure your AI model
 
-Works with any AI provider:
+Gemini uses ADK's native model integration. To use LiteLLM as the model
+provider, set `model.provider` to `litellm` in YAML and put LiteLLM's
+underlying provider/model string in `model.name`. For environment-only
+configuration, put that same `provider/model` string in `ADK_MODEL`.
+
+| Underlying provider | LiteLLM model string | Typical environment variables |
+|---|---|---|
+| OpenAI | `openai/<model>` | `OPENAI_API_KEY` |
+| Anthropic | `anthropic/<model>` | `ANTHROPIC_API_KEY` |
+| DeepSeek | `deepseek/<model>` | `DEEPSEEK_API_KEY` |
+| Groq | `groq/<model>` | `GROQ_API_KEY` |
+| Mistral | `mistral/<model>` | `MISTRAL_API_KEY` |
+| Ollama | `ollama/<model>` | `OLLAMA_API_BASE` |
+| OpenRouter | `openrouter/<provider>/<model>` | `OPENROUTER_API_KEY` |
+
+Examples:
 
 ```bash
 # OpenAI
@@ -74,12 +89,44 @@ docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=...
 # Anthropic
 docker run -e ADK_MODEL=anthropic/claude-sonnet-5 -e ANTHROPIC_API_KEY=...
 
-# Google Gemini
-docker run -e GOOGLE_API_KEY=...
+# DeepSeek
+docker run -e ADK_MODEL=deepseek/<model-name> -e DEEPSEEK_API_KEY=...
 
 # Local with Ollama
-docker run -e ADK_MODEL=ollama/llama3 -e OLLAMA_API_BASE=http://host.docker.internal:11434
+docker run \
+  -e ADK_MODEL=ollama/<model-name> \
+  -e OLLAMA_API_BASE=http://host.docker.internal:11434
+
+# OpenRouter
+docker run \
+  -e ADK_MODEL=openrouter/<provider>/<model-name> \
+  -e OPENROUTER_API_KEY=...
 ```
+
+For a YAML configuration, set `model.provider: litellm`. The
+`model.name`, `model.api_key`, and `model.base_url` values are passed to
+LiteLLM. Keep secrets in environment variables rather than committing them.
+
+```yaml
+agent:
+  use_case: assistant
+
+model:
+  provider: litellm
+  name: openai/gpt-4o
+  api_key: "${OPENAI_API_KEY}"
+  # Useful for an OpenAI-compatible gateway or self-hosted endpoint.
+  base_url: "${OPENAI_API_BASE:https://api.openai.com/v1}"
+```
+
+When using LiteLLM, keep the underlying provider prefix in `model.name` (for
+example, `openai/gpt-4o`); `name: gpt-4o` with `provider: litellm` would resolve
+to the invalid `litellm/gpt-4o` route. With environment-only configuration,
+set `ADK_MODEL` to the complete `provider/model` value; the provider's
+standard LiteLLM environment variables are then used automatically. See the [ADK LiteLLM
+guide](https://adk.dev/agents/models/litellm/) and [LiteLLM provider
+catalog](https://docs.litellm.ai/docs/providers) for provider-specific model
+names and credentials.
 
 ## Give your agent tools
 

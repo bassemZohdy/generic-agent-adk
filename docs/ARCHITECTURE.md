@@ -51,7 +51,7 @@ Google ADK agent tree
 | `tools.py` | Tool building factories (`build_tool`, MCP/OpenAPI/Skill/ApplicationIntegration toolsets) and the before/after-tool audit callbacks. |
 | `knowledge.py` | Knowledge file caching and `retrieve_knowledge` tool function. |
 | `util.py` | Import-cycle-free shared utilities: `is_production()`, `split_csv()`. Zero imports from the rest of the package. |
-| `models.py` | `resolve_model()`: bare string → native Gemini; `provider/model` prefix → `LiteLlm` instance. |
+| `models.py` | `resolve_model()`: bare string → native Gemini; `provider: litellm` with a `provider/model` name (or a provider-prefixed name) → ADK's `LiteLlm` instance. |
 | `autoconfig.py` | Ambient capability discovery (`discover_capabilities()`). Source of `ProviderConfigurationError`. |
 | `strategies/` | Internal composition layer. `base.py` defines `RuntimeContext`; one builder file per composition pattern; `registry.py` maps strategy keys to builders. |
 | `use_cases/` | Public catalog. One class per use case binding metadata + a strategy; `base.py` provides `BaseUseCaseAgent` with runtime hooks wired as ADK callbacks. |

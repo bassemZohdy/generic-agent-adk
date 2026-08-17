@@ -33,3 +33,42 @@ facts appendices that used to live here moved into
 
 Completed work is recorded in [CHANGELOG.md](CHANGELOG.md). Design
 decisions are recorded as ADRs in [docs/](docs/).
+
+---
+
+## Open items — 2026-08-17
+
+Verified against the current tree after the docs/CMD/CVE fix series. The
+2026-08-15 security-and-correctness hardening landed in full (identity
+binding, fail-closed auth, realm dev/prod split, locked non-root builds,
+constant-time service keys, JWKS caching, WS hardening, prompt-injection
+framing, rate limits, tool audit callbacks, `execution.steps`/`workers`
+wiring, custom-module allowlisting) — none of that is still open. What
+remains:
+
+- [ ] **O1 — ADK Workflow migration** (blocked on upstream; [ADR-003](docs/ADR-003-adk-workflow-migration.md)).
+  `strategies/` still builds on the deprecated `SequentialAgent`,
+  `ParallelAgent`, and `LoopAgent` (used in `sequential.py`,
+  `parallel.py`, `loop.py`, `evaluator_optimizer.py`, `planner_executor.py`,
+  `human_in_loop.py`). ADR-003's gate requires upstream `google.adk` to let
+  a `Workflow` act as an `LlmAgent` sub-agent before the swap is possible.
+  When the gate is met:
+  1. Prototype the four shapes (`sequential`, `parallel`, `loop`,
+     `human-in-loop`) behind a strategy-local feature flag.
+  2. Run the eight-use-case + example-YAML compatibility matrix with zero
+     deprecation warnings.
+  3. Keep the legacy path as rollback for one release, then remove it and
+     drop the `"ignore:.*is deprecated in favor of Workflow.*"` line from
+     `pyproject.toml`'s `filterwarnings`.
+- [ ] **O2 — Remove stale `TODO P11 security review` comment** in
+  `docker-compose.yml` (code-exec network block, ~line 325). P11 is
+  complete; the comment is a leftover marker, not an open task.
+- [ ] **O3 — Pin `k8s_agent_sandbox` if adopting `gke` sandbox mode**
+  (`pyproject.toml` `gke` extra comment, lines 24–26). The PyPI name/version
+  is unverified; executor_type="sandbox" imports it, job mode does not.
+  Verify and pin before enabling sandbox mode.
+- [ ] **O4 — Re-verify pinned warnings/duties on each `google-adk` upgrade**:
+  the `BaseAgentConfig` and `plugins=` deprecation filters in `pyproject.toml`
+  (aimed at ADK's own callers), the Workflow-gate status in ADR-003, and the
+  verified-internals appendices in ADR-004 A/B (sandbox-image decision,
+  docker-py kwargs, socket-proxy ACL semantics).

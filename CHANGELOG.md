@@ -2,6 +2,44 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-17 — Docs accuracy pass + broken default CMD fix
+
+- **Fixed broken image CMD**: `Dockerfile` still launched
+  `basic_agent.api_server:app`, a module removed by the source
+  reorganization — every plain `docker run` of the image (the README
+  quick start) crashed at startup. Now targets
+  `basic_agent.interfaces.rest:app` (what compose already used).
+- **CI gap closed**: the image smoke tests overrode the container
+  command (`python -c …`), so the dead CMD module passed CI. Both
+  startup-test steps (PR and verify-image) now additionally boot the
+  container with its **default CMD** and poll `/docs` to 200.
+- README corrections:
+  - Quick start and all "Common configurations" examples passed
+    `OPENAI_API_KEY` without `ADK_MODEL` — the default Gemini model
+    needs `GOOGLE_API_KEY`, so every example failed as written.
+    Added `-e ADK_MODEL=openai/gpt-4o` throughout.
+  - Auth section: `DEMO_MODE=true` was documented as a plain
+    `docker run` switch; it only selects the dev Keycloak realm under
+    Docker Compose. Rewritten (plain run → `AUTH_DISABLED=true`;
+    compose → `DEMO_MODE` demo/demo; production realm by default).
+  - Compose section: now states the required `KEYCLOAK_ADMIN_PASSWORD`
+    / `GRAFANA_ADMIN_PASSWORD` env vars, the bearer-token step for
+    `:8002` (forward-auth), and the previously undocumented `demo`
+    profile backing the `mcp`/`openapi` tools.
+  - Tools list completed (was 5 of 10): added `mcp`, `openapi`,
+    `runtime`, `structured_output`, `application_integration` and the
+    default tool set.
+  - Stale `anthropic/claude-sonnet-4-5` example (regressed in the
+    end-user rewrite) back to `claude-sonnet-5`; same fix in
+    `.env.example`.
+  - Developers section: `pre-commit install` step and the uvicorn
+    command matching compose; troubleshooting rows for model/key
+    mismatch, `503` auth, and required compose passwords.
+- `docs/ARCHITECTURE.md`: `Settings` module reference corrected to
+  `config/settings.py`.
+- `.github/PUBLISHING.md`: 23 placeholder `ghcr.io/your-org/adk`
+  image references replaced with the real image name.
+
 ## 2026-08-16 — Source folder reorganization
 
 - `src/basic_agent/` reorganized from 17 root-level files into 4 focused

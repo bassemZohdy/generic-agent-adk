@@ -23,12 +23,13 @@ All powered by Google's ADK (Agent Development Kit) with support for any AI mode
 ## Quick start (30 seconds)
 
 ```bash
-# 1. Set your API key
+# 1. Set your API key and model (they must match)
 export OPENAI_API_KEY=your-key
 
 # 2. Run the agent
 docker run -p 8002:8002 \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  -e ADK_MODEL=openai/gpt-4o \
   -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 
@@ -36,6 +37,8 @@ docker run -p 8002:8002 \
 ```
 
 That's it! The agent runs as a REST API you can call from any application.
+
+> **Model ↔ key must match**: without `ADK_MODEL`, the agent defaults to Gemini and needs `GOOGLE_API_KEY` instead.
 
 ## Choose what your agent does
 
@@ -54,6 +57,7 @@ Set `AGENT_USE_CASE` to pick a behavior:
 
 ```bash
 docker run -e AGENT_USE_CASE=pipeline \
+  -e ADK_MODEL=openai/gpt-4o \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
   -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
@@ -68,7 +72,7 @@ Works with any AI provider:
 docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=...
 
 # Anthropic
-docker run -e ADK_MODEL=anthropic/claude-sonnet-4-5 -e ANTHROPIC_API_KEY=...
+docker run -e ADK_MODEL=anthropic/claude-sonnet-5 -e ANTHROPIC_API_KEY=...
 
 # Google Gemini
 docker run -e GOOGLE_API_KEY=...
@@ -83,46 +87,66 @@ Add tools to make your agent more capable:
 
 ```bash
 docker run -e AGENT_TOOLS=knowledge,search,code_execution \
+  -e ADK_MODEL=openai/gpt-4o \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
   -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
-Available tools:
-- `knowledge` — search your documents
+Available tools (default: `knowledge,search,mcp,openapi,approval,runtime,structured_output`):
+- `knowledge` — search your documents (`AGENT_KNOWLEDGE_FILE`, JSON)
 - `search` — web search
-- `code_execution` — run Python code safely in a sandbox
+- `code_execution` — run Python in a sandbox (auto-detected; see [ADR-004](./docs/ADR-004-pluggable-code-execution.md))
 - `approval` — ask for human approval before actions
-- `skills` — load specialized capabilities from folders
+- `skills` — load SKILL.md capability folders (`AGENT_SKILLS_DIR`)
+- `mcp` — call tools via Model Context Protocol
+- `openapi` — call an OpenAPI-described service (`AGENT_OPENAPI_URL`)
+- `runtime` — let the agent inspect its own configuration
+- `structured_output` — return responses in a fixed JSON schema
+- `application_integration` — trigger GCP Application Integrations
 
-## Run with Docker Compose (production)
+`mcp` and `openapi` need a reachable backend — run the bundled example with the compose `demo` profile (`docker compose --profile demo up`).
 
-For a full setup with authentication, monitoring, and more:
+## Run with Docker Compose (full stack)
+
+For a setup with authentication, monitoring, and more:
 
 ```bash
 # 1. Clone and configure
 git clone https://github.com/bassemZohdy/generic-agent-adk.git
 cd generic-agent-adk
 cp .env.example .env
-# Edit .env with your API keys
+# Required: set KEYCLOAK_ADMIN_PASSWORD and a model API key
+# (GRAFANA_ADMIN_PASSWORD too if you use the observability profile)
 
-# 2. Start everything
-docker compose up --build
+# 2. For local evaluation, enable the demo user (demo/demo)
+echo "DEMO_MODE=true" >> .env
 
-# 3. Open http://localhost:8002/docs
+# 3. Start everything
+docker compose up --build -d
+
+# 4. Get a token and call the API
+curl -s -X POST http://localhost:8080/realms/basic-agent/protocol/openid-connect/token \
+  -d client_id=basic-agent -d username=demo -d password=demo -d grant_type=password \
+  | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])"
 ```
+
+The API at `http://localhost:8002` requires that token (`Authorization: Bearer …`) — every request passes through Keycloak verification. Without `DEMO_MODE=true`, the production realm is imported (no demo user, no direct password grants) — bring your own users.
 
 Add features with profiles:
 
 ```bash
-# Add live WebSocket support
+# Add live WebSocket support (port 8003)
 docker compose --profile live up --build
 
-# Add monitoring dashboards
+# Add monitoring dashboards (Grafana on localhost:3000)
 docker compose --profile observability up --build
 
-# Add code execution sandbox
+# Add the code execution sandbox
 docker compose --profile code-exec up --build
+
+# Add the demo service API (port 8001) backing the mcp/openapi tools
+docker compose --profile demo up --build
 ```
 
 ## Configure with YAML (advanced)
@@ -158,44 +182,44 @@ docker run \
 
 ## Authentication
 
-By default, the agent requires authentication. For local development:
+A plain `docker run` has no identity provider attached, so for local testing disable auth:
 
 ```bash
-# Disable auth for local testing
 docker run -e AUTH_DISABLED=true ...
-
-# Or use the demo credentials
-docker run -e DEMO_MODE=true ...
-# Login with: demo / demo
 ```
 
-For production, set up Keycloak or your own identity provider.
+With Docker Compose, a Keycloak service is included:
+
+- `DEMO_MODE=true` imports the dev realm with a `demo` / `demo` user — local evaluation only (compose refuses it in production-like `DEPLOYMENT_ENV`s).
+- Default is the production realm: no demo user, no direct password grants, brute-force protection on.
+
+For production, use Keycloak or your own OIDC provider — the API fails closed if `KEYCLOAK_ISSUER` is unset (`503`), and identity is bound to the token subject on every request.
 
 ## Common configurations
 
 ### Simple Q&A agent
 ```bash
-docker run -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 ### Agent with web search
 ```bash
-docker run -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
   -e AGENT_TOOLS=knowledge,search \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 ### Agent that writes and runs code
 ```bash
-docker run -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
   -e AGENT_TOOLS=knowledge,search,code_execution \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 ### Multi-step workflow
 ```bash
-docker run -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
   -e AGENT_USE_CASE=pipeline \
   -e AGENT_INSTRUCTION="First research the topic, then write a summary, then review it." \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
@@ -212,7 +236,9 @@ docker run -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
 
 | Problem | Solution |
 |---|---|
-| Agent doesn't start | Check your API key is set correctly |
+| Agent doesn't start | Model and API key must match: `ADK_MODEL=openai/…` needs `OPENAI_API_KEY`, no prefix needs `GOOGLE_API_KEY` |
+| `503` from the API | Auth not configured — set `KEYCLOAK_ISSUER` or explicitly `AUTH_DISABLED=true` |
+| Compose won't start | `KEYCLOAK_ADMIN_PASSWORD` (and `GRAFANA_ADMIN_PASSWORD` with observability) must be set in `.env` |
 | Wrong behavior | Check the startup log for which config was loaded |
 | Keycloak won't start | Make sure port 8080 is free |
 | Import errors | Run `uv sync --upgrade` |
@@ -225,8 +251,12 @@ git clone https://github.com/bassemZohdy/generic-agent-adk.git
 cd generic-agent-adk
 uv sync
 cp .env.example .env
+uv run pre-commit install   # gitleaks secret scan
 
-# Run locally
+# Run locally (same server compose uses)
+uv run uvicorn basic_agent.interfaces.rest:app --port 8002
+
+# Or via the ADK CLI
 uv run adk api_server src/basic_agent
 
 # Run tests

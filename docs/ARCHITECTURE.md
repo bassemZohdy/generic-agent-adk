@@ -76,7 +76,7 @@ No YAML present → env-only configuration (`load_config_from_env`), which
 produces the same `AgentConfig` shape so downstream code never branches on
 config source.
 
-`Settings` (config.py) is deliberately a separate, import-time snapshot:
+`Settings` (`config/settings.py`) is deliberately a separate, import-time snapshot:
 it answers "how is this *process* configured" (ports, limits, feature
 flags), while `AgentConfig` answers "what agent is this" (use case, model,
 tools, roles). Things that must react to a fresh environment — like the

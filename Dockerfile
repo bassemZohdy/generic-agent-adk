@@ -40,4 +40,4 @@ USER appuser
 
 EXPOSE 8002
 
-CMD ["sh", "-c", "uvicorn basic_agent.api_server:app --host 0.0.0.0 --port ${PORT:-8002} --limit-concurrency 100"]
+CMD ["sh", "-c", "uvicorn basic_agent.interfaces.rest:app --host 0.0.0.0 --port ${PORT:-8002} --limit-concurrency 100"]

@@ -21,10 +21,10 @@ ghcr.io/<owner>/<repository>:<tag>
 
 Example:
 ```
-ghcr.io/your-org/adk:main
-ghcr.io/your-org/adk:latest
-ghcr.io/your-org/adk:v1.0.0
-ghcr.io/your-org/adk:main-abc123def456
+ghcr.io/bassemzohdy/generic-agent-adk:main
+ghcr.io/bassemzohdy/generic-agent-adk:latest
+ghcr.io/bassemzohdy/generic-agent-adk:v1.0.0
+ghcr.io/bassemzohdy/generic-agent-adk:main-abc123def456
 ```
 
 ### 3. Tagging Strategy
@@ -81,17 +81,17 @@ The workflow automatically generates multiple tags:
 
 ```bash
 # Latest build from main
-docker pull ghcr.io/your-org/adk:latest
+docker pull ghcr.io/bassemzohdy/generic-agent-adk:latest
 
 # Specific version
-docker pull ghcr.io/your-org/adk:v1.0.0
+docker pull ghcr.io/bassemzohdy/generic-agent-adk:v1.0.0
 
 # Branch-specific build
-docker pull ghcr.io/your-org/adk:main
-docker pull ghcr.io/your-org/adk:develop
+docker pull ghcr.io/bassemzohdy/generic-agent-adk:main
+docker pull ghcr.io/bassemzohdy/generic-agent-adk:develop
 
 # Commit-specific build
-docker pull ghcr.io/your-org/adk:main-abc123def456
+docker pull ghcr.io/bassemzohdy/generic-agent-adk:main-abc123def456
 ```
 
 ### Running Published Image
@@ -100,7 +100,7 @@ docker pull ghcr.io/your-org/adk:main-abc123def456
 docker run -it \
   -v ./examples/assistant.yaml:/app/config/agent.yaml \
   -e GOOGLE_API_KEY=your-api-key \
-  ghcr.io/your-org/adk:latest
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 ## Authentication
@@ -114,7 +114,7 @@ If your repository is private, you need to authenticate:
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
 # Pull image
-docker pull ghcr.io/your-org/adk:latest
+docker pull ghcr.io/bassemzohdy/generic-agent-adk:latest
 
 # Log out
 docker logout ghcr.io
@@ -139,9 +139,9 @@ This triggers:
 2. Build job to create the staging-tagged image
 3. Verify Staged Image to scan and smoke-test it
 4. Promote Verified Image to attach the release tags, only once verified:
-   - `ghcr.io/your-org/adk:v1.0.0`
-   - `ghcr.io/your-org/adk:1.0`
-   - `ghcr.io/your-org/adk:latest`
+   - `ghcr.io/bassemzohdy/generic-agent-adk:v1.0.0`
+   - `ghcr.io/bassemzohdy/generic-agent-adk:1.0`
+   - `ghcr.io/bassemzohdy/generic-agent-adk:latest`
 
 ## Monitoring
 
@@ -153,7 +153,7 @@ In GitHub, go to:
 Or via CLI:
 ```bash
 # List available tags
-docker search ghcr.io/your-org/adk --no-trunc
+docker search ghcr.io/bassemzohdy/generic-agent-adk --no-trunc
 ```
 
 ### GitHub Actions Logs
@@ -216,10 +216,10 @@ To manually scan locally:
 
 ```bash
 # Using trivy
-trivy image ghcr.io/your-org/adk:latest
+trivy image ghcr.io/bassemzohdy/generic-agent-adk:latest
 
 # Using grype
-grype ghcr.io/your-org/adk:latest
+grype ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 ## Examples
@@ -227,19 +227,19 @@ grype ghcr.io/your-org/adk:latest
 ### Deploy Latest Main Build
 
 ```bash
-docker pull ghcr.io/your-org/adk:latest
+docker pull ghcr.io/bassemzohdy/generic-agent-adk:latest
 docker run -d \
   -p 8002:8002 \
   -v ./examples/assistant.yaml:/app/config/agent.yaml \
   -e GOOGLE_API_KEY=your-api-key \
-  ghcr.io/your-org/adk:latest
+  ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 ### Deploy Specific Version
 
 ```bash
-docker pull ghcr.io/your-org/adk:v1.0.0
-docker tag ghcr.io/your-org/adk:v1.0.0 my-adk:production
+docker pull ghcr.io/bassemzohdy/generic-agent-adk:v1.0.0
+docker tag ghcr.io/bassemzohdy/generic-agent-adk:v1.0.0 my-adk:production
 docker run -d \
   -p 8002:8002 \
   -v ./examples/assistant.yaml:/app/config/agent.yaml \
@@ -253,7 +253,7 @@ docker run -d \
 version: '3.8'
 services:
   adk-runtime:
-    image: ghcr.io/your-org/adk:latest
+    image: ghcr.io/bassemzohdy/generic-agent-adk:latest
     ports:
       - "8002:8002"
     environment:

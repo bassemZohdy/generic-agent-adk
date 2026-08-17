@@ -256,6 +256,14 @@ jobs:
           docker run --rm -e GOOGLE_API_KEY=ci-smoke \
             -v "$GITHUB_WORKSPACE/examples/approval-gate.yaml:/app/config/agent.yaml:ro" "${{ steps.tag.outputs.value }}" \
             python -c "from basic_agent.agent import root_agent; assert type(root_agent).__name__ == 'SequentialAgent', type(root_agent).__name__; print('image config OK: approval_gate -> SequentialAgent')"
+          cid=$(docker run -d --rm -p 18002:8002 -e GOOGLE_API_KEY=ci-smoke -e AUTH_DISABLED=true "${{ steps.tag.outputs.value }}")
+          trap 'docker rm -f $cid >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:18002/docs >/dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -fsS http://localhost:18002/docs >/dev/null && echo "default CMD serves /docs OK"
+          docker rm -f "$cid" >/dev/null
 
   verify-image:
     name: Verify Staged Image
@@ -299,6 +307,14 @@ jobs:
           docker run --rm -e GOOGLE_API_KEY=ci-smoke \
             -v "$GITHUB_WORKSPACE/examples/approval-gate.yaml:/app/config/agent.yaml:ro" "${{ needs.build.outputs.image-tag }}" \
             python -c "from basic_agent.agent import root_agent; assert type(root_agent).__name__ == 'SequentialAgent', type(root_agent).__name__; print('image config OK: approval_gate -> SequentialAgent')"
+          cid=$(docker run -d --rm -p 18002:8002 -e GOOGLE_API_KEY=ci-smoke -e AUTH_DISABLED=true "${{ needs.build.outputs.image-tag }}")
+          trap 'docker rm -f $cid >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:18002/docs >/dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -fsS http://localhost:18002/docs >/dev/null && echo "default CMD serves /docs OK"
+          docker rm -f "$cid" >/dev/null
 
   promote-image:
     name: Promote Verified Image

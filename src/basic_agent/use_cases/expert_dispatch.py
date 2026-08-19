@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from .base import BaseUseCaseAgent
+from typing import ClassVar
+
 from ..strategies import RouterStrategy
+from .base import BaseUseCaseAgent
 
 
 class ExpertDispatchAgent(BaseUseCaseAgent):
@@ -13,5 +15,5 @@ class ExpertDispatchAgent(BaseUseCaseAgent):
     title = "Expert Dispatch"
     when_to_use = "You want each incoming question routed to the right specialist out of a fixed roster."
     aliases = ()
-    defaults = {"specialists": ("research", "solution", "risk")}
+    defaults: ClassVar[dict] = {"specialists": ("research", "solution", "risk")}
     strategy = RouterStrategy()

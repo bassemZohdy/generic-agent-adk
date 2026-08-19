@@ -9,7 +9,12 @@ spec:
         run.googleapis.com/execution-environment: gen2
         run.googleapis.com/ingress: internal-and-cloud-load-balancing
         run.googleapis.com/invoker-iam-disabled: "false"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
     spec:
+      serviceAccountName: basic-adk-runtime@PROJECT_ID.iam.gserviceaccount.com
+      containerConcurrency: 40
+      timeoutSeconds: 300
       containers:
         - image: REGION-docker.pkg.dev/PROJECT_ID/REPOSITORY/basic-adk-agent:TAG
           ports:
@@ -31,11 +36,35 @@ spec:
               value: agent-user
             - name: ADK_MODEL
               value: gemini-3.6-flash
+            # Required for multi-instance session consistency. Create this
+            # secret and grant the runtime service account access before deploy.
+            - name: ADK_SESSION_SERVICE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: adk-session-database-uri
+                  key: latest
+            - name: STORAGE_BUCKET
+              value: PROJECT_ID-adk-artifacts
             - name: GOOGLE_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: google-api-key
                   key: latest
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             limits:
               cpu: "1"

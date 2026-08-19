@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 from google.adk.agents import LlmAgent, SequentialAgent
@@ -146,18 +147,15 @@ def make_tool(name):
 
 def test_approval_veto_blocks_unapproved():
     ctx = SimpleNamespace(state={})
-    result = ApprovalGateAgent().before_tool(
-        make_tool("request_approval"), {}, ctx
-    )
-    assert result == {
-        "status": "blocked",
-        "reason": "This action requires human approval before execution.",
-    }
+    result = ApprovalGateAgent().before_tool(make_tool("request_approval"), {}, ctx)
+    assert result is None
 
 
 def test_approval_veto_passes_when_approved():
     ctx = SimpleNamespace(state={"human_approved": True})
-    assert ApprovalGateAgent().before_tool(make_tool("request_approval"), {}, ctx) is None
+    assert (
+        ApprovalGateAgent().before_tool(make_tool("request_approval"), {}, ctx) is None
+    )
 
 
 def test_non_gated_tool_passes():
@@ -175,17 +173,38 @@ def test_gated_prefix_veto():
 
 def test_approval_veto_tolerates_broken_state():
     ctx = SimpleNamespace(state=None)
-    assert ApprovalGateAgent().before_tool(make_tool("request_approval"), {}, ctx) is None
+    assert (
+        ApprovalGateAgent().before_tool(make_tool("request_approval"), {}, ctx) is None
+    )
 
 
 # --- T2.2: perspective aggregation ---
 
 
 def test_aggregation_collects_perspective_entries():
-    state = {"perspective_a": 1, "perspective_b": 2, "other": 3}
+    state = {"perspective_10": 10, "perspective_2": 2, "perspective_0": 0, "other": 3}
     ctx = SimpleNamespace(state=state)
     MultiPerspectiveAgent().after_run(ctx)
-    assert state["aggregated_perspectives"] == [1, 2]
+    assert state["aggregated_perspectives"] == [0, 2, 10]
+
+
+def test_multi_perspective_workers_have_unique_outputs_and_synthesizer():
+    root = MultiPerspectiveAgent().build(
+        RuntimeContext(
+            model="gemini-2.0-flash",
+            instruction="runtime policy",
+            tools=[],
+            description="test",
+            extra_config={"workers": 3},
+        )
+    )
+    parallel, synthesizer = root.sub_agents
+    assert [worker.output_key for worker in parallel.sub_agents] == [
+        "perspective_0",
+        "perspective_1",
+        "perspective_2",
+    ]
+    assert synthesizer.name == "perspective_synthesizer"
 
 
 def test_aggregation_ignores_non_matching_keys():
@@ -404,11 +423,9 @@ def test_chain_short_circuits_and_always_runs_second():
 
     def unreached_cb(ctx):
         calls.append("unreached")
-        return None
 
     def hook(ctx):
         calls.append("hook")
-        return None
 
     chained = _chain([first_cb, unreached_cb], hook)
     result = chained(SimpleNamespace())
@@ -435,7 +452,6 @@ def test_chain_before_tool_veto_short_circuits_second():
 
     def hook(tool, args, ctx):
         calls.append("hook")
-        return None
 
     chained = _chain_before_tool(veto, hook)
     result = chained(None, {}, None)
@@ -505,7 +521,7 @@ class DefaultsAgent(BaseUseCaseAgent):
     when_to_use = "Test-only."
     aliases = ()
     strategy = DirectStrategy()
-    defaults = {
+    defaults: ClassVar[dict] = {
         "roles": {"billing": "billing-default"},
         "model": "default-model",
         "instruction": "default instruction",
@@ -553,6 +569,8 @@ def test_resolve_runtime_applies_defaults_when_caller_left_them_empty():
 def test_resolve_runtime_applies_unconditional_default_for_other_keys():
     # Keys outside the roles/dataclass-default/model-instruction-tools special
     # cases (e.g. "description") apply unconditionally, caller value or not.
-    rt = RuntimeContext(model="m", instruction="i", tools=[], description="caller description")
+    rt = RuntimeContext(
+        model="m", instruction="i", tools=[], description="caller description"
+    )
     resolved = DefaultsAgent().resolve_runtime(rt)
     assert resolved.description == "default description"

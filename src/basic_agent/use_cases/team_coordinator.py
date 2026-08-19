@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .base import BaseUseCaseAgent
 from ..strategies import SupervisorStrategy
+from .base import BaseUseCaseAgent
 
 
 class TeamCoordinatorAgent(BaseUseCaseAgent):

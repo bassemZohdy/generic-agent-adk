@@ -95,11 +95,12 @@ Generic ADK Agent Runtime
 from .base import AgentStrategy, AgentStrategyContext
 from google.adk.agents import Agent
 
+
 class MyStrategy(AgentStrategy):
     @property
     def agent_type(self) -> str:
         return "MY_TYPE"
-    
+
     def build(self, context: AgentStrategyContext) -> Agent:
         # Construct and return agent
         return ...

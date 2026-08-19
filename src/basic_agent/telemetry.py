@@ -6,10 +6,10 @@ import os
 from typing import Any
 
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
 from .config.settings import settings
 
@@ -21,9 +21,7 @@ def configure_telemetry() -> trace.Tracer:
         provider = TracerProvider(
             resource=Resource.create(
                 {
-                    "service.name": os.getenv(
-                        "OTEL_SERVICE_NAME", "basic-adk-agent"
-                    ),
+                    "service.name": os.getenv("OTEL_SERVICE_NAME", "basic-adk-agent"),
                     "service.version": settings.app_version,
                 }
             )

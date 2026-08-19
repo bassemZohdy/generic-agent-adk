@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Callable
+from collections.abc import Callable
 
 
 class FakeExecResult:

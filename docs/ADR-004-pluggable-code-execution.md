@@ -17,7 +17,7 @@ Docker Compose sandbox integration.
 `_SILENT_TOOL_NAMES`); when enabled, `_build_runtime_context` currently does:
 
 ```python
-code_executor=BuiltInCodeExecutor() if "code_execution" in configured else None,
+code_executor = (BuiltInCodeExecutor() if "code_execution" in configured else None,)
 ```
 
 `BuiltInCodeExecutor` (`google.adk.code_executors`) does not execute
@@ -95,8 +95,7 @@ so the raising has to live one level up.
 ```python
 def resolve_code_executor(
     environment: Mapping[str, str], *, model: str | LiteLlm
-) -> CodeExecutionResolution:
-    ...
+) -> CodeExecutionResolution: ...
 ```
 
 1. **Explicit override** — `AGENT_CODE_EXECUTION_STRATEGY` (env) or

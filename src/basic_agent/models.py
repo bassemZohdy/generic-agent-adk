@@ -58,7 +58,7 @@ def resolve_model(
     provider: str = "google",
     api_key: str | None = None,
     base_url: str | None = None,
-) -> "str | LiteLlm":
+) -> str | LiteLlm:
     """Resolve a model name to a native Gemini string or a LiteLlm instance.
 
     Args:

@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 
 import pytest
+from fakes import FakeDockerClient, install_fake_docker
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
 
 from basic_agent import agent as agent_module
 from basic_agent.agent import resolve_agent_config
-from fakes import FakeDockerClient, install_fake_docker
 
 _CONFIG_ENV_VARS = (
     "AGENT_CONFIG_FILE",
@@ -140,24 +140,81 @@ tools:
     assert [s.name for s in skill_toolsets[0].skills] == ["demo-skill"]
 
 
+def test_explicit_empty_tools_do_not_fall_back_to_environment_defaults(monkeypatch):
+    config = _ce_config(tools=())
+    runtime = agent_module._build_runtime_context(config)
+
+    assert runtime.tools == []
+    assert json.loads(agent_module.inspect_runtime())["enabled_tools"] == []
+
+
+def test_unknown_configured_tool_fails_at_build_time():
+    with pytest.raises(ValueError, match="Unknown tool name"):
+        agent_module._build_runtime_context(_ce_config(tools=("typo_tool",)))
+
+
+def test_yaml_public_fields_wire_into_runtime(tmp_path, monkeypatch):
+    instructions_file = tmp_path / "role.md"
+    instructions_file.write_text("File operator instruction.", encoding="utf-8")
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text(
+        f"""
+agent:
+  use_case: assistant
+  name: named-root
+model:
+  provider: google
+  name: gemini-2.0-flash
+instructions:
+  value: Inline instruction.
+  file: {instructions_file.as_posix()}
+tools:
+  enabled: []
+output:
+  schema: GenericAgentResponse
+  key: answer_payload
+state:
+  enabled: false
+roles:
+  reviewer:
+    model: openai/gpt-4o
+    tools: []
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AGENT_CONFIG_FILE", str(config_file))
+
+    config = resolve_agent_config()
+    runtime = agent_module._build_runtime_context(config)
+    root = agent_module._build_root_agent(config, "yaml")
+
+    assert root.name == "named-root"
+    assert "Inline instruction." in runtime.instruction
+    assert "File operator instruction." in runtime.instruction
+    assert runtime.state_schema is None
+    assert runtime.output_schema is not None
+    assert runtime.output_key == "answer_payload"
+    assert runtime.roles["reviewer"].model.model == "openai/gpt-4o"
+    assert runtime.roles["reviewer"].tools == []
+
+
 # ── P6: code-execution resolution wired into _build_runtime_context ─────────
 
 import asyncio
 import json
 import sys
-import types
 from types import SimpleNamespace
 
 from basic_agent.autoconfig import ProviderConfigurationError
-from basic_agent.execution.resolver import CodeExecutionResolution
 from basic_agent.config.loader import (
     AgentConfig,
-    ExecutionConfig,
     ExecutionCodeExecutionConfig,
+    ExecutionConfig,
     InstructionsConfig,
     ModelConfig,
     ToolsConfig,
 )
+from basic_agent.execution.resolver import CodeExecutionResolution
 
 _CODE_EXEC_ENV_VARS = (
     "AGENT_CODE_EXECUTION_STRATEGY",
@@ -170,8 +227,11 @@ _CODE_EXEC_ENV_VARS = (
 )
 
 
-def _ce_config(model_name: str = "gemini-3.6-flash", tools=("code_execution",),
-               code_execution: ExecutionCodeExecutionConfig | None = None):
+def _ce_config(
+    model_name: str = "gemini-3.6-flash",
+    tools=("code_execution",),
+    code_execution: ExecutionCodeExecutionConfig | None = None,
+):
     return AgentConfig(
         use_case="assistant",
         model=ModelConfig(provider="google", name=model_name),
@@ -189,7 +249,7 @@ def clean_code_exec_env(monkeypatch):
 
 
 def test_runtime_context_resolves_docker_strategy(monkeypatch, clean_code_exec_env):
-    client = install_fake_docker(monkeypatch, FakeDockerClient())
+    install_fake_docker(monkeypatch, FakeDockerClient())
     runtime = agent_module._build_runtime_context(_ce_config())
 
     assert runtime.code_execution_strategy == "docker_container"
@@ -235,7 +295,9 @@ def test_runtime_context_broken_override_raises(monkeypatch, clean_code_exec_env
         agent_module._build_runtime_context(_ce_config())
 
 
-def test_runtime_context_yaml_overlay_reaches_resolver(monkeypatch, clean_code_exec_env):
+def test_runtime_context_yaml_overlay_reaches_resolver(
+    monkeypatch, clean_code_exec_env
+):
     monkeypatch.setitem(sys.modules, "docker", None)
     runtime = agent_module._build_runtime_context(
         _ce_config(
@@ -246,7 +308,9 @@ def test_runtime_context_yaml_overlay_reaches_resolver(monkeypatch, clean_code_e
     assert runtime.code_execution_strategy == "gemini_built_in"
 
 
-def test_runtime_context_without_tool_skips_resolution(monkeypatch, clean_code_exec_env):
+def test_runtime_context_without_tool_skips_resolution(
+    monkeypatch, clean_code_exec_env
+):
     client = FakeDockerClient()
     install_fake_docker(monkeypatch, client)
     runtime = agent_module._build_runtime_context(
@@ -259,7 +323,9 @@ def test_runtime_context_without_tool_skips_resolution(monkeypatch, clean_code_e
     assert client.constructor_kwargs == []
 
 
-def test_inspect_runtime_reports_code_execution_strategy(monkeypatch, clean_code_exec_env):
+def test_inspect_runtime_reports_code_execution_strategy(
+    monkeypatch, clean_code_exec_env
+):
     monkeypatch.setattr(
         agent_module,
         "_code_execution_resolution",
@@ -277,12 +343,17 @@ def test_plugin_span_carries_code_execution_strategy(monkeypatch, clean_code_exe
     class _RecordingSpan:
         def __init__(self, attributes):
             self.attributes = dict(attributes)
+            self.status = None
+            self.ended = False
 
         def set_attribute(self, key, value):
             self.attributes[key] = value
 
+        def set_status(self, status):
+            self.status = status
+
         def end(self):
-            pass
+            self.ended = True
 
     spans: list[_RecordingSpan] = []
 
@@ -297,7 +368,9 @@ def test_plugin_span_carries_code_execution_strategy(monkeypatch, clean_code_exe
     monkeypatch.setattr(
         agent_module,
         "_code_execution_resolution",
-        CodeExecutionResolution(executor=object(), strategy="docker_container", detail="t"),
+        CodeExecutionResolution(
+            executor=object(), strategy="docker_container", detail="t"
+        ),
     )
     context = SimpleNamespace(invocation_id="inv-1", app_name="basic_agent")
 
@@ -308,7 +381,42 @@ def test_plugin_span_carries_code_execution_strategy(monkeypatch, clean_code_exe
     plugin._spans.clear()
 
 
-def test_yaml_code_execution_overlay_reaches_docker_client(monkeypatch, clean_code_exec_env):
+def test_plugin_error_callback_closes_span(monkeypatch):
+    class Span:
+        def __init__(self):
+            self.attributes = {}
+            self.ended = False
+            self.status = None
+
+        def set_attribute(self, key, value):
+            self.attributes[key] = value
+
+        def set_status(self, status):
+            self.status = status
+
+        def end(self):
+            self.ended = True
+
+    span = Span()
+    plugin = agent_module.GenericAgentPlugin()
+    context = SimpleNamespace(invocation_id="error-1")
+    plugin._spans[context.invocation_id] = span
+
+    asyncio.run(
+        plugin.on_run_error_callback(
+            invocation_context=context, error=RuntimeError("boom")
+        )
+    )
+
+    assert span.ended
+    assert span.attributes["error.type"] == "RuntimeError"
+    assert "boom" in span.attributes["error.message"]
+    assert context.invocation_id not in plugin._spans
+
+
+def test_yaml_code_execution_overlay_reaches_docker_client(
+    monkeypatch, clean_code_exec_env
+):
     """docker_host + docker_image from execution.code_execution flow through
     the resolver into the DockerClient constructor and containers.run."""
     client = FakeDockerClient()
@@ -351,11 +459,16 @@ def test_rebuild_without_tool_resets_resolution_stash(monkeypatch, clean_code_ex
     install_fake_docker(monkeypatch, FakeDockerClient())
     with_res = agent_module._build_runtime_context(_ce_config())
     assert with_res.code_execution_strategy == "docker_container"
-    assert "code_execution" in json.loads(agent_module.inspect_runtime())["capabilities"]
+    assert (
+        "code_execution" in json.loads(agent_module.inspect_runtime())["capabilities"]
+    )
 
     without_res = agent_module._build_runtime_context(
         _ce_config(tools=("knowledge",), model_name="gemini-2.0-flash")
     )
     assert without_res.code_execution_strategy is None
     assert agent_module._code_execution_resolution is None
-    assert "code_execution" not in json.loads(agent_module.inspect_runtime())["capabilities"]
+    assert (
+        "code_execution"
+        not in json.loads(agent_module.inspect_runtime())["capabilities"]
+    )

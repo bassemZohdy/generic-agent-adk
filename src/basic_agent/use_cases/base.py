@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Callable, ClassVar
+from collections.abc import Callable
+from typing import Any, ClassVar
 
 from google.adk.agents import BaseAgent, LlmAgent
 
@@ -40,7 +41,9 @@ def _chain(first: Callable | list[Callable] | None, second: Callable) -> Callabl
     return chained
 
 
-def _chain_before_tool(first: Callable | list[Callable] | None, second: Callable) -> Callable:
+def _chain_before_tool(
+    first: Callable | list[Callable] | None, second: Callable
+) -> Callable:
     """Chain before-tool callbacks while preserving veto short-circuiting."""
     callbacks = list(first) if isinstance(first, list) else ([first] if first else [])
 
@@ -54,7 +57,9 @@ def _chain_before_tool(first: Callable | list[Callable] | None, second: Callable
     return chained
 
 
-def _chain_after_tool(first: Callable | list[Callable] | None, second: Callable) -> Callable:
+def _chain_after_tool(
+    first: Callable | list[Callable] | None, second: Callable
+) -> Callable:
     """Chain after-tool callbacks, allowing the use-case hook to transform results."""
     callbacks = list(first) if isinstance(first, list) else ([first] if first else [])
 

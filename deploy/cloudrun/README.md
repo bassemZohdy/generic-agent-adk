@@ -21,3 +21,10 @@ gcloud run services add-iam-policy-binding basic-adk-agent \
 Grant `roles/run.invoker` only to the load balancer, gateway, or caller
 identities that should reach the service. Keep `AUTH_DISABLED=false`; a
 production deployment without `KEYCLOAK_ISSUER` fails during settings load.
+
+`ADK_SESSION_SERVICE_URI` must point at a shared, managed database with backups,
+retention, and migrations owned by the deployment team. Set `STORAGE_BUCKET`
+to a versioned bucket and grant the runtime service account only the object
+permissions it needs. The service intentionally refuses a production REST
+startup without shared session storage; local SQLite and in-memory services are
+for development/test only.

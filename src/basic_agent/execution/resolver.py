@@ -21,9 +21,11 @@ from __future__ import annotations
 import atexit
 import logging
 import os
+import re
 import threading
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from google.adk.code_executors.code_execution_utils import CodeExecutionResult
 
@@ -67,6 +69,7 @@ DOCKER_IMAGE_ENV = "AGENT_CODE_EXECUTION_DOCKER_IMAGE"
 #: python images are maintained, scanned, and verified to run under the
 #: full hardened constraint set (read-only rootfs + tmpfs + no caps).
 DEFAULT_SANDBOX_IMAGE = "python:3.13-slim"
+MAX_EXECUTION_OUTPUT_BYTES = 1_048_576
 
 #: Strategy reported when no provider probe succeeds (no executor attached).
 UNAVAILABLE = "unavailable"
@@ -193,9 +196,7 @@ def resolve_code_executor(
             return CodeExecutionResolution(
                 spec.build(environment), name, "auto-detected"
             )
-    logger.info(
-        "No code-execution sandbox available; resolving to '%s'", UNAVAILABLE
-    )
+    logger.info("No code-execution sandbox available; resolving to '%s'", UNAVAILABLE)
     return CodeExecutionResolution(None, UNAVAILABLE, "no provider probe succeeded")
 
 
@@ -212,17 +213,26 @@ class VertexAiCodeExecutionProvider(_CodeExecutionProviderSpec):
 
     strategy = "vertex_ai"
 
+    @staticmethod
+    def _available() -> bool:
+        try:
+            from google.adk.code_executors import VertexAiCodeExecutor
+        except Exception:  # noqa: BLE001 - probes must never abort startup
+            return False
+        return VertexAiCodeExecutor is not None
+
     @classmethod
     def probe(cls, environment: Mapping[str, str], *, model: Any) -> bool:
-        return bool((environment.get(VERTEX_RESOURCE_ENV) or "").strip())
+        return (
+            bool((environment.get(VERTEX_RESOURCE_ENV) or "").strip())
+            and cls._available()
+        )
 
     @classmethod
     def build(cls, environment: Mapping[str, str]) -> Any:
         from google.adk.code_executors import VertexAiCodeExecutor  # deferred
 
-        return VertexAiCodeExecutor(
-            resource_name=environment.get(VERTEX_RESOURCE_ENV)
-        )
+        return VertexAiCodeExecutor(resource_name=environment.get(VERTEX_RESOURCE_ENV))
 
 
 class AgentEngineSandboxCodeExecutionProvider(_CodeExecutionProviderSpec):
@@ -230,9 +240,20 @@ class AgentEngineSandboxCodeExecutionProvider(_CodeExecutionProviderSpec):
 
     strategy = "agent_engine_sandbox"
 
+    @staticmethod
+    def _available() -> bool:
+        try:
+            from google.adk.code_executors import AgentEngineSandboxCodeExecutor
+        except Exception:  # noqa: BLE001 - probes must never abort startup
+            return False
+        return AgentEngineSandboxCodeExecutor is not None
+
     @classmethod
     def probe(cls, environment: Mapping[str, str], *, model: Any) -> bool:
-        return bool((environment.get(AGENT_ENGINE_RESOURCE_ENV) or "").strip())
+        return (
+            bool((environment.get(AGENT_ENGINE_RESOURCE_ENV) or "").strip())
+            and cls._available()
+        )
 
     @classmethod
     def build(cls, environment: Mapping[str, str]) -> Any:
@@ -255,9 +276,21 @@ class GkeCodeExecutionProvider(_CodeExecutionProviderSpec):
 
     strategy = "gke"
 
+    @staticmethod
+    def _available() -> bool:
+        try:
+            import kubernetes  # noqa: F401
+            from google.adk.code_executors import GkeCodeExecutor
+        except Exception:  # noqa: BLE001 - probes must never abort startup
+            return False
+        return GkeCodeExecutor is not None
+
     @classmethod
     def probe(cls, environment: Mapping[str, str], *, model: Any) -> bool:
-        return bool((environment.get(GKE_KUBECONFIG_PATH_ENV) or "").strip())
+        return (
+            bool((environment.get(GKE_KUBECONFIG_PATH_ENV) or "").strip())
+            and cls._available()
+        )
 
     @classmethod
     def build(cls, environment: Mapping[str, str]) -> Any:
@@ -325,18 +358,12 @@ def _hardened_executor_cls_get() -> type:
                 # init (ADK 2.6.3) — re-verify on upgrade.
                 super(ContainerCodeExecutor, self).__init__(**data)
                 if not image and not docker_path:
-                    raise ValueError(
-                        "Either image or docker_path must be set."
-                    )
+                    raise ValueError("Either image or docker_path must be set.")
                 if self.stateful or self.optimize_data_file:
-                    raise ValueError(
-                        "Cannot set stateful/optimize_data_file=True."
-                    )
+                    raise ValueError("Cannot set stateful/optimize_data_file=True.")
                 self.base_url = base_url
                 self.image = image if image else DEFAULT_SANDBOX_IMAGE
-                self.docker_path = (
-                    os.path.abspath(docker_path) if docker_path else None
-                )
+                self.docker_path = os.path.abspath(docker_path) if docker_path else None
                 self._client = (
                     docker.DockerClient(base_url=base_url)
                     if base_url
@@ -349,6 +376,7 @@ def _hardened_executor_cls_get() -> type:
                     "read_only": True,
                     "tmpfs": {"/tmp": f"size={tmpfs_size},rw"},
                 }
+                self._execution_lock = threading.RLock()
                 self._start_container()
                 atexit.register(self._cleanup_container)
 
@@ -369,14 +397,15 @@ def _hardened_executor_cls_get() -> type:
                 self._verify_python_installation()  # inherited from ADK
 
             def _cleanup_container(self) -> None:
-                if getattr(self, "_container", None):
-                    try:
-                        self._container.stop()
-                        self._container.remove()
-                    except Exception:
-                        logger.debug(
-                            "sandbox container cleanup failed", exc_info=True
-                        )
+                with self._execution_lock:
+                    if getattr(self, "_container", None):
+                        try:
+                            self._container.stop()
+                            self._container.remove()
+                        except Exception:
+                            logger.debug(
+                                "sandbox container cleanup failed", exc_info=True
+                            )
 
             def _recover_container(self) -> None:
                 """Kill and restart the reused container after a hung exec.
@@ -395,15 +424,11 @@ def _hardened_executor_cls_get() -> type:
                     try:
                         self._container.kill()
                     except Exception:
-                        logger.debug(
-                            "sandbox container kill failed", exc_info=True
-                        )
+                        logger.debug("sandbox container kill failed", exc_info=True)
                     try:
                         self._container.remove()
                     except Exception:
-                        logger.debug(
-                            "sandbox container remove failed", exc_info=True
-                        )
+                        logger.debug("sandbox container remove failed", exc_info=True)
                 self._start_container()
 
             def execute_code(self, invocation_context, code_execution_input):
@@ -419,42 +444,93 @@ def _hardened_executor_cls_get() -> type:
                 timeout = self.timeout_seconds or 60
                 result_box: dict[str, Any] = {}
 
+                def _bounded_output(output: Any) -> tuple[str, str]:
+                    stdout = bytearray()
+                    stderr = bytearray()
+
+                    def add(target: bytearray, value: Any) -> None:
+                        if not value:
+                            return
+                        if isinstance(value, str):
+                            value = value.encode("utf-8", "replace")
+                        remaining = MAX_EXECUTION_OUTPUT_BYTES - len(target)
+                        if remaining > 0:
+                            target.extend(bytes(value)[:remaining])
+
+                    if isinstance(output, tuple):
+                        add(stdout, output[0] if len(output) > 0 else b"")
+                        add(stderr, output[1] if len(output) > 1 else b"")
+                    elif isinstance(output, (bytes, bytearray, str)):
+                        add(stdout, output)
+                    else:
+                        for chunk in output or ():
+                            if isinstance(chunk, tuple):
+                                add(stdout, chunk[0] if len(chunk) > 0 else b"")
+                                add(stderr, chunk[1] if len(chunk) > 1 else b"")
+                            else:
+                                add(stdout, chunk)
+                            if (
+                                len(stdout) >= MAX_EXECUTION_OUTPUT_BYTES
+                                and len(stderr) >= MAX_EXECUTION_OUTPUT_BYTES
+                            ):
+                                close = getattr(output, "close", None)
+                                if callable(close):
+                                    close()
+                                break
+                    return (
+                        stdout.decode("utf-8", "replace")
+                        + (
+                            "\n[output truncated]"
+                            if len(stdout) >= MAX_EXECUTION_OUTPUT_BYTES
+                            else ""
+                        ),
+                        stderr.decode("utf-8", "replace")
+                        + (
+                            "\n[output truncated]"
+                            if len(stderr) >= MAX_EXECUTION_OUTPUT_BYTES
+                            else ""
+                        ),
+                    )
+
                 def _run() -> None:
                     try:
-                        result_box["exec"] = self._container.exec_run(
-                            ["python3", "-c", code_execution_input.code],
-                            demux=True,
-                        )
-                    except Exception as error:  # container killed mid-exec
+                        try:
+                            result_box["exec"] = self._container.exec_run(
+                                ["python3", "-c", code_execution_input.code],
+                                demux=True,
+                                stream=True,
+                            )
+                        except TypeError:
+                            # Compatibility with older docker-py and test doubles.
+                            result_box["exec"] = self._container.exec_run(
+                                ["python3", "-c", code_execution_input.code],
+                                demux=True,
+                            )
+                    except Exception as error:  # noqa: BLE001 - contain executor failures
                         result_box["error"] = error
 
-                worker = threading.Thread(target=_run, daemon=True)
-                worker.start()
-                worker.join(timeout)
-                if worker.is_alive():
-                    logger.warning(
-                        "sandbox exec exceeded %ss; restarting container",
-                        timeout,
+                with self._execution_lock:
+                    worker = threading.Thread(target=_run, daemon=True)
+                    worker.start()
+                    worker.join(timeout)
+                    if worker.is_alive():
+                        logger.warning(
+                            "sandbox exec exceeded %ss; restarting container",
+                            timeout,
+                        )
+                        self._recover_container()
+                        return CodeExecutionResult(
+                            stderr=f"Execution timed out after {timeout}s."
+                        )
+                    if "error" in result_box:
+                        return CodeExecutionResult(
+                            stderr=f"Execution failed: {result_box['error']}"
+                        )
+                    result = result_box.get("exec")
+                    stdout, stderr = _bounded_output(
+                        getattr(result, "output", result) if result is not None else ()
                     )
-                    self._recover_container()
-                    return CodeExecutionResult(
-                        stderr=f"Execution timed out after {timeout}s."
-                    )
-                if "error" in result_box:
-                    return CodeExecutionResult(
-                        stderr=f"Execution failed: {result_box['error']}"
-                    )
-                out = getattr(result_box.get("exec"), "output", None) or (
-                    None,
-                    None,
-                )
-                stdout = out[0].decode("utf-8", "replace") if out[0] else ""
-                stderr = (
-                    out[1].decode("utf-8", "replace")
-                    if len(out) > 1 and out[1]
-                    else ""
-                )
-                return CodeExecutionResult(stdout=stdout, stderr=stderr)
+                    return CodeExecutionResult(stdout=stdout, stderr=stderr)
 
         _hardened_executor_cls = HardenedContainerCodeExecutor
     return _hardened_executor_cls
@@ -468,16 +544,27 @@ class DockerContainerCodeExecutionProvider(_CodeExecutionProviderSpec):
     @classmethod
     def _docker_host(cls, environment: Mapping[str, str]) -> str | None:
         return (
-            environment.get(DOCKER_HOST_ENV)
-            or environment.get("DOCKER_HOST")
-            or None
+            environment.get(DOCKER_HOST_ENV) or environment.get("DOCKER_HOST") or None
         )
 
     @classmethod
+    def _image(cls, environment: Mapping[str, str]) -> str:
+        return environment.get(DOCKER_IMAGE_ENV) or DEFAULT_SANDBOX_IMAGE
+
+    @classmethod
+    def _image_is_pinned(cls, image: str) -> bool:
+        return bool(re.search(r"@sha256:[0-9a-f]{64}$", image, re.IGNORECASE))
+
+    @classmethod
     def probe(cls, environment: Mapping[str, str], *, model: Any) -> bool:
+        deployment = (environment.get("DEPLOYMENT_ENV") or "").strip().lower()
+        if deployment in {"production", "prod", "staging"} and not cls._image_is_pinned(
+            cls._image(environment)
+        ):
+            return False
         try:
             import docker
-        except ImportError:
+        except Exception:  # noqa: BLE001 - probes must never abort startup
             return False
         try:
             host = cls._docker_host(environment)
@@ -490,16 +577,18 @@ class DockerContainerCodeExecutionProvider(_CodeExecutionProviderSpec):
                 else docker.from_env(timeout=1)
             )
             return bool(client.ping())
-        except Exception:
+        except Exception:  # noqa: BLE001 - probes must never abort startup
             return False
+        finally:
+            close = locals().get("client")
+            if close is not None and callable(getattr(close, "close", None)):
+                close.close()
 
     @classmethod
     def build(cls, environment: Mapping[str, str]) -> Any:
         return _hardened_executor_cls_get()(
             base_url=cls._docker_host(environment),
-            image=(
-                environment.get(DOCKER_IMAGE_ENV) or DEFAULT_SANDBOX_IMAGE
-            ),
+            image=cls._image(environment),
         )
 
 
@@ -526,7 +615,7 @@ class GeminiBuiltInCodeExecutionProvider(_CodeExecutionProviderSpec):
             from google.adk.utils.model_name_utils import (
                 is_gemini_eap_or_2_or_above,
             )
-        except ImportError:
+        except Exception:  # noqa: BLE001 - probes must never abort startup
             return False
         # Mirror BuiltInCodeExecutor.process_llm_request's per-request gate:
         # ADK raises ValueError mid-run for pre-2.0 Gemini, so evaluating the

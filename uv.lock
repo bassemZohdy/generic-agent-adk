@@ -1,6 +1,6 @@
 version = 1
 revision = 2
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 resolution-markers = [
     "python_full_version >= '3.14'",
     "python_full_version == '3.13.*'",
@@ -302,7 +302,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "docker", marker = "extra == 'docker'", specifier = ">=7.0.0" },
-    { name = "google-adk", extras = ["a2a", "mcp"], specifier = ">=1.0.0" },
+    { name = "google-adk", extras = ["a2a", "mcp"], specifier = ">=2.6.3,<2.7.0" },
     { name = "kubernetes", marker = "extra == 'gke'", specifier = ">=29.0" },
     { name = "litellm", specifier = ">=1.96.2" },
     { name = "msgpack", specifier = ">=1.2.1" },

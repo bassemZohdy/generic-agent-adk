@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
 import os
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -120,7 +120,9 @@ class LocalDiskStorageProvider(_ProviderSpec):
         if not _detected(environment, "STORAGE_PATH"):
             return None
         values = _require(environment, cls.capability, cls.strategy, "STORAGE_PATH")
-        values["STORAGE_PATH"] = _path(values["STORAGE_PATH"], cls.capability, cls.strategy)
+        values["STORAGE_PATH"] = _path(
+            values["STORAGE_PATH"], cls.capability, cls.strategy
+        )
         return CapabilityProvider(cls.capability, cls.strategy, values)
 
 
@@ -185,7 +187,9 @@ class CloudSearchProvider(_ProviderSpec):
     def discover(cls, environment: Mapping[str, str]) -> CapabilityProvider | None:
         if not _detected(environment, "SEARCH_URL", "SEARCH_API_KEY"):
             return None
-        values = _require(environment, cls.capability, cls.strategy, "SEARCH_URL", "SEARCH_API_KEY")
+        values = _require(
+            environment, cls.capability, cls.strategy, "SEARCH_URL", "SEARCH_API_KEY"
+        )
         _url(values["SEARCH_URL"], cls.capability, cls.strategy)
         return CapabilityProvider(cls.capability, cls.strategy, values)
 
@@ -198,8 +202,12 @@ class LocalIndexSearchProvider(_ProviderSpec):
     def discover(cls, environment: Mapping[str, str]) -> CapabilityProvider | None:
         if not _detected(environment, "SEARCH_INDEX_PATH"):
             return None
-        values = _require(environment, cls.capability, cls.strategy, "SEARCH_INDEX_PATH")
-        values["SEARCH_INDEX_PATH"] = _path(values["SEARCH_INDEX_PATH"], cls.capability, cls.strategy)
+        values = _require(
+            environment, cls.capability, cls.strategy, "SEARCH_INDEX_PATH"
+        )
+        values["SEARCH_INDEX_PATH"] = _path(
+            values["SEARCH_INDEX_PATH"], cls.capability, cls.strategy
+        )
         return CapabilityProvider(cls.capability, cls.strategy, values)
 
 
@@ -211,7 +219,9 @@ class CloudLoggingProvider(_ProviderSpec):
     def discover(cls, environment: Mapping[str, str]) -> CapabilityProvider | None:
         if not _detected(environment, "LOG_ENDPOINT", "LOG_API_KEY"):
             return None
-        values = _require(environment, cls.capability, cls.strategy, "LOG_ENDPOINT", "LOG_API_KEY")
+        values = _require(
+            environment, cls.capability, cls.strategy, "LOG_ENDPOINT", "LOG_API_KEY"
+        )
         _url(values["LOG_ENDPOINT"], cls.capability, cls.strategy)
         return CapabilityProvider(cls.capability, cls.strategy, values)
 
@@ -230,7 +240,11 @@ class LocalFileLoggingProvider(_ProviderSpec):
 
 
 _FALLBACK_CHAINS: Mapping[str, tuple[type[_ProviderSpec], ...]] = {
-    "storage": (CloudStorageProvider, DatabaseStorageProvider, LocalDiskStorageProvider),
+    "storage": (
+        CloudStorageProvider,
+        DatabaseStorageProvider,
+        LocalDiskStorageProvider,
+    ),
     "messaging": (CloudMessagingProvider, LocalBrokerMessagingProvider),
     "caching": (CloudCachingProvider, LocalDiskCachingProvider),
     "search": (CloudSearchProvider, LocalIndexSearchProvider),

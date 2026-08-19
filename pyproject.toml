@@ -3,9 +3,22 @@ name = "basic-adk-agent"
 version = "0.1.0"
 description = "A generic configuration-driven Google ADK agent"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
+authors = [{ name = "Generic Agent ADK contributors" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+urls = { Repository = "https://github.com/bassemZohdy/generic-agent-adk", Documentation = "https://github.com/bassemZohdy/generic-agent-adk#readme" }
 dependencies = [
-    "google-adk[a2a,mcp]>=1.0.0",
+    # The runtime uses ADK 2.6.x callback, workflow, and code-executor APIs.
+    # Keep the upper bound until the upgrade checklist in TODO/ADR-003 is run.
+    "google-adk[a2a,mcp]>=2.6.3,<2.7.0",
     "litellm>=1.96.2",
     "msgpack>=1.2.1",
     "opentelemetry-exporter-otlp-proto-grpc>=1.28.0",

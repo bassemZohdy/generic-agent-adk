@@ -9,17 +9,17 @@ Container Registry (GHCR).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    GitHub Push / PR / Tag                   │
+│                 GitHub Push / PR / Tag / Manual             │
 └──────────────────────┬──────────────────────────────────────┘
                         │
-         ┌──────────────┼──────────────┐
-         │              │              │
-    ┌────▼────┐   ┌─────▼─────┐   ┌────▼────────┐
-    │  LINT   │   │   TEST    │   │ TEST-EXTRAS │
-    │ (5 min) │   │ (15 min)  │   │   (docker,  │
-    └────┬────┘   └─────┬─────┘   │    gke)     │
-         │              │         └────┬────────┘
-         └──────────────┼──────────────┘
+         ┌──────────────┼─────────────────────────┐
+         │              │                         │
+    ┌────▼────┐   ┌─────▼─────┐   ┌────▼────────┐  ┌────▼─────┐
+    │  LINT   │   │   TEST    │   │ TEST-EXTRAS │  │  AUDIT   │
+    │ (5 min) │   │ (15 min)  │   │   (docker,  │  │ (10 min) │
+    └────┬────┘   └─────┬─────┘   │    gke)     │  └────┬─────┘
+         │              │         └────┬────────┘       │
+         └──────────────┼─────────────┼─────────────────┘
                         │
                    ┌────▼─────┐
                    │  BUILD   │   pushes an unverified staging tag only
@@ -46,29 +46,43 @@ only after `verify-image` succeeds.
 
 ### 1. Lint & Format Job
 
-**Steps**: `git diff --check`, Keycloak JSON fixture validation,
-`docker compose config` validation, secret scanning via
+**Steps**: `git diff --check`, Ruff lint/format checks, package compilation and
+build, Keycloak JSON fixture validation, YAML/link validation,
+`docker compose config` validation, and secret scanning via
 `gitleaks/gitleaks-action`.
 
 **Triggers**: pushes to `main` or version tags, and pull requests.
 **Duration**: ~5 minutes.
 
-### 2. Test Job (Python 3.10–3.13)
+### 2. Sandbox Image Verification Job (optional)
+
+Runs when the repository variable `SANDBOX_IMAGE_DIGEST` is configured. It
+verifies the pinned image reference, scans it for vulnerabilities, and
+generates an SBOM using Trivy and Syft.
+
+**Duration**: ~10 minutes.
+
+### 3. Test Job (Python 3.10–3.13)
 
 **Steps**:
 1. `uv sync --frozen`
-2. `pip-audit --strict` against the locked dependency set
-3. `pytest tests/ -v --tb=short --cov=basic_agent --cov-report=term-missing --cov-report=xml --cov-report=html`
-4. Upload coverage artifacts (Python 3.13 run only)
-5. Re-run with `--cov-fail-under=${{ env.COVERAGE_THRESHOLD }}` (currently
-   **90%**) as a hard gate
-6. Optional, non-blocking Codecov upload
+2. `pytest tests/ -v --tb=short --cov=basic_agent --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}`
+3. Upload coverage artifacts (Python 3.13 run only)
+4. Optional, non-blocking Codecov upload
 
 **Triggers**: pushes to `main` or version tags, and pull requests.
 **Duration**: ~15 minutes per Python version, matrix runs in parallel with
 `fail-fast: false`.
 
-### 3. Test Extras Job (docker, gke)
+### 4. Dependency Audit Job
+
+**Steps**: install the locked environment and run `pip-audit --strict`.
+
+**Triggers**: pushes to `main` or version tags, pull requests, and manual
+workflow dispatches.
+**Duration**: ~10 minutes.
+
+### 5. Test Extras Job (docker, gke)
 
 **Steps**:
 1. `uv sync --frozen --extra ${{ matrix.extra }}` for `docker` and `gke` extras
@@ -77,9 +91,9 @@ only after `verify-image` succeeds.
 **Triggers**: pushes to `main` or version tags, and pull requests.
 **Duration**: ~15 minutes, matrix runs `docker` and `gke` legs in parallel.
 
-### 4. Build Docker Image Job
+### 6. Build Docker Image Job
 
-**Dependencies**: `needs: [test, test-extras, lint]`.
+**Dependencies**: `needs: [test, test-extras, lint, audit]`.
 
 **Steps**:
 1. `docker compose config` validation
@@ -97,7 +111,7 @@ only after `verify-image` succeeds.
 
 **Duration**: ~20 minutes.
 
-### 5. Verify Staged Image Job (non-PR only)
+### 7. Verify Staged Image Job (non-PR only)
 
 **Dependencies**: `needs: build`. **Condition**:
 `github.event_name != 'pull_request'`.
@@ -115,7 +129,7 @@ only after `verify-image` succeeds.
 
 **Duration**: ~10 minutes.
 
-### 6. Promote Verified Image Job (non-PR only)
+### 8. Promote Verified Image Job (non-PR only)
 
 **Dependencies**: `needs: [build, verify-image]`. **Condition**:
 `github.event_name != 'pull_request'`.
@@ -127,7 +141,7 @@ digest that passed Verify Staged Image, never rebuilt.
 
 **Duration**: ~5 minutes.
 
-### 7. Notify Success Job
+### 9. Notify Success Job
 
 Runs `if: always()`. Fails if `build` didn't succeed, or — for non-PR
 events — if `verify-image` or `promote-image` didn't succeed.
@@ -152,11 +166,14 @@ permissions:
 
 ## Trigger Matrix
 
-| Trigger        | Lint | Test | Test-Extras | Build | Verify | Promote |
-|-----------------|------|------|-------------|-------|--------|---------|
-| Push to main    | ✅   | ✅   | ✅          | ✅ (push staging tag) | ✅ | ✅ |
-| Push with `v*` tag | ✅ | ✅  | ✅          | ✅ (push staging tag) | ✅ | ✅ |
-| Pull request    | ✅   | ✅   | ✅          | ✅ (local only, verified in-job) | — | — |
+| Trigger        | Lint | Sandbox* | Test | Audit | Test-Extras | Build | Verify | Promote |
+|-----------------|------|----------|------|-------|-------------|-------|--------|---------|
+| Push to main    | ✅   | ✅       | ✅   | ✅    | ✅          | ✅ (push staging tag) | ✅ | ✅ |
+| Push with `v*` tag | ✅ | ✅     | ✅   | ✅    | ✅          | ✅ (push staging tag) | ✅ | ✅ |
+| Pull request    | ✅   | ✅       | ✅   | ✅    | ✅          | ✅ (local only, verified in-job) | — | — |
+| Manual dispatch | ✅   | ✅       | ✅   | ✅    | ✅          | ✅ (push staging tag) | ✅ | ✅ |
+
+`*` The Sandbox job is skipped when `SANDBOX_IMAGE_DIGEST` is unset.
 
 ### Scheduled verification (separate workflow)
 
@@ -181,9 +198,8 @@ then add tests for the reported missing lines.
 with `docker build --progress=plain .`.
 
 **Trivy scan fails in Verify Staged Image** — a HIGH/CRITICAL vulnerability
-with a known fix was found; update the affected package (see
-`docs/SECURITY-HARDENING-2026-08-15.md` for the pattern used to patch prior
-findings) and re-push.
+with a known fix was found; review the current security-hardening entries in
+`TODO.md` and the relevant ADR before updating a dependency, then re-push.
 
 **Image won't verify / dependency-lock check fails** — the installed set
 inside the image has drifted from `uv.lock`; run

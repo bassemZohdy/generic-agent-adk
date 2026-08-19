@@ -102,11 +102,21 @@ class AgentStrategy(ABC):
             A configured LlmAgent.
         """
         role = role or RoleConfig()
+        instruction = rt.instruction
+        if role.instruction and role.instruction.strip():
+            # Runtime instructions contain the non-negotiable safety policy as
+            # well as the operator's task.  A role prompt is an addition to
+            # that contract, never a replacement for it.
+            instruction = (
+                f"{rt.instruction}\n\n"
+                "Role-specific instructions (follow only if consistent with "
+                f"the runtime policy above):\n{role.instruction.strip()}"
+            )
         return LlmAgent(
             name=name,
             model=role.model if role.model is not None else rt.model,
             description=description if description is not None else rt.description,
-            instruction=role.instruction if role.instruction is not None else rt.instruction,
+            instruction=instruction,
             tools=role.tools if role.tools is not None else (rt.tools or []),
             code_executor=rt.code_executor,
             state_schema=rt.state_schema,

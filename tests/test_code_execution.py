@@ -6,18 +6,17 @@ import importlib
 import importlib.util
 import logging
 import sys
-import types
-from typing import Any, Callable
+from typing import Any
 
 import pytest
-
-import basic_agent.execution.resolver as ce
 from fakes import (
     FakeDockerClient,
     FakeExecResult,
     install_fake_docker,
     install_fake_kubernetes,
 )
+
+import basic_agent.execution.resolver as ce
 from basic_agent.autoconfig import ProviderConfigurationError
 from basic_agent.execution.resolver import (
     STRATEGY_ENV,
@@ -193,7 +192,9 @@ def test_docker_probe_uses_docker_host_fallback(clean_registry, monkeypatch):
     assert ce.DockerContainerCodeExecutionProvider.probe(
         {"DOCKER_HOST": "tcp://fallback:2375"}, model="m"
     )
-    assert client.constructor_kwargs == [{"base_url": "tcp://fallback:2375", "timeout": 1}]
+    assert client.constructor_kwargs == [
+        {"base_url": "tcp://fallback:2375", "timeout": 1}
+    ]
 
 
 def test_docker_probe_uses_from_env_without_host(clean_registry, monkeypatch):
@@ -215,10 +216,23 @@ def test_docker_probe_package_missing_returns_false(clean_registry, monkeypatch)
     assert not ce.DockerContainerCodeExecutionProvider.probe({}, model="m")
 
 
+def test_docker_probe_requires_pinned_image_in_production(clean_registry, monkeypatch):
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
+    assert not ce.DockerContainerCodeExecutionProvider.probe(
+        {"DEPLOYMENT_ENV": "production"}, model="m"
+    )
+    pinned = "python:3.13-slim@sha256:" + "a" * 64
+    assert ce.DockerContainerCodeExecutionProvider.probe(
+        {"DEPLOYMENT_ENV": "production", "AGENT_CODE_EXECUTION_DOCKER_IMAGE": pinned},
+        model="m",
+    )
+
+
 def test_hardened_executor_container_kwargs(clean_registry, monkeypatch):
     client = FakeDockerClient()
     install_fake_docker(monkeypatch, client)
-    executor = ce.DockerContainerCodeExecutionProvider.build(
+    ce.DockerContainerCodeExecutionProvider.build(
         {"AGENT_CODE_EXECUTION_DOCKER_IMAGE": "python:3.13-slim"}
     )
     assert client.run_calls and client.run_calls[0]["image"] == "python:3.13-slim"
@@ -297,6 +311,25 @@ def test_hardened_executor_streams_demuxed_output(clean_registry, monkeypatch):
     assert result.stderr == "err-line\n"
 
 
+def test_hardened_executor_caps_stdout_and_stderr(clean_registry, monkeypatch):
+    client = FakeDockerClient()
+    client.exec_handler = lambda cmd: FakeExecResult(
+        0,
+        (
+            b"o" * (ce.MAX_EXECUTION_OUTPUT_BYTES + 10),
+            b"e" * (ce.MAX_EXECUTION_OUTPUT_BYTES + 10),
+        ),
+    )
+    install_fake_docker(monkeypatch, client)
+    executor = ce._hardened_executor_cls_get()(timeout_seconds=5)
+
+    result = executor.execute_code(None, _code_input("print('x')"))
+    assert len(result.stdout.encode()) <= ce.MAX_EXECUTION_OUTPUT_BYTES + 30
+    assert len(result.stderr.encode()) <= ce.MAX_EXECUTION_OUTPUT_BYTES + 30
+    assert "output truncated" in result.stdout
+    assert "output truncated" in result.stderr
+
+
 def test_docker_provider_auto_detected(clean_registry, monkeypatch):
     client = FakeDockerClient()
     install_fake_docker(monkeypatch, client)
@@ -331,9 +364,7 @@ def test_gemini_probe_native_2plus_true(clean_registry):
 
 
 def test_gemini_probe_pre_2_0_false(clean_registry):
-    assert not ce.GeminiBuiltInCodeExecutionProvider.probe(
-        {}, model="gemini-1.5-flash"
-    )
+    assert not ce.GeminiBuiltInCodeExecutionProvider.probe({}, model="gemini-1.5-flash")
 
 
 def test_gemini_probe_litellm_false(clean_registry):
@@ -441,17 +472,24 @@ def test_agent_engine_probe_requires_resource_identifier(clean_registry):
     assert not probe({}, model="m")
     assert not probe({"GCP_PROJECT": "proj"}, model="m")
     assert probe(
-        {"AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE": "projects/p/locations/l/reasoningEngines/r"},
+        {
+            "AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE": "projects/p/locations/l/reasoningEngines/r"
+        },
         model="m",
     )
 
 
-def test_gke_probe_requires_kubeconfig_path(clean_registry):
+def test_gke_probe_requires_kubeconfig_path(clean_registry, monkeypatch):
     probe = ce.GkeCodeExecutionProvider.probe
+    monkeypatch.setattr(
+        ce.GkeCodeExecutionProvider, "_available", staticmethod(lambda: True)
+    )
     assert not probe({}, model="m")
     assert not probe({"GCP_PROJECT": "proj"}, model="m")
     assert not probe({"AGENT_CODE_EXECUTION_GKE_KUBECONFIG_CONTEXT": "ctx"}, model="m")
-    assert probe({"AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH": "/kube/config"}, model="m")
+    assert probe(
+        {"AGENT_CODE_EXECUTION_GKE_KUBECONFIG_PATH": "/kube/config"}, model="m"
+    )
 
 
 def _register_real_chain():
@@ -477,6 +515,7 @@ def _stub_gcp_builds(monkeypatch):
         ce.AgentEngineSandboxCodeExecutionProvider,
         ce.GkeCodeExecutionProvider,
     ):
+        monkeypatch.setattr(provider, "_available", staticmethod(lambda: True))
         monkeypatch.setattr(
             provider, "build", classmethod(lambda cls, environment: object())
         )
@@ -500,7 +539,9 @@ def test_agent_engine_beats_docker(clean_registry, monkeypatch):
     _register_real_chain()
     _stub_gcp_builds(monkeypatch)
     resolution = resolve_code_executor(
-        {"AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE": "projects/p/locations/l/reasoningEngines/r"},
+        {
+            "AGENT_CODE_EXECUTION_AGENT_ENGINE_RESOURCE": "projects/p/locations/l/reasoningEngines/r"
+        },
         model="gemini-1.5-flash",
     )
     assert resolution.strategy == "agent_engine_sandbox"
@@ -585,7 +626,9 @@ def test_gke_build_constructs_executor(clean_registry, monkeypatch):
     assert calls == {"path": "/kube/config", "context": "sandbox-ctx"}
 
 
-def test_hardened_executor_exec_run_exception_returns_stderr(clean_registry, monkeypatch):
+def test_hardened_executor_exec_run_exception_returns_stderr(
+    clean_registry, monkeypatch
+):
     client = FakeDockerClient()
 
     def explode(cmd):

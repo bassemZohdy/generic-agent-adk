@@ -107,7 +107,7 @@ reading `Settings`, because YAML values arrive via overlay, not env.
 |---|---|---|
 | `assistant` | `direct` | single `LlmAgent` |
 | `pipeline` | `sequential` | `SequentialAgent` |
-| `multi_perspective` | `parallel` | `ParallelAgent` |
+| `multi_perspective` | `parallel` + synthesis | `SequentialAgent(ParallelAgent, LlmAgent)` |
 | `refine_until_good` | `evaluator_optimizer` | optimizer/evaluator loop |
 | `expert_dispatch` | `router` | dynamic sub-agent routing |
 | `team_coordinator` | `supervisor` | supervisor + workers |

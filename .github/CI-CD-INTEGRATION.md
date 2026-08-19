@@ -9,17 +9,17 @@ Container Registry (GHCR).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    GitHub Push / PR / Tag                    │
-└──────────────────────┬───────────────────────────────────────┘
+│                    GitHub Push / PR / Tag                   │
+└──────────────────────┬──────────────────────────────────────┘
                         │
-             ┌──────────┴──────────┐
-             │                     │
-        ┌────▼────┐          ┌────▼────┐
-        │  LINT   │          │  TEST   │
-        │ (5 min) │          │ (15 min)│
-        └────┬────┘          └────┬────┘
-             │                    │
-             └──────────┬─────────┘
+         ┌──────────────┼──────────────┐
+         │              │              │
+    ┌────▼────┐   ┌─────▼─────┐   ┌────▼────────┐
+    │  LINT   │   │   TEST    │   │ TEST-EXTRAS │
+    │ (5 min) │   │ (15 min)  │   │   (docker,  │
+    └────┬────┘   └─────┬─────┘   │    gke)     │
+         │              │         └────┬────────┘
+         └──────────────┼──────────────┘
                         │
                    ┌────▼─────┐
                    │  BUILD   │   pushes an unverified staging tag only
@@ -68,9 +68,18 @@ only after `verify-image` succeeds.
 **Duration**: ~15 minutes per Python version, matrix runs in parallel with
 `fail-fast: false`.
 
-### 3. Build Docker Image Job
+### 3. Test Extras Job (docker, gke)
 
-**Dependencies**: `needs: [test, lint]`.
+**Steps**:
+1. `uv sync --frozen --extra ${{ matrix.extra }}` for `docker` and `gke` extras
+2. `pytest tests/ -v --tb=short --cov=basic_agent --cov-report=term --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}`
+
+**Triggers**: pushes to `main` or version tags, and pull requests.
+**Duration**: ~15 minutes, matrix runs `docker` and `gke` legs in parallel.
+
+### 4. Build Docker Image Job
+
+**Dependencies**: `needs: [test, test-extras, lint]`.
 
 **Steps**:
 1. `docker compose config` validation
@@ -88,7 +97,7 @@ only after `verify-image` succeeds.
 
 **Duration**: ~20 minutes.
 
-### 4. Verify Staged Image Job (non-PR only)
+### 5. Verify Staged Image Job (non-PR only)
 
 **Dependencies**: `needs: build`. **Condition**:
 `github.event_name != 'pull_request'`.
@@ -106,7 +115,7 @@ only after `verify-image` succeeds.
 
 **Duration**: ~10 minutes.
 
-### 5. Promote Verified Image Job (non-PR only)
+### 6. Promote Verified Image Job (non-PR only)
 
 **Dependencies**: `needs: [build, verify-image]`. **Condition**:
 `github.event_name != 'pull_request'`.
@@ -118,7 +127,7 @@ digest that passed Verify Staged Image, never rebuilt.
 
 **Duration**: ~5 minutes.
 
-### 6. Notify Success Job
+### 7. Notify Success Job
 
 Runs `if: always()`. Fails if `build` didn't succeed, or — for non-PR
 events — if `verify-image` or `promote-image` didn't succeed.
@@ -143,11 +152,11 @@ permissions:
 
 ## Trigger Matrix
 
-| Trigger        | Lint | Test | Build | Verify | Promote |
-|-----------------|------|------|-------|--------|---------|
-| Push to main    | ✅   | ✅   | ✅ (push staging tag) | ✅ | ✅ |
-| Push with `v*` tag | ✅ | ✅  | ✅ (push staging tag) | ✅ | ✅ |
-| Pull request    | ✅   | ✅   | ✅ (local only, verified in-job) | — | — |
+| Trigger        | Lint | Test | Test-Extras | Build | Verify | Promote |
+|-----------------|------|------|-------------|-------|--------|---------|
+| Push to main    | ✅   | ✅   | ✅          | ✅ (push staging tag) | ✅ | ✅ |
+| Push with `v*` tag | ✅ | ✅  | ✅          | ✅ (push staging tag) | ✅ | ✅ |
+| Pull request    | ✅   | ✅   | ✅          | ✅ (local only, verified in-job) | — | — |
 
 ### Scheduled verification (separate workflow)
 

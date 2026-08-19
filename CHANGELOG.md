@@ -2,6 +2,22 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-19 — Coverage expansion, CI/CD extras matrix, and documentation alignment
+
+- **Test coverage expanded to 99.39% (347 tests)**:
+  - Added test coverage across `basic_agent.agent` (callbacks lifecycle, span handling, unknown tool skipping).
+  - Added test coverage across `basic_agent.auth.core` and `basic_agent.auth.gateway` (missing token subjects, auth-disabled WebSocket token bypass, ForwardAuth healthz/verify status codes).
+  - Added test coverage for `basic_agent.autoconfig` (storage bucket path validation, cloud messaging, cloud caching with Redis/Cache URL, cloud search, and cloud logging providers).
+  - Added test coverage for `basic_agent.config.loader` and `basic_agent.config.settings` (positive integer validation, unresolved substitutions, malformed YAML schemas, code execution config typing, strict boolean/integer/float settings constraints).
+  - Added test coverage for `basic_agent.interfaces.rest` (SubjectBindingMiddleware bypass on `/health` and `/version`, malformed JSON error handling, and subject override behavior when auth is disabled).
+  - Added test coverage for `basic_agent.knowledge` (cache hit / stat verification, missing file cache reset), `basic_agent.telemetry` (OTLP endpoint initialization), and `basic_agent.tools` (service API headers, non-directory skills scanning, GCP Application Integration toolset construction).
+- **CI/CD matrix for optional dependency extras**:
+  - Expanded `test-extras` in `.github/workflows/ci.yml` to a matrix covering both `docker` and `gke` extras (`extra: ["docker", "gke"]`).
+  - Aligned `.github/CI-CD-INTEGRATION.md` architecture diagram, job dependencies (`needs: [test, test-extras, lint]`), and trigger matrix.
+- **Backlog audit**:
+  - Audited O1 Workflow migration against ADK 2.6.3 and confirmed gate status (ADR-003).
+  - Verified GKE dependency set and filterwarnings under pytest across all matrix configurations.
+
 ## 2026-08-17 — Image CVE fix: apply Debian security upgrades in build
 
 - The previous push failed the CI Trivy gate (9 × HIGH, all one CVE):

@@ -2,8 +2,8 @@
 
 An AI agent that adapts to your needs. Choose what you want it to do, configure it with environment variables, and run it with one Docker command.
 
-[![Tests](https://img.shields.io/badge/tests-311%20passing-brightgreen)](./tests/)
-[![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen)](./tests/)
+[![Tests](https://img.shields.io/badge/tests-347%20passing-brightgreen)](./tests/)
+[![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](./tests/)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-production%20ready-green)](.)
 

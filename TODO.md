@@ -36,12 +36,19 @@ decisions are recorded as ADRs in [docs/](docs/).
 
 ---
 
+## Cleanup completed — 2026-08-19
+
+- [x] Expanded test coverage to 99.39% across all modules (347 tests passing), covering edge cases and defensive branches in `agent`, `auth`, `autoconfig`, `config`, `interfaces`, `knowledge`, `telemetry`, and `tools`.
+- [x] Expanded CI/CD `test-extras` in `.github/workflows/ci.yml` into a matrix running both `docker` and `gke` optional extras.
+- [x] Aligned `.github/CI-CD-INTEGRATION.md` architecture diagram, job dependencies, and trigger matrix.
+- [x] Re-audited O1 against `google.adk` 2.6.3 and confirmed gate status (ADR-003).
+
 ## Cleanup completed — 2026-08-17
 
 - [x] Removed the stale `TODO P11 security review` marker from the
   `code-exec` network definition in `docker-compose.yml`; P11 is complete.
 
-## Open items — 2026-08-17
+## Open items — 2026-08-19
 
 Verified against the current tree after the docs/CMD/CVE fix series. The
 2026-08-15 security-and-correctness hardening landed in full (identity

@@ -289,3 +289,474 @@ class TestConfigurationEdgeCases:
 
         config = load_settings()
         assert config.live_model == "gemini-3.1-flash-live-preview"
+
+
+class TestAgentCallbacksAndWiring:
+    """Test agent callbacks and runtime wiring branches."""
+
+    def test_before_and_after_run_callback_lifecycle(self):
+        import asyncio
+        from types import SimpleNamespace
+        from basic_agent.agent import GenericAgentPlugin
+
+        plugin = GenericAgentPlugin()
+        plugin.capabilities = {}
+        ctx = SimpleNamespace(invocation_id="test-inv-001", app_name="test-app")
+
+        asyncio.run(plugin.before_run_callback(invocation_context=ctx))
+        assert bool(plugin.capabilities)
+        assert "test-inv-001" in plugin._spans
+
+        asyncio.run(plugin.after_run_callback(invocation_context=ctx))
+        assert "test-inv-001" not in plugin._spans
+
+    def test_after_run_callback_unregistered_span(self):
+        import asyncio
+        from types import SimpleNamespace
+        from basic_agent.agent import GenericAgentPlugin
+
+        plugin = GenericAgentPlugin()
+        ctx = SimpleNamespace(invocation_id="missing-inv-id", app_name="test-app")
+        # Calling after_run_callback with unknown invocation_id should not fail
+        asyncio.run(plugin.after_run_callback(invocation_context=ctx))
+
+    def test_build_runtime_context_skips_unknown_tool(self):
+        from basic_agent.agent import _build_runtime_context
+        from basic_agent.config.loader import AgentConfig, ToolsConfig
+
+        config = AgentConfig(
+            use_case="assistant",
+            name="test_agent",
+            tools=ToolsConfig(enabled=["runtime", "unknown_custom_tool_xyz"]),
+        )
+        runtime_ctx = _build_runtime_context(config)
+        assert len(runtime_ctx.tools) == 1
+
+
+class TestAuthEdgeCases:
+    """Test auth token decoding and websocket edge cases."""
+
+    def test_decode_token_missing_sub_raises_error(self, settings_patch, monkeypatch):
+        import jwt
+        from types import SimpleNamespace
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from basic_agent import auth
+
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_key = private_key.public_key()
+        settings_patch(
+            auth.core,
+            auth_disabled=False,
+            keycloak_issuer="https://issuer.example",
+            keycloak_jwks_url="https://issuer.example/jwks",
+            keycloak_audience="test-aud",
+        )
+
+        class FakeJwks:
+            def get_signing_key_from_jwt(self, _token):
+                return SimpleNamespace(key=public_key)
+
+        monkeypatch.setattr(auth.core, "_jwks_client", lambda _url: FakeJwks())
+
+        token_without_sub = jwt.encode(
+            {"iss": "https://issuer.example", "aud": "test-aud"},
+            private_key,
+            algorithm="RS256",
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            auth.core._decode(token_without_sub)
+        assert exc_info.value.status_code == 401
+
+    def test_authenticate_websocket_token_when_auth_disabled(self, settings_patch):
+        from basic_agent import auth
+
+        settings_patch(auth.core, auth_disabled=True)
+        result = auth.core.authenticate_websocket_token("any-token")
+        assert result == {}
+
+    def test_authenticate_websocket_missing_token_raises_401(self, settings_patch):
+        from basic_agent import auth
+
+        settings_patch(auth.core, auth_disabled=False, keycloak_issuer="https://issuer.example")
+        ws = MagicMock()
+        ws.headers = {}
+        with pytest.raises(HTTPException) as exc_info:
+            auth.core.authenticate_websocket(ws)
+        assert exc_info.value.status_code == 401
+
+    def test_forwardauth_gateway_healthz(self):
+        from basic_agent.auth.gateway import healthz
+
+        assert healthz() == {"status": "ok", "provider": "keycloak"}
+
+    def test_forwardauth_gateway_verify_unconfigured(self, settings_patch):
+        from basic_agent import auth
+        from basic_agent.auth.gateway import verify
+
+        settings_patch(auth.core, keycloak_issuer="", auth_disabled=False)
+        req = Request({"type": "http", "headers": []})
+        response = verify(req)
+        assert response.status_code == 503
+
+
+class TestAutoconfigProvidersCoverage:
+    """Test autoconfig provider discovery edge cases."""
+
+    def test_provider_spec_base_raises(self):
+        from basic_agent.autoconfig import _ProviderSpec
+
+        with pytest.raises(NotImplementedError):
+            _ProviderSpec.discover({})
+
+    def test_cloud_storage_invalid_bucket_paths(self):
+        from basic_agent.autoconfig import CloudStorageProvider, ProviderConfigurationError
+
+        with pytest.raises(ProviderConfigurationError, match="Invalid storage bucket"):
+            CloudStorageProvider.discover({"STORAGE_BUCKET": "bucket/with/slashes"})
+
+        with pytest.raises(ProviderConfigurationError, match="Invalid storage bucket"):
+            CloudStorageProvider.discover({"STORAGE_BUCKET": "bucket with spaces"})
+
+        valid = CloudStorageProvider.discover({"STORAGE_BUCKET": "my-valid-bucket"})
+        assert valid is not None
+        assert valid.strategy == "cloud"
+
+    def test_cloud_messaging_provider(self):
+        from basic_agent.autoconfig import CloudMessagingProvider
+
+        provider = CloudMessagingProvider.discover({"MESSAGING_URL": "https://messaging.example.com"})
+        assert provider is not None
+        assert provider.strategy == "cloud"
+
+    def test_cloud_caching_provider_redis_url(self):
+        from basic_agent.autoconfig import CloudCachingProvider
+
+        provider = CloudCachingProvider.discover({"REDIS_URL": "redis://localhost:6379"})
+        assert provider is not None
+        assert provider.strategy == "cloud"
+
+    def test_cloud_search_provider(self):
+        from basic_agent.autoconfig import CloudSearchProvider
+
+        provider = CloudSearchProvider.discover({
+            "SEARCH_URL": "https://search.example.com",
+            "SEARCH_API_KEY": "test-key",
+        })
+        assert provider is not None
+        assert provider.strategy == "cloud"
+
+    def test_cloud_logging_provider(self):
+        from basic_agent.autoconfig import CloudLoggingProvider
+
+        provider = CloudLoggingProvider.discover({
+            "LOG_ENDPOINT": "https://logging.example.com",
+            "LOG_API_KEY": "test-key",
+        })
+        assert provider is not None
+        assert provider.strategy == "cloud"
+
+
+class TestConfigLoaderValidationBranches:
+    """Test config loader parsing and validation branches."""
+
+    def test_positive_int_validation(self):
+        from basic_agent.config.loader import _positive_int, _env_positive_int
+
+        with pytest.raises(ValueError, match="must be an integer >= 1"):
+            _positive_int(True, "test")
+        with pytest.raises(ValueError, match="must be an integer >= 1"):
+            _positive_int("string", "test")
+        with pytest.raises(ValueError, match="must be an integer >= 1"):
+            _env_positive_int("not-a-number", "test")
+
+    def test_resolve_use_case_key_unregistered(self):
+        from basic_agent.config.loader import _resolve_use_case_key
+
+        assert _resolve_use_case_key(" Custom_Case ") == "custom_case"
+
+    def test_substitute_env_vars_missing_no_default(self):
+        from basic_agent.config.loader import _substitute_env_vars
+
+        result = _substitute_env_vars("${TOTALLY_UNSET_ENV_VAR_XYZ}")
+        assert result == "${TOTALLY_UNSET_ENV_VAR_XYZ}"
+
+    def test_load_config_yaml_non_dict(self, tmp_path):
+        from basic_agent.config.loader import load_config_from_yaml
+
+        p = tmp_path / "list_config.yaml"
+        p.write_text("- item1\n- item2\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="must be a YAML object"):
+            load_config_from_yaml(p)
+
+    def test_load_config_yaml_unresolved_env(self, tmp_path):
+        from basic_agent.config.loader import load_config_from_yaml
+
+        p = tmp_path / "unresolved.yaml"
+        p.write_text("agent:\n  use_case: ${UNRESOLVED_TEST_VAR_123}\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="Unresolved environment substitution"):
+            load_config_from_yaml(p)
+
+    def test_parse_execution_code_execution_invalid_type(self):
+        from basic_agent.config.loader import _parse_code_execution_config
+
+        with pytest.raises(ValueError, match="must be a string"):
+            _parse_code_execution_config({"code_execution": {"docker_host": 12345}})
+
+    def test_parse_agent_config_not_dict(self):
+        from basic_agent.config.loader import _parse_agent_config
+
+        with pytest.raises(ValueError, match="agent must be a mapping"):
+            _parse_agent_config({"agent": "not-a-mapping"})
+
+
+class TestSettingsValidationErrors:
+    """Test Settings parser validation errors."""
+
+    def test_settings_bool_error(self, monkeypatch):
+        from basic_agent.config.settings import _bool
+
+        monkeypatch.setenv("TEST_BOOL_VAR", "not-bool")
+        with pytest.raises(ValueError, match="must be true or false"):
+            _bool("TEST_BOOL_VAR")
+
+    def test_settings_int_error(self, monkeypatch):
+        from basic_agent.config.settings import _int
+
+        monkeypatch.setenv("TEST_INT_VAR", "invalid-int")
+        with pytest.raises(ValueError, match="must be an integer"):
+            _int("TEST_INT_VAR", 5)
+
+    def test_settings_float_error(self, monkeypatch):
+        from basic_agent.config.settings import _float
+
+        monkeypatch.setenv("TEST_FLOAT_VAR", "invalid-float")
+        with pytest.raises(ValueError, match="must be a number"):
+            _float("TEST_FLOAT_VAR", 1.0)
+
+        monkeypatch.setenv("TEST_FLOAT_MIN_VAR", "0.5")
+        with pytest.raises(ValueError, match="must be at least 1.0"):
+            _float("TEST_FLOAT_MIN_VAR", 1.0, minimum=1.0)
+
+
+class TestKnowledgeCacheHit:
+    """Test knowledge cache behavior."""
+
+    def test_knowledge_cache_hit_and_missing_file(self, tmp_path, settings_patch):
+        from basic_agent import knowledge as knowledge_mod
+
+        kfile = tmp_path / "cache_test.json"
+        kfile.write_text('[{"title":"Item","content":"Content"}]', encoding="utf-8")
+        settings_patch(knowledge_mod, knowledge_file=str(kfile))
+
+        entries_1 = knowledge_mod._knowledge_entries()
+        entries_2 = knowledge_mod._knowledge_entries()
+        assert entries_1 == entries_2
+        assert len(entries_1) == 1
+
+        # Non-existent file resets cache and returns empty list
+        settings_patch(knowledge_mod, knowledge_file=str(tmp_path / "non_existent_file.json"))
+        assert knowledge_mod._knowledge_entries() == []
+
+
+class TestTelemetryOtelConfig:
+    """Test OpenTelemetry configuration with endpoint."""
+
+    def test_configure_telemetry_with_endpoint(self, monkeypatch):
+        from basic_agent.telemetry import configure_telemetry
+
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+        tracer = configure_telemetry()
+        assert tracer is not None
+
+
+class TestToolsBuildingBranches:
+    """Test tools building branches and edge cases."""
+
+    def test_api_headers_with_service_key(self, settings_patch):
+        from basic_agent import tools as tools_mod
+
+        settings_patch(tools_mod, service_api_key="service-secret-key")
+        headers = tools_mod.api_headers(None)
+        assert headers == {"x-api-key": "service-secret-key"}
+
+    def test_build_skill_toolset_with_non_dir_and_invalid_dir(self, tmp_path):
+        from basic_agent.tools import _build_skill_toolset, build_tool
+        from basic_agent.config.loader import AgentConfig, ToolsConfig, ToolsSkillsConfig
+
+        skills_dir = tmp_path / "skills"
+        skills_dir.mkdir()
+        (skills_dir / "regular_file.txt").write_text("not a directory", encoding="utf-8")
+
+        config = AgentConfig(
+            use_case="assistant",
+            name="test",
+            tools=ToolsConfig(skills=ToolsSkillsConfig(dir=str(skills_dir))),
+        )
+        toolset = _build_skill_toolset(config)
+        assert toolset is not None
+
+        config_invalid = AgentConfig(
+            use_case="assistant",
+            name="test",
+            tools=ToolsConfig(skills=ToolsSkillsConfig(dir=str(tmp_path / "nonexistent_dir"))),
+        )
+        toolset_invalid = _build_skill_toolset(config_invalid)
+        assert toolset_invalid is not None
+
+        assert build_tool("unknown_tool_type", config) is None
+
+    def test_build_application_integration_toolset(self, settings_patch, monkeypatch):
+        from basic_agent import tools as tools_mod
+
+        settings_patch(tools_mod, gcp_project="", gcp_integration="")
+        assert tools_mod._build_application_integration_toolset() is None
+
+        settings_patch(
+            tools_mod,
+            gcp_project="test-project",
+            gcp_integration="test-integration",
+            gcp_location="us-central1",
+        )
+        fake_toolset = MagicMock()
+        monkeypatch.setattr(
+            "google.adk.tools.application_integration_tool.ApplicationIntegrationToolset",
+            lambda **kwargs: fake_toolset,
+        )
+        assert tools_mod._build_application_integration_toolset() is fake_toolset
+        assert tools_mod.build_tool("application_integration", None) is fake_toolset
+
+
+class TestCustomUseCaseRegistryLoaderError:
+    """Test custom use cases loading errors."""
+
+    def test_load_custom_use_cases_bad_spec(self, tmp_path):
+        from basic_agent.use_cases.registry import load_custom_use_cases
+
+        dummy_file = tmp_path / "dummy.py"
+        dummy_file.write_text("# dummy", encoding="utf-8")
+
+        with patch("importlib.util.spec_from_file_location", return_value=None):
+            with pytest.raises(ValueError, match="Cannot load use-case module"):
+                load_custom_use_cases(str(dummy_file))
+
+
+class TestResolverDefensiveBranches:
+    """Test code execution resolver defensive branches."""
+
+    def test_provider_spec_methods(self):
+        from basic_agent.execution.resolver import _CodeExecutionProviderSpec
+
+        with pytest.raises(NotImplementedError):
+            _CodeExecutionProviderSpec.probe({}, model="test")
+        with pytest.raises(NotImplementedError):
+            _CodeExecutionProviderSpec.build({})
+
+    def test_gemini_builtin_import_error(self):
+        from basic_agent.execution.resolver import GeminiBuiltInCodeExecutionProvider
+
+        with patch.dict("sys.modules", {"google.adk.utils.model_name_utils": None}):
+            assert GeminiBuiltInCodeExecutionProvider.probe({}, model="gemini-2.0-flash") is False
+
+
+class TestRestMiddlewareEdgeCases:
+    """Test SubjectBindingMiddleware edge cases."""
+
+    def test_middleware_health_and_version_bypass(self):
+        import asyncio
+        from starlette.requests import Request
+        from starlette.responses import PlainTextResponse
+        from basic_agent.interfaces.rest import SubjectBindingMiddleware
+
+        middleware = SubjectBindingMiddleware(app=None)
+        req_health = Request({"type": "http", "path": "/health", "headers": []})
+        req_version = Request({"type": "http", "path": "/version", "headers": []})
+
+        async def fake_next(req):
+            return PlainTextResponse("ok")
+
+        res1 = asyncio.run(middleware.dispatch(req_health, fake_next))
+        assert res1.status_code == 200
+        res2 = asyncio.run(middleware.dispatch(req_version, fake_next))
+        assert res2.status_code == 200
+
+    def test_middleware_auth_disabled_override_user_id(self, settings_patch):
+        import asyncio
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+        from basic_agent import auth
+        from basic_agent.interfaces import rest as rest_mod
+        from basic_agent.interfaces.rest import SubjectBindingMiddleware
+
+        settings_patch(auth.core, auth_disabled=True)
+        settings_patch(rest_mod, auth_disabled=True)
+        middleware = SubjectBindingMiddleware(app=None)
+
+        scope = {
+            "type": "http",
+            "path": "/run",
+            "headers": [(b"content-type", b"application/json")],
+        }
+        body = b'{"user_id": "other_user"}'
+
+        async def fake_receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        req = Request(scope, fake_receive)
+
+        async def fake_next(req):
+            return JSONResponse({"status": "ok", "body": json.loads(req._body)})
+
+        res = asyncio.run(middleware.dispatch(req, fake_next))
+        assert res.status_code == 200
+        data = json.loads(res.body)
+        assert data["body"]["user_id"] == "anonymous"
+
+    def test_middleware_malformed_json_on_run(self, settings_patch):
+        import asyncio
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+        from basic_agent import auth
+        from basic_agent.interfaces.rest import SubjectBindingMiddleware
+
+        settings_patch(auth.core, auth_disabled=True)
+        middleware = SubjectBindingMiddleware(app=None)
+
+        scope = {
+            "type": "http",
+            "path": "/run",
+            "headers": [(b"content-type", b"application/json")],
+        }
+        body = b'not-json'
+
+        async def fake_receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        req = Request(scope, fake_receive)
+
+        async def fake_next(req):
+            return JSONResponse({"status": "ok"})
+
+        res = asyncio.run(middleware.dispatch(req, fake_next))
+        assert res.status_code == 200
+
+    def test_middleware_auth_exception_handling(self, settings_patch):
+        import asyncio
+        from starlette.requests import Request
+        from basic_agent import auth
+        from basic_agent.interfaces.rest import SubjectBindingMiddleware
+
+        settings_patch(auth.core, auth_disabled=False, keycloak_issuer="https://issuer.example")
+        middleware = SubjectBindingMiddleware(app=None)
+
+        scope = {
+            "type": "http",
+            "path": "/api/resource",
+            "headers": [],
+        }
+        req = Request(scope)
+
+        async def fake_next(req):
+            return None
+
+        res = asyncio.run(middleware.dispatch(req, fake_next))
+        assert res.status_code == 401

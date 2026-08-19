@@ -137,15 +137,19 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
-  # The docker extra is opt-in (`uv sync --extra docker`) and therefore
-  # never exercised by the matrix above. It must stay installable from the
-  # lock and the full suite must pass with the SDK present — note the
-  # import-safety test intentionally skips there (its assertion is only
-  # provable without the package); the no-docker matrix leg covers it.
+  # The optional extras (docker, gke) are opt-in (`uv sync --extra ...`)
+  # and therefore never exercised by the default matrix above. They must stay
+  # installable from the lock and the full suite must pass with their SDKs
+  # present — note the docker import-safety test intentionally skips when the
+  # docker SDK is installed; the no-extra matrix legs cover that assertion.
   test-extras:
-    name: "Test (extras: docker)"
+    name: "Test (extras: ${{ matrix.extra }})"
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        extra: ["docker", "gke"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -161,8 +165,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install dependencies (with docker extra)
-        run: uv sync --frozen --extra docker
+      - name: Install dependencies (with ${{ matrix.extra }} extra)
+        run: uv sync --frozen --extra ${{ matrix.extra }}
 
       - name: Run tests with coverage
         run: |

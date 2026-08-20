@@ -18,6 +18,24 @@ All notable changes to this project are recorded here, newest first.
   - Audited O1 Workflow migration against ADK 2.6.3 and confirmed gate status (ADR-003).
   - Verified GKE dependency set and filterwarnings under pytest across all matrix configurations.
 
+## 2026-08-17 — Whole-project audit remediation
+
+- Preserved runtime safety policy across every role prompt and added strict
+  YAML validation, explicit empty-tool semantics, role model/tool resolution,
+  output/state/name wiring, and indexed multi-perspective synthesis.
+- Replaced heuristic mutation detection with explicit tool policy and ADK
+  confirmation callbacks; isolated unauthenticated sessions and rejected
+  `AUTH_DISABLED` in production-like deployments.
+- Serialized and bounded Docker code execution, tightened optional-provider
+  probes, removed OpenAPI/search defaults that cannot work for every model,
+  added knowledge/Live input limits, and wired external ADK persistence URIs.
+- Hardened Cloud Run/Compose defaults, added resolved-runtime telemetry/error
+  spans, pinned the ADK dependency range, expanded behavior regression tests,
+  and added Ruff/build/coverage/sandbox-image CI gates.
+- Added the strict [configuration reference](docs/CONFIGURATION.md); residual
+  release-supply-chain, license, staging, and upstream Workflow migration work
+  remains tracked in `TODO.md`.
+
 ## 2026-08-17 — Image CVE fix: apply Debian security upgrades in build
 
 - The previous push failed the CI Trivy gate (9 × HIGH, all one CVE):

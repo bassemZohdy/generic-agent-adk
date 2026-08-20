@@ -7,9 +7,9 @@ import inspect
 import logging
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
-import uuid
 
 from ..util import is_production
 
@@ -197,5 +197,7 @@ def load_custom_use_cases(
         instance = cls()
         registry.register(instance)
         registered.append(instance.use_case)
-        logger.info("Registered custom use case %r from %s", instance.use_case, module_path)
+        logger.info(
+            "Registered custom use case %r from %s", instance.use_case, module_path
+        )
     return sorted(registered)

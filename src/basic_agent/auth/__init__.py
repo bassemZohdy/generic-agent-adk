@@ -13,6 +13,7 @@ from .core import (
 from .gateway import app
 
 __all__ = [
+    "app",
     "authenticate_request",
     "authenticate_websocket",
     "authenticate_websocket_token",
@@ -21,5 +22,4 @@ __all__ = [
     "roles_from_claims",
     "token_from_request",
     "websocket_auth_subprotocol",
-    "app",
 ]

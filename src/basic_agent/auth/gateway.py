@@ -5,10 +5,9 @@ from __future__ import annotations
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 
-from .core import authenticate_request, keycloak_enabled
 from ..config.settings import settings
 from ..util import is_production
-
+from .core import authenticate_request, keycloak_enabled
 
 _production = is_production(settings.deployment)
 app = FastAPI(
@@ -28,10 +27,13 @@ def healthz() -> dict[str, str]:
 def verify(request: Request) -> Response:
     """Return 2xx only for a valid Keycloak bearer token."""
     if not keycloak_enabled() and not settings.auth_disabled:
-        return Response(status_code=503, content="Keycloak authentication is not configured")
-    claims = authenticate_request(request, required_roles=settings.keycloak_required_roles)
+        return Response(
+            status_code=503, content="Keycloak authentication is not configured"
+        )
+    claims = authenticate_request(
+        request, required_roles=settings.keycloak_required_roles
+    )
     response = Response(status_code=200)
-    if claims:
-        if subject := claims.get("sub"):
-            response.headers["X-Auth-User"] = str(subject)
+    if claims and (subject := claims.get("sub")):
+        response.headers["X-Auth-User"] = str(subject)
     return response

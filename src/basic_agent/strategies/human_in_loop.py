@@ -42,7 +42,14 @@ class HumanInLoopStrategy(AgentStrategy):
             rt,
             name="human_in_loop_completer",
             description="Complete the approved action",
-            role=RoleConfig(instruction="Complete the user-approved action."),
+            role=RoleConfig(
+                instruction=(
+                    "Complete the user-approved action only after the approval "
+                    "tool has returned confirmed. If approval is pending or "
+                    "rejected, do not invoke any state-changing tool; explain "
+                    "that the action was not authorized."
+                )
+            ),
         )
 
         return SequentialAgent(

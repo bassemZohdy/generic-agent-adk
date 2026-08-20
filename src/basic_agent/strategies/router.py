@@ -18,7 +18,9 @@ class RouterStrategy(AgentStrategy):
     def validate(self, context: AgentStrategyContext) -> None:
         """Ensure specialists are configured."""
         if not context.runtime.specialists:
-            raise ValueError("ROUTER strategy requires at least one specialist in config")
+            raise ValueError(
+                "ROUTER strategy requires at least one specialist in config"
+            )
 
     def build(self, context: AgentStrategyContext) -> LlmAgent:
         """Build a ROUTER-mode agent.

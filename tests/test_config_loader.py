@@ -1,10 +1,8 @@
 """Tests for configuration loader."""
 
 import logging
-import os
+
 import pytest
-import tempfile
-from pathlib import Path
 
 from basic_agent.config.loader import (
     AgentConfig,
@@ -199,9 +197,21 @@ def test_config_validation_rejects_missing_use_case():
 def test_config_validation_is_structural_and_numeric():
     """The loader leaves use-case semantics to strategies but rejects bad counts."""
     configs = [
-        AgentConfig(use_case="expert_dispatch", description="Test", execution=ExecutionConfig(specialists=[])),
-        AgentConfig(use_case="approval_gate", description="Test", execution=ExecutionConfig(require_approval=False)),
-        AgentConfig(use_case="refine_until_good", description="Test", execution=ExecutionConfig(max_iterations=1)),
+        AgentConfig(
+            use_case="expert_dispatch",
+            description="Test",
+            execution=ExecutionConfig(specialists=[]),
+        ),
+        AgentConfig(
+            use_case="approval_gate",
+            description="Test",
+            execution=ExecutionConfig(require_approval=False),
+        ),
+        AgentConfig(
+            use_case="refine_until_good",
+            description="Test",
+            execution=ExecutionConfig(max_iterations=1),
+        ),
     ]
 
     for config in configs:
@@ -209,7 +219,9 @@ def test_config_validation_is_structural_and_numeric():
 
     with pytest.raises(ValueError, match="execution.max_iterations"):
         AgentConfig(
-            use_case="refine_until_good", description="Test", execution=ExecutionConfig(max_iterations=0)
+            use_case="refine_until_good",
+            description="Test",
+            execution=ExecutionConfig(max_iterations=0),
         ).validate()
 
 
@@ -316,7 +328,44 @@ state:
   enabled: true
 """)
 
-    with pytest.raises(ValueError, match="use_case is required"):
+    with pytest.raises(ValueError, match="Unknown agent field"):
+        load_config_from_yaml(config_file)
+
+
+@pytest.mark.parametrize(
+    ("section", "value", "message"),
+    [
+        ("model", "[]", "model must be a mapping"),
+        ("instructions", "[]", "instructions must be a mapping"),
+        ("tools", "[]", "tools must be a mapping"),
+        ("execution", "[]", "execution must be a mapping"),
+        ("output", "[]", "output must be a mapping"),
+        ("state", "[]", "state must be a mapping"),
+        ("roles", "[]", "roles must be a mapping"),
+    ],
+)
+def test_load_config_rejects_wrong_section_types(tmp_path, section, value, message):
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text(f"agent:\n  use_case: assistant\n{section}: {value}\n")
+
+    with pytest.raises(ValueError, match=message):
+        load_config_from_yaml(config_file)
+
+
+def test_load_config_rejects_wrong_nested_section_types(tmp_path):
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text(
+        """
+agent:
+  use_case: assistant
+tools:
+  mcp: []
+execution:
+  code_execution: []
+"""
+    )
+
+    with pytest.raises(ValueError, match="tools.mcp must be a mapping"):
         load_config_from_yaml(config_file)
 
 
@@ -429,6 +478,14 @@ def test_apply_env_overrides_noop_when_unset(monkeypatch, base_config):
         monkeypatch.delenv(var, raising=False)
 
     assert apply_env_overrides(base_config) == base_config
+
+
+def test_apply_env_overrides_respects_explicit_empty_tools(monkeypatch, base_config):
+    for var in _ALL_CONFIG_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("AGENT_TOOLS", "")
+
+    assert apply_env_overrides(base_config).tools.enabled == []
 
 
 def test_apply_env_overrides_creates_missing_subconfigs(monkeypatch):
@@ -583,6 +640,7 @@ def test_env_builder_code_execution_defaults(monkeypatch):
 
 def test_env_builder_code_execution_from_settings(settings_patch):
     import sys
+
     settings_mod = sys.modules["basic_agent.config.settings"]
 
     settings_patch(

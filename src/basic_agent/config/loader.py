@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 import logging
 import os
 from dataclasses import dataclass, field
@@ -40,7 +39,9 @@ class InstructionsConfig:
 class ToolsConfig:
     """Tools configuration."""
 
-    enabled: list[str] = field(default_factory=list)
+    # ``None`` means the tools section omitted ``enabled``; an empty list is an
+    # intentional request for no tools.
+    enabled: list[str] | None = None
     mcp: ToolsMcpConfig | None = None
     openapi: ToolsOpenApiConfig | None = None
     skills: ToolsSkillsConfig | None = None
@@ -50,7 +51,7 @@ class ToolsConfig:
 class ToolsMcpConfig:
     """MCP tools configuration."""
 
-    enabled: bool = False
+    enabled: bool | None = None
     tools: list[str] = field(default_factory=list)
     prefix: str = "mcp_"
 
@@ -59,7 +60,7 @@ class ToolsMcpConfig:
 class ToolsOpenApiConfig:
     """OpenAPI tools configuration."""
 
-    enabled: bool = False
+    enabled: bool | None = None
     url: str = ""
     path: str = "/status"
     title: str = "Service API"
@@ -70,7 +71,7 @@ class ToolsOpenApiConfig:
 class ToolsSkillsConfig:
     """Skills tools configuration."""
 
-    enabled: bool = False
+    enabled: bool | None = None
     dir: str = ""
     prefix: str = ""
 
@@ -84,7 +85,7 @@ class ExecutionConfig:
     steps: int | None = None
     workers: int | None = None
     specialists: list[str] = field(default_factory=list)
-    code_execution: "ExecutionCodeExecutionConfig | None" = None
+    code_execution: ExecutionCodeExecutionConfig | None = None
 
 
 @dataclass
@@ -165,10 +166,62 @@ def _split_names(raw: str) -> list[str]:
 def _positive_int(value: Any, name: str) -> int:
     """Validate a positive integer from YAML or environment input."""
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"{name} must be an integer >= 1; got {value!r}")
+        raise ValueError(  # noqa: TRY004 - preserve actionable config error type
+            f"{name} must be an integer >= 1; got {value!r}"
+        )
     if value < 1:
         raise ValueError(f"{name} must be an integer >= 1; got {value!r}")
     return value
+
+
+_CONFIG_KEYS = {
+    "agent",
+    "model",
+    "instructions",
+    "tools",
+    "execution",
+    "output",
+    "state",
+    "roles",
+}
+
+
+def _mapping(value: Any, name: str) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError(  # noqa: TRY004 - preserve actionable config error type
+            f"{name} must be a mapping; got {type(value).__name__}"
+        )
+    return value
+
+
+def _keys(value: dict, allowed: set[str], name: str) -> None:
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        raise ValueError(f"Unknown {name} field(s): {', '.join(unknown)}")
+
+
+def _string(value: Any, name: str, *, allow_empty: bool = True) -> str:
+    if not isinstance(value, str):
+        raise ValueError(  # noqa: TRY004 - preserve actionable config error type
+            f"{name} must be a string; got {type(value).__name__}"
+        )
+    if not allow_empty and not value.strip():
+        raise ValueError(f"{name} must not be empty")
+    return value
+
+
+def _boolean(value: Any, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(  # noqa: TRY004 - preserve actionable config error type
+            f"{name} must be a boolean; got {type(value).__name__}"
+        )
+    return value
+
+
+def _string_list(value: Any, name: str) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{name} must be a list of strings")
+    return [item.strip() for item in value if item.strip()]
 
 
 def _env_positive_int(raw: str, name: str) -> int:
@@ -248,7 +301,11 @@ def _unresolved_substitution_paths(obj: Any, path: str = "") -> list[str]:
     if isinstance(obj, dict):
         paths: list[str] = []
         for key, value in obj.items():
-            paths.extend(_unresolved_substitution_paths(value, f"{path}.{key}" if path else str(key)))
+            paths.extend(
+                _unresolved_substitution_paths(
+                    value, f"{path}.{key}" if path else str(key)
+                )
+            )
         return paths
     if isinstance(obj, list):
         paths = []
@@ -285,15 +342,16 @@ def load_config_from_yaml(path: str | Path) -> AgentConfig:
         raise ValueError(f"Invalid YAML in {path}: {e}") from e
 
     if not isinstance(raw_data, dict):
-        raise ValueError(f"Configuration must be a YAML object, not {type(raw_data)}")
+        raise ValueError(  # noqa: TRY004 - preserve actionable config error type
+            f"Configuration must be a YAML object, not {type(raw_data)}"
+        )
 
     # Apply environment variable substitutions
     raw_data = _process_dict_substitutions(raw_data)
     unresolved = _unresolved_substitution_paths(raw_data)
     if unresolved:
         raise ValueError(
-            "Unresolved environment substitution(s) in YAML: "
-            + ", ".join(unresolved)
+            "Unresolved environment substitution(s) in YAML: " + ", ".join(unresolved)
         )
 
     # Parse into dataclasses
@@ -328,11 +386,13 @@ def load_config_from_env() -> AgentConfig:
     )
 
     specialists_raw = os.environ.get("AGENT_SPECIALISTS")
-    specialists = _split_names(specialists_raw) if specialists_raw else list(settings.specialists)
+    specialists = (
+        _split_names(specialists_raw) if specialists_raw else list(settings.specialists)
+    )
 
     config = AgentConfig(
         use_case=use_case,
-        name=settings.app_name,
+        name="",
         description=settings.agent_description,
         model=ModelConfig(
             provider="google",
@@ -361,7 +421,9 @@ def load_config_from_env() -> AgentConfig:
             ),
         ),
         output=OutputConfig(
-            schema="GenericAgentResponse" if settings.enable_structured_output else None,
+            schema="GenericAgentResponse"
+            if settings.enable_structured_output
+            else None,
             key="last_response",
         ),
         state=StateConfig(enabled=True),
@@ -429,7 +491,7 @@ def apply_env_overrides(
         overridden.append("AGENT_INSTRUCTION")
 
     tool_names = os.environ.get("AGENT_TOOLS")
-    if tool_names and tool_names.strip():
+    if tool_names is not None:
         tools = config.tools or ToolsConfig()
         config = dataclasses.replace(
             config, tools=dataclasses.replace(tools, enabled=_split_names(tool_names))
@@ -470,11 +532,27 @@ def apply_env_overrides(
     return config
 
 
-def _parse_code_execution_config(execution_data: dict) -> "ExecutionCodeExecutionConfig | None":
+def _parse_code_execution_config(
+    execution_data: dict,
+) -> ExecutionCodeExecutionConfig | None:
     """Parse the ``execution.code_execution`` mapping; None when absent."""
     data = execution_data.get("code_execution")
-    if not data:
+    if data is None:
         return None
+    data = _mapping(data, "execution.code_execution")
+    _keys(
+        data,
+        {
+            "strategy",
+            "docker_host",
+            "docker_image",
+            "vertex_resource",
+            "agent_engine_resource",
+            "gke_kubeconfig_path",
+            "gke_kubeconfig_context",
+        },
+        "execution.code_execution",
+    )
     fields = (
         "strategy",
         "docker_host",
@@ -486,10 +564,9 @@ def _parse_code_execution_config(execution_data: dict) -> "ExecutionCodeExecutio
     )
     for name in fields:
         value = data.get(name, "")
-        if value is not None and not isinstance(value, str):
-            raise ValueError(
-                f"execution.code_execution.{name} must be a string, got {type(value).__name__}"
-            )
+        if value is None:
+            value = ""
+        _string(value, f"execution.code_execution.{name}")
     return ExecutionCodeExecutionConfig(
         strategy=data.get("strategy", ""),
         docker_host=data.get("docker_host", ""),
@@ -513,18 +590,23 @@ def _parse_agent_config(data: dict) -> AgentConfig:
     Raises:
         ValueError: If required fields are missing.
     """
-    agent_data = data.get("agent", {})
-    if not isinstance(agent_data, dict):
-        raise ValueError("agent must be a mapping")
+    _keys(data, _CONFIG_KEYS, "configuration")
+    agent_data = _mapping(data.get("agent", {}), "agent")
+    _keys(agent_data, {"use_case", "name", "description"}, "agent")
 
-    use_case_raw = str(agent_data.get("use_case") or "").strip()
+    use_case_raw = _string(agent_data.get("use_case", ""), "agent.use_case").strip()
     if not use_case_raw:
         raise ValueError("agent.use_case is required")
     use_case = _resolve_use_case_key(use_case_raw)
 
     model_data = data.get("model", {})
     model_config = None
-    if model_data:
+    if "model" in data and model_data is not None:
+        model_data = _mapping(model_data, "model")
+        _keys(model_data, {"provider", "name", "api_key", "base_url"}, "model")
+        for field_name in ("provider", "name", "api_key", "base_url"):
+            if model_data.get(field_name) is not None:
+                _string(model_data[field_name], f"model.{field_name}")
         model_config = ModelConfig(
             provider=model_data.get("provider", "google"),
             name=model_data.get("name", ""),
@@ -534,7 +616,12 @@ def _parse_agent_config(data: dict) -> AgentConfig:
 
     instructions_data = data.get("instructions", {})
     instructions_config = None
-    if instructions_data:
+    if "instructions" in data and instructions_data is not None:
+        instructions_data = _mapping(instructions_data, "instructions")
+        _keys(instructions_data, {"value", "file"}, "instructions")
+        for field_name in ("value", "file"):
+            if instructions_data.get(field_name) is not None:
+                _string(instructions_data[field_name], f"instructions.{field_name}")
         instructions_config = InstructionsConfig(
             value=instructions_data.get("value", ""),
             file=instructions_data.get("file"),
@@ -542,21 +629,49 @@ def _parse_agent_config(data: dict) -> AgentConfig:
 
     tools_data = data.get("tools", {})
     tools_config = None
-    if tools_data:
+    if "tools" in data and tools_data is not None:
+        tools_data = _mapping(tools_data, "tools")
+        _keys(tools_data, {"enabled", "mcp", "openapi", "skills"}, "tools")
+        enabled = tools_data.get("enabled")
+        if enabled is not None:
+            enabled = _string_list(enabled, "tools.enabled")
         mcp_data = tools_data.get("mcp")
         mcp_config = None
-        if mcp_data:
+        if mcp_data is not None:
+            mcp_data = _mapping(mcp_data, "tools.mcp")
+            _keys(mcp_data, {"enabled", "tools", "prefix"}, "tools.mcp")
+            if "enabled" in mcp_data:
+                _boolean(mcp_data["enabled"], "tools.mcp.enabled")
+            mcp_tools = _string_list(mcp_data.get("tools", []), "tools.mcp.tools")
+            _string(mcp_data.get("prefix", "mcp_"), "tools.mcp.prefix")
             mcp_config = ToolsMcpConfig(
-                enabled=mcp_data.get("enabled", False),
-                tools=mcp_data.get("tools", []),
+                enabled=mcp_data.get("enabled"),
+                tools=mcp_tools,
                 prefix=mcp_data.get("prefix", "mcp_"),
             )
 
         openapi_data = tools_data.get("openapi")
         openapi_config = None
-        if openapi_data:
+        if openapi_data is not None:
+            openapi_data = _mapping(openapi_data, "tools.openapi")
+            _keys(
+                openapi_data,
+                {"enabled", "url", "path", "title", "prefix"},
+                "tools.openapi",
+            )
+            if "enabled" in openapi_data:
+                _boolean(openapi_data["enabled"], "tools.openapi.enabled")
+            for field_name, default in (
+                ("url", ""),
+                ("path", "/status"),
+                ("title", "Service API"),
+                ("prefix", "api_"),
+            ):
+                _string(
+                    openapi_data.get(field_name, default), f"tools.openapi.{field_name}"
+                )
             openapi_config = ToolsOpenApiConfig(
-                enabled=openapi_data.get("enabled", False),
+                enabled=openapi_data.get("enabled"),
                 url=openapi_data.get("url", ""),
                 path=openapi_data.get("path", "/status"),
                 title=openapi_data.get("title", "Service API"),
@@ -565,15 +680,21 @@ def _parse_agent_config(data: dict) -> AgentConfig:
 
         skills_data = tools_data.get("skills")
         skills_config = None
-        if skills_data:
+        if skills_data is not None:
+            skills_data = _mapping(skills_data, "tools.skills")
+            _keys(skills_data, {"enabled", "dir", "prefix"}, "tools.skills")
+            if "enabled" in skills_data:
+                _boolean(skills_data["enabled"], "tools.skills.enabled")
+            _string(skills_data.get("dir", ""), "tools.skills.dir")
+            _string(skills_data.get("prefix", ""), "tools.skills.prefix")
             skills_config = ToolsSkillsConfig(
-                enabled=skills_data.get("enabled", False),
+                enabled=skills_data.get("enabled"),
                 dir=skills_data.get("dir", ""),
                 prefix=skills_data.get("prefix", ""),
             )
 
         tools_config = ToolsConfig(
-            enabled=tools_data.get("enabled", []),
+            enabled=enabled,
             mcp=mcp_config,
             openapi=openapi_config,
             skills=skills_config,
@@ -581,7 +702,25 @@ def _parse_agent_config(data: dict) -> AgentConfig:
 
     execution_data = data.get("execution", {})
     execution_config = None
-    if execution_data:
+    if "execution" in data and execution_data is not None:
+        execution_data = _mapping(execution_data, "execution")
+        _keys(
+            execution_data,
+            {
+                "max_iterations",
+                "require_approval",
+                "steps",
+                "workers",
+                "specialists",
+                "code_execution",
+            },
+            "execution",
+        )
+        if "require_approval" in execution_data:
+            _boolean(execution_data["require_approval"], "execution.require_approval")
+        specialists = _string_list(
+            execution_data.get("specialists", []), "execution.specialists"
+        )
         execution_config = ExecutionConfig(
             max_iterations=_positive_int(
                 execution_data.get("max_iterations", 3),
@@ -598,13 +737,18 @@ def _parse_agent_config(data: dict) -> AgentConfig:
                 if execution_data.get("workers") is not None
                 else None
             ),
-            specialists=execution_data.get("specialists", []),
+            specialists=specialists,
             code_execution=_parse_code_execution_config(execution_data),
         )
 
     output_data = data.get("output", {})
     output_config = None
-    if output_data:
+    if "output" in data and output_data is not None:
+        output_data = _mapping(output_data, "output")
+        _keys(output_data, {"schema", "key"}, "output")
+        for field_name in ("schema", "key"):
+            if output_data.get(field_name) is not None:
+                _string(output_data[field_name], f"output.{field_name}")
         output_config = OutputConfig(
             schema=output_data.get("schema"),
             key=output_data.get("key"),
@@ -612,24 +756,36 @@ def _parse_agent_config(data: dict) -> AgentConfig:
 
     state_data = data.get("state", {})
     state_config = None
-    if state_data:
+    if "state" in data and state_data is not None:
+        state_data = _mapping(state_data, "state")
+        _keys(state_data, {"enabled"}, "state")
+        _boolean(state_data.get("enabled", True), "state.enabled")
         state_config = StateConfig(enabled=state_data.get("enabled", True))
 
-    roles_data = data.get("roles") or {}
-    roles = {
-        str(name): RoleConfig(
+    roles_data = data.get("roles", {})
+    if roles_data is None:
+        roles_data = {}
+    roles_data = _mapping(roles_data, "roles")
+    roles: dict[str, RoleConfig] = {}
+    for name, role in roles_data.items():
+        role = _mapping(role, f"roles.{name}")
+        _keys(role, {"instruction", "model", "tools"}, f"roles.{name}")
+        for field_name in ("instruction", "model"):
+            if role.get(field_name) is not None:
+                _string(role[field_name], f"roles.{name}.{field_name}")
+        role_tools = None
+        if "tools" in role and role["tools"] is not None:
+            role_tools = _string_list(role["tools"], f"roles.{name}.tools")
+        roles[str(name)] = RoleConfig(
             instruction=role.get("instruction"),
             model=role.get("model"),
-            tools=role.get("tools"),
+            tools=role_tools,
         )
-        for name, role in roles_data.items()
-        if isinstance(role, dict)
-    }
 
     return AgentConfig(
         use_case=use_case,
-        name=agent_data.get("name", ""),
-        description=agent_data.get("description", ""),
+        name=_string(agent_data.get("name", ""), "agent.name"),
+        description=_string(agent_data.get("description", ""), "agent.description"),
         model=model_config,
         instructions=instructions_config,
         tools=tools_config,

@@ -5,6 +5,7 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,6 +22,24 @@ env:
   COVERAGE_THRESHOLD: 90
 
 jobs:
+  sandbox-image:
+    name: Verify sandbox image
+    if: ${{ vars.SANDBOX_IMAGE_DIGEST != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Install image scanners
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$RUNNER_TOOL_CACHE"
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b "$RUNNER_TOOL_CACHE"
+          echo "$RUNNER_TOOL_CACHE" >> "$GITHUB_PATH"
+      - name: Verify pinned sandbox image, scan, and generate SBOM
+        env:
+          SANDBOX_IMAGE: ${{ vars.SANDBOX_IMAGE_DIGEST }}
+        run: sh scripts/verify-sandbox-image.sh "$SANDBOX_IMAGE"
+
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
@@ -39,7 +58,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v10.0.1
         with:
-          version: "latest"
+          version: "0.11.18"
           enable-cache: true
 
       - name: Set up Python
@@ -50,10 +69,32 @@ jobs:
       - name: Check patch formatting
         run: git diff --check
 
+      - name: Run Ruff lint and format checks
+        run: |
+          uvx --from ruff ruff check .
+          uvx --from ruff ruff format --check .
+
+      - name: Compile and validate package metadata
+        run: |
+          uv run python -m compileall -q src
+          uv build --wheel --sdist
+
       - name: Validate JSON fixtures
         run: |
           uv run python -m json.tool keycloak/realm-basic-agent.json >/dev/null
           uv run python -m json.tool keycloak/realm-basic-agent-dev.json >/dev/null
+
+      - name: Validate YAML and Markdown links
+        run: |
+          uv run python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          for path in list(Path("examples").glob("*.yaml")) + [Path("deploy/cloudrun/service.yaml")]:
+              yaml.safe_load(path.read_text(encoding="utf-8"))
+          print("YAML validation passed")
+          PY
+          uv run python scripts/check-doc-links.py
 
       - name: Validate Compose configuration
         run: |
@@ -84,7 +125,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v10.0.1
         with:
-          version: "latest"
+          version: "0.11.18"
           enable-cache: true
 
       - name: Set up Python
@@ -95,9 +136,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Audit Python dependencies
-        run: uvx --from pip-audit pip-audit --strict
-
       - name: Run tests with coverage
         run: |
           uv run pytest tests/ \
@@ -106,7 +144,8 @@ jobs:
             --cov=basic_agent \
             --cov-report=term-missing \
             --cov-report=xml \
-            --cov-report=html
+            --cov-report=html \
+            --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
 
       - name: Upload coverage reports
         if: matrix.python-version == '3.13'
@@ -117,14 +156,6 @@ jobs:
             .coverage
             htmlcov/
           retention-days: 5
-
-      - name: Check coverage threshold
-        if: matrix.python-version == '3.13'
-        run: |
-          uv run pytest tests/ \
-            --cov=basic_agent \
-            --cov-report=term \
-            --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
 
       - name: Upload coverage to Codecov (optional)
         if: matrix.python-version == '3.13'
@@ -142,6 +173,30 @@ jobs:
   # installable from the lock and the full suite must pass with their SDKs
   # present — note the docker import-safety test intentionally skips when the
   # docker SDK is installed; the no-extra matrix legs cover that assertion.
+
+  audit:
+    name: Audit Python dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.11.18"
+          enable-cache: true
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Install locked dependencies
+        run: uv sync --frozen
+      - name: Audit Python dependencies
+        run: uvx --from pip-audit pip-audit --strict
+
+  # The optional extras are opt-in and therefore never exercised by the
+  # default matrix above. The matrix below verifies each supported extra.
   test-extras:
     name: "Test (extras: ${{ matrix.extra }})"
     runs-on: ubuntu-latest
@@ -157,7 +212,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v10.0.1
         with:
-          version: "latest"
+          version: "0.11.18"
           enable-cache: true
 
       - name: Set up Python
@@ -181,7 +236,7 @@ jobs:
     name: Build Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [test, test-extras, lint]
+    needs: [test, test-extras, lint, audit]
     outputs:
       # Unverified staging tag only — never a floating release tag (latest,
       # branch, semver). Those are applied by promote-image only after

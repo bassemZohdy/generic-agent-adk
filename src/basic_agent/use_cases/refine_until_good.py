@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from .base import BaseUseCaseAgent
+from typing import ClassVar
+
 from ..strategies import EvaluatorOptimizerStrategy
+from .base import BaseUseCaseAgent
 
 
 class RefineUntilGoodAgent(BaseUseCaseAgent):
@@ -13,5 +15,5 @@ class RefineUntilGoodAgent(BaseUseCaseAgent):
     title = "Refine Until Good"
     when_to_use = "You want the agent to critique and improve its own output until it meets a quality bar."
     aliases = ()
-    defaults = {"max_iterations": 5}
+    defaults: ClassVar[dict] = {"max_iterations": 5}
     strategy = EvaluatorOptimizerStrategy()

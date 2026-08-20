@@ -27,7 +27,9 @@ class PlannerExecutorStrategy(AgentStrategy):
             rt,
             name="planner_agent",
             description="Create a detailed plan",
-            role=RoleConfig(instruction="Create a step-by-step plan to address the request."),
+            role=RoleConfig(
+                instruction="Create a step-by-step plan to address the request."
+            ),
         )
 
         executor = self.llm(

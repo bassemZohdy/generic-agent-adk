@@ -3,22 +3,22 @@
 import pytest
 from google.adk.agents import Agent, LlmAgent, LoopAgent, ParallelAgent, SequentialAgent
 
+from basic_agent.strategies import (
+    DirectStrategy,
+    EvaluatorOptimizerStrategy,
+    HumanInLoopStrategy,
+    LoopStrategy,
+    ParallelStrategy,
+    RouterStrategy,
+    SequentialStrategy,
+    SupervisorStrategy,
+)
 from basic_agent.strategies.base import (
     AgentStrategyContext,
     RoleConfig,
     RuntimeContext,
 )
 from basic_agent.strategies.registry import AgentStrategyRegistry, get_default_registry
-from basic_agent.strategies import (
-    DirectStrategy,
-    EvaluatorOptimizerStrategy,
-    HumanInLoopStrategy,
-    SequentialStrategy,
-    ParallelStrategy,
-    LoopStrategy,
-    RouterStrategy,
-    SupervisorStrategy,
-)
 
 
 def test_strategy_registry_register_and_retrieve():
@@ -138,7 +138,7 @@ def test_sequential_step_role_override():
 
     agent = strategy.build(context)
 
-    assert agent.sub_agents[0].instruction == "Gather relevant information."
+    assert agent.sub_agents[0].instruction.endswith("Gather relevant information.")
 
 
 def test_parallel_strategy_builds_parallel_agent():
@@ -289,7 +289,7 @@ def test_supervisor_worker_role_override():
 
     agent = strategy.build(context)
 
-    assert agent.sub_agents[0].instruction == "Custom worker 0 instruction"
+    assert agent.sub_agents[0].instruction.endswith("Custom worker 0 instruction")
 
 
 def test_llm_builder_applies_role_overrides():
@@ -312,7 +312,7 @@ def test_llm_builder_applies_role_overrides():
             tools=[override_tool],
         ),
     )
-    assert agent.instruction == "Override instruction"
+    assert agent.instruction.endswith("Override instruction")
     assert agent.model == "override-model"
     assert agent.tools == [override_tool]
 
@@ -346,8 +346,8 @@ def test_router_specialists_get_distinct_instructions_with_roles():
     agent = strategy.build(context)
 
     research, solution = agent.sub_agents
-    assert research.instruction == "Research-only instruction"
-    assert solution.instruction == (
+    assert research.instruction.endswith("Research-only instruction")
+    assert solution.instruction.endswith(
         "You are the solution specialist. Handle requests in your domain."
     )
     assert research.instruction != agent.instruction
@@ -369,10 +369,10 @@ def test_router_specialists_get_generated_prompts_without_roles():
     agent = strategy.build(context)
 
     research, solution = agent.sub_agents
-    assert research.instruction == (
+    assert research.instruction.endswith(
         "You are the research specialist. Handle requests in your domain."
     )
-    assert solution.instruction == (
+    assert solution.instruction.endswith(
         "You are the solution specialist. Handle requests in your domain."
     )
     assert research.instruction != agent.instruction

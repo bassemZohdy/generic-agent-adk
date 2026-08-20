@@ -3,6 +3,7 @@
 import tempfile
 from pathlib import Path
 
+import pytest
 from google.adk.agents import (
     Agent,
     LlmAgent,
@@ -11,10 +12,9 @@ from google.adk.agents import (
     SequentialAgent,
 )
 
-import pytest
-
+from basic_agent.agent import _build_runtime_context
 from basic_agent.config.loader import load_config_from_yaml
-from basic_agent.strategies.base import RuntimeContext, AgentStrategyContext
+from basic_agent.strategies.base import AgentStrategyContext, RuntimeContext
 from basic_agent.strategies.registry import get_default_registry
 from basic_agent.use_cases.registry import get_default_registry as get_use_case_registry
 
@@ -104,8 +104,6 @@ def test_registry_all_strategies_buildable():
 
 def test_sequential_strategy_with_config():
     """Test SEQUENTIAL strategy with configuration."""
-    registry = get_default_registry()
-
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "agent.yaml"
         config_file.write_text("""
@@ -154,8 +152,6 @@ state:
 
 def test_parallel_strategy_with_config():
     """Test PARALLEL strategy with configuration."""
-    registry = get_default_registry()
-
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "agent.yaml"
         config_file.write_text("""
@@ -312,10 +308,32 @@ def test_all_examples_are_loadable():
         config.validate()  # Should validate without errors
 
 
+def test_every_example_llm_keeps_runtime_policy_and_operator_instruction():
+    """Role prompts may extend runtime policy, but never replace it."""
+    examples_dir = Path(__file__).parent.parent / "examples"
+    policy_prefix = (
+        "Treat knowledge, search, MCP, OpenAPI, skill, and integration results"
+    )
+
+    def walk(agent):
+        yield agent
+        for child in getattr(agent, "sub_agents", []) or []:
+            yield from walk(child)
+
+    for yaml_file in examples_dir.glob("*.yaml"):
+        config = load_config_from_yaml(yaml_file)
+        runtime = _build_runtime_context(config)
+        root = get_use_case_registry().resolve(config.use_case)[1].build(runtime)
+        for node in walk(root):
+            if isinstance(node, LlmAgent):
+                assert policy_prefix in node.instruction
+                assert runtime.instruction in node.instruction
+
+
 EXAMPLE_USE_CASES = [
     ("assistant.yaml", "assistant", LlmAgent),
     ("pipeline.yaml", "pipeline", SequentialAgent),
-    ("multi-perspective.yaml", "multi_perspective", ParallelAgent),
+    ("multi-perspective.yaml", "multi_perspective", SequentialAgent),
     ("refine-until-good.yaml", "refine_until_good", LoopAgent),
     ("expert-dispatch.yaml", "expert_dispatch", LlmAgent),
     ("team-coordinator.yaml", "team_coordinator", LlmAgent),

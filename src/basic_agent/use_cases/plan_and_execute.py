@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .base import BaseUseCaseAgent
 from ..strategies import PlannerExecutorStrategy
+from .base import BaseUseCaseAgent
 
 
 class PlanAndExecuteAgent(BaseUseCaseAgent):

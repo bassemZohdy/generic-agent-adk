@@ -5,7 +5,7 @@ An AI agent that adapts to your needs. Choose what you want it to do, configure 
 [![Tests](https://img.shields.io/badge/tests-347%20passing-brightgreen)](./tests/)
 [![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)](./tests/)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-production%20ready-green)](.)
+[![Status](https://img.shields.io/badge/status-active%20%2F%20staging-yellow)](.)
 
 ## What does it do?
 
@@ -27,7 +27,9 @@ All powered by Google's ADK (Agent Development Kit) with support for any AI mode
 export OPENAI_API_KEY=your-key
 
 # 2. Run the agent
-docker run -p 8002:8002 \
+# Local-only demo: AUTH_DISABLED creates an isolated anonymous cookie/session;
+# use Keycloak/OIDC before exposing this beyond localhost.
+docker run -p 127.0.0.1:8002:8002 \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
   -e ADK_MODEL=openai/gpt-4o \
   -e AUTH_DISABLED=true \
@@ -140,14 +142,14 @@ docker run -e AGENT_TOOLS=knowledge,search,code_execution \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
-Available tools (default: `knowledge,search,mcp,openapi,approval,runtime,structured_output`):
+Available tools (default: `knowledge,search,mcp,approval,runtime,structured_output`):
 - `knowledge` — search your documents (`AGENT_KNOWLEDGE_FILE`, JSON)
 - `search` — web search
 - `code_execution` — run Python in a sandbox (auto-detected; see [ADR-004](./docs/ADR-004-pluggable-code-execution.md))
 - `approval` — ask for human approval before actions
 - `skills` — load SKILL.md capability folders (`AGENT_SKILLS_DIR`)
 - `mcp` — call tools via Model Context Protocol
-- `openapi` — call an OpenAPI-described service (`AGENT_OPENAPI_URL`)
+- `openapi` — call an OpenAPI-described service (`AGENT_OPENAPI_URL`; opt in explicitly)
 - `runtime` — let the agent inspect its own configuration
 - `structured_output` — return responses in a fixed JSON schema
 - `application_integration` — trigger GCP Application Integrations
@@ -197,6 +199,10 @@ docker compose --profile demo up --build
 ```
 
 ## Configure with YAML (advanced)
+
+The complete strict YAML schema and environment reference is in
+[docs/CONFIGURATION.md](./docs/CONFIGURATION.md); supported versions and
+deployment boundaries are in [docs/SUPPORT.md](./docs/SUPPORT.md).
 
 For complex setups, use a YAML config file:
 
@@ -298,7 +304,7 @@ git clone https://github.com/bassemZohdy/generic-agent-adk.git
 cd generic-agent-adk
 uv sync
 cp .env.example .env
-uv run pre-commit install   # gitleaks secret scan
+uvx pre-commit install       # gitleaks secret scan
 
 # Run locally (same server compose uses)
 uv run uvicorn basic_agent.interfaces.rest:app --port 8002

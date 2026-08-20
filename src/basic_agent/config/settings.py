@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 
 from ..util import is_production, split_csv
+from .defaults import (
+    APP_VERSION,
+    ENABLED_TOOLS,
+    LIVE_MAX_AUDIO_BYTES,
+    LIVE_MAX_MESSAGE_BYTES,
+    LIVE_MAX_MESSAGES_PER_MINUTE,
+    LIVE_MODEL,
+    MAX_ITERATIONS,
+    MCP_TOOLS,
+    MODEL,
+    SERVICE_API_URL,
+)
 
 
 def _env(name: str, default: str = "") -> str:
@@ -70,6 +82,8 @@ class Settings:
     agent_description: str
     agent_instruction: str
     enabled_tools: tuple[str, ...]
+    read_only_tools: tuple[str, ...]
+    mutating_tools: tuple[str, ...]
     enable_knowledge: bool
     enable_search: bool
     enable_code_execution: bool
@@ -80,6 +94,8 @@ class Settings:
     enable_structured_output: bool
     knowledge_file: str
     knowledge_result_limit: int
+    knowledge_max_file_bytes: int
+    knowledge_max_result_bytes: int
     max_iterations: int
     specialists: tuple[str, ...]
     mcp_tools: tuple[str, ...]
@@ -113,22 +129,27 @@ def load_settings() -> Settings:
     deployment = _env("DEPLOYMENT_ENV", "docker-compose")
     issuer = _env("KEYCLOAK_ISSUER")
     auth_disabled = _bool("AUTH_DISABLED")
-    if is_production(deployment) and not issuer and not auth_disabled:
-        raise ValueError(
-            "KEYCLOAK_ISSUER is required when DEPLOYMENT_ENV is production-like; "
-            "set AUTH_DISABLED=true only for an intentional unauthenticated deployment"
-        )
+    if is_production(deployment):
+        if auth_disabled:
+            raise ValueError(
+                "AUTH_DISABLED=true is only permitted for local/test deployments; "
+                "configure KEYCLOAK_ISSUER for production-like environments"
+            )
+        if not issuer:
+            raise ValueError(
+                "KEYCLOAK_ISSUER is required when DEPLOYMENT_ENV is production-like"
+            )
     enabled_tools = _roles(
         "AGENT_TOOLS",
-        "knowledge,search,mcp,openapi,approval,runtime,structured_output",
+        ENABLED_TOOLS,
     )
     return Settings(
         app_name=app_name,
-        app_version=_env("APP_VERSION", "0.1.0"),
+        app_version=_env("APP_VERSION", APP_VERSION),
         deployment=deployment,
-        model=_env("ADK_MODEL", "gemini-3.6-flash"),
-        live_model=_env("LIVE_ADK_MODEL", "gemini-3.1-flash-live-preview"),
-        service_api_url=_env("AGENT_SERVICE_API_URL", "http://127.0.0.1:8001"),
+        model=_env("ADK_MODEL", MODEL),
+        live_model=_env("LIVE_ADK_MODEL", LIVE_MODEL),
+        service_api_url=_env("AGENT_SERVICE_API_URL", SERVICE_API_URL),
         service_api_key=_env("AGENT_SERVICE_API_KEY"),
         auth_disabled=auth_disabled,
         keycloak_issuer=issuer,
@@ -140,9 +161,7 @@ def load_settings() -> Settings:
         keycloak_audience=_env("KEYCLOAK_AUDIENCE", "basic-agent"),
         keycloak_role_claim=_env("KEYCLOAK_ROLE_CLAIM", "realm_access.roles"),
         keycloak_required_roles=_roles("KEYCLOAK_REQUIRED_ROLES", "agent-user"),
-        service_api_roles=_roles(
-            "AGENT_SERVICE_API_ROLES", "agent-user"
-        ),
+        service_api_roles=_roles("AGENT_SERVICE_API_ROLES", "agent-user"),
         live_api_roles=_roles("LIVE_API_ROLES", "agent-user"),
         plugin_name=_env("AGENT_PLUGIN_NAME", "generic_agent_plugin"),
         agent_description=_env(
@@ -153,6 +172,12 @@ def load_settings() -> Settings:
             "Answer the user's request helpfully and accurately. Use configured tools when useful. State assumptions, cite evidence when available, and do not claim actions you did not perform.",
         ),
         enabled_tools=enabled_tools,
+        read_only_tools=_roles(
+            "AGENT_READ_ONLY_TOOLS",
+            "request_approval,inspect_runtime,retrieve_knowledge,google_search,"
+            "get_service_status,mcp_get_service_status,api_getconfiguredservicestatus",
+        ),
+        mutating_tools=_roles("AGENT_MUTATING_TOOLS", ""),
         enable_knowledge="knowledge" in enabled_tools,
         enable_search="search" in enabled_tools,
         enable_code_execution="code_execution" in enabled_tools,
@@ -163,9 +188,15 @@ def load_settings() -> Settings:
         enable_structured_output="structured_output" in enabled_tools,
         knowledge_file=_env("AGENT_KNOWLEDGE_FILE"),
         knowledge_result_limit=_int("AGENT_KNOWLEDGE_RESULT_LIMIT", 3, minimum=1),
-        max_iterations=_int("AGENT_MAX_ITERATIONS", 3, minimum=1),
+        knowledge_max_file_bytes=_int(
+            "AGENT_KNOWLEDGE_MAX_FILE_BYTES", 2_097_152, minimum=1
+        ),
+        knowledge_max_result_bytes=_int(
+            "AGENT_KNOWLEDGE_MAX_RESULT_BYTES", 65_536, minimum=1
+        ),
+        max_iterations=_int("AGENT_MAX_ITERATIONS", MAX_ITERATIONS, minimum=1),
         specialists=_roles("AGENT_SPECIALISTS", "research,solution,risk"),
-        mcp_tools=_roles("AGENT_MCP_TOOLS", "get_service_status"),
+        mcp_tools=_roles("AGENT_MCP_TOOLS", MCP_TOOLS),
         mcp_tool_prefix=_env("AGENT_MCP_TOOL_PREFIX", "mcp_"),
         skills_dir=_env("AGENT_SKILLS_DIR"),
         skills_tool_prefix=_env("AGENT_SKILLS_TOOL_PREFIX"),
@@ -182,10 +213,14 @@ def load_settings() -> Settings:
         gcp_location=_env("GCP_LOCATION", "us-central1"),
         gcp_integration=_env("GCP_INTEGRATION"),
         gcp_triggers=_roles("GCP_INTEGRATION_TRIGGERS", ""),
-        live_max_message_bytes=_int("LIVE_MAX_MESSAGE_BYTES", 1_048_576, minimum=1),
-        live_max_audio_bytes=_int("LIVE_MAX_AUDIO_BYTES", 786_432, minimum=1),
+        live_max_message_bytes=_int(
+            "LIVE_MAX_MESSAGE_BYTES", LIVE_MAX_MESSAGE_BYTES, minimum=1
+        ),
+        live_max_audio_bytes=_int(
+            "LIVE_MAX_AUDIO_BYTES", LIVE_MAX_AUDIO_BYTES, minimum=1
+        ),
         live_max_messages_per_minute=_int(
-            "LIVE_MAX_MESSAGES_PER_MINUTE", 60, minimum=1
+            "LIVE_MAX_MESSAGES_PER_MINUTE", LIVE_MAX_MESSAGES_PER_MINUTE, minimum=1
         ),
         code_execution_strategy=_env("AGENT_CODE_EXECUTION_STRATEGY"),
         code_execution_docker_host=_env("AGENT_CODE_EXECUTION_DOCKER_HOST"),

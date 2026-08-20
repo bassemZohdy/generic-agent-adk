@@ -1,5 +1,7 @@
 """PARALLEL strategy: ParallelAgent pattern."""
 
+from dataclasses import replace
+
 from google.adk.agents import Agent, ParallelAgent
 
 from .base import AgentStrategy, AgentStrategyContext
@@ -24,9 +26,17 @@ class ParallelStrategy(AgentStrategy):
         Returns:
             A ParallelAgent running multiple workers concurrently.
         """
-        workers = self.build_worker_pool(
-            context, key="workers", name_prefix="parallel_worker", description="Parallel worker"
-        )
+        count = self.positive_count(context, "workers", 2)
+        workers = []
+        for index in range(count):
+            worker_runtime = replace(context.runtime, output_key=f"perspective_{index}")
+            workers.append(
+                self.llm(
+                    worker_runtime,
+                    name=f"parallel_worker_{index}",
+                    description=f"Parallel worker {index}",
+                )
+            )
 
         return ParallelAgent(
             name=f"{context.agent_type.lower()}_agent",

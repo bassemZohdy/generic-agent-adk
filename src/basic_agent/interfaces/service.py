@@ -8,7 +8,6 @@ from ..auth.core import authenticate_request, roles_from_claims
 from ..config.settings import settings
 from ..util import is_production
 
-
 logger = logging.getLogger(__name__)
 _production = is_production(settings.deployment)
 app = FastAPI(

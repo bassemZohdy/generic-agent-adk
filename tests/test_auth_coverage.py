@@ -1,15 +1,12 @@
 """Additional tests for authentication module coverage."""
 
-import json
-from unittest.mock import MagicMock, patch
 import pytest
 from starlette.requests import Request
-from starlette.responses import Response
 
 from basic_agent.auth import (
     authenticate_request,
-    require_roles,
     keycloak_enabled,
+    require_roles,
 )
 
 
@@ -73,8 +70,9 @@ class TestRoleValidation:
 
     def test_require_roles_with_missing_intermediate_key(self, settings_patch):
         """Test role validation fails when intermediate key is missing."""
-        from basic_agent import auth
         from fastapi import HTTPException
+
+        from basic_agent import auth
 
         settings_patch(auth.core, keycloak_role_claim="resource_access.api.roles")
         with pytest.raises(HTTPException) as exc_info:
@@ -83,8 +81,9 @@ class TestRoleValidation:
 
     def test_require_roles_with_non_list_roles(self, settings_patch):
         """Test role validation with non-list role values."""
-        from basic_agent import auth
         from fastapi import HTTPException
+
+        from basic_agent import auth
 
         settings_patch(auth.core, keycloak_role_claim="realm_access.roles")
         # Roles value is not a list

@@ -1,28 +1,24 @@
+import logging
+
+import pytest
+from google.adk.agents import LlmAgent
+from starlette.requests import Request
+
 from basic_agent.agent import (
     AgentState,
-    GenericAgent,
     GenericAgentPlugin,
     GenericAgentResponse,
     inspect_runtime,
     root_agent,
 )
-from basic_agent.tools import (
-    request_approval,
-    build_tool as _build_skill_toolset_compat,
-)
-from basic_agent.knowledge import retrieve_knowledge
-from basic_agent.auth import authenticate_request, keycloak_enabled
-from basic_agent.auth import require_roles
+from basic_agent.auth import authenticate_request, keycloak_enabled, require_roles
 from basic_agent.auth.gateway import app as auth_gateway_app
 from basic_agent.autoconfig import ProviderConfigurationError, discover_capabilities
 from basic_agent.config import load_settings
 from basic_agent.interfaces.live import LIVE_MODEL, app
 from basic_agent.interfaces.service import get_service_status
+from basic_agent.knowledge import retrieve_knowledge
 from basic_agent.telemetry import tracer
-from google.adk.agents import LlmAgent
-import logging
-import pytest
-from starlette.requests import Request
 
 
 def test_root_agent_is_use_case_built():
@@ -98,8 +94,8 @@ def test_external_knowledge_file_is_loaded_and_ranked(tmp_path, settings_patch):
 
 
 def test_skills_toolset_is_empty_when_unconfigured():
-    from basic_agent.tools import _build_skill_toolset
     from basic_agent.config.loader import AgentConfig
+    from basic_agent.tools import _build_skill_toolset
 
     toolset = _build_skill_toolset(AgentConfig(use_case="assistant"))
     assert toolset.skills == []
@@ -255,7 +251,9 @@ def test_keycloak_and_forward_auth_surfaces_exist():
     assert {route.path for route in auth_gateway_app.routes} >= {"/healthz", "/verify"}
 
 
-def test_authentication_requires_explicit_disable_when_keycloak_is_not_configured(settings_patch):
+def test_authentication_requires_explicit_disable_when_keycloak_is_not_configured(
+    settings_patch,
+):
     from basic_agent import auth
 
     settings_patch(auth.core, auth_disabled=True)
@@ -264,7 +262,9 @@ def test_authentication_requires_explicit_disable_when_keycloak_is_not_configure
     assert authenticate_request(request) is None
 
 
-def test_authentication_requires_bearer_token_when_keycloak_is_configured(settings_patch):
+def test_authentication_requires_bearer_token_when_keycloak_is_configured(
+    settings_patch,
+):
     from basic_agent import auth
 
     settings_patch(
@@ -287,8 +287,9 @@ def test_role_claims_accept_nested_configured_roles(settings_patch):
 
 
 def test_role_claims_reject_missing_role(settings_patch):
-    from basic_agent import auth
     from fastapi import HTTPException
+
+    from basic_agent import auth
 
     settings_patch(auth.core, keycloak_role_claim="realm_access.roles")
     try:

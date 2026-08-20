@@ -1,6 +1,6 @@
 """SUPERVISOR strategy: coordinating multiple agents."""
 
-from google.adk.agents import Agent, LlmAgent
+from google.adk.agents import Agent
 
 from .base import AgentStrategy, AgentStrategyContext, RoleConfig
 

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import json
 import logging
+import os
+import secrets
 import time
 from collections import deque
 from typing import Any
@@ -19,16 +22,15 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from ..agent import GenericAgentPlugin, get_root_agent
-from ..autoconfig import discover_capabilities
 from ..auth.core import (
     authenticate_websocket,
     authenticate_websocket_token,
     roles_from_claims,
     websocket_auth_subprotocol,
 )
+from ..autoconfig import discover_capabilities
 from ..config.settings import settings
 from ..util import is_production
-
 
 logger = logging.getLogger(__name__)
 APP_NAME = settings.app_name
@@ -42,8 +44,33 @@ app = FastAPI(
     docs_url=None if _production else "/docs",
     redoc_url=None if _production else "/redoc",
 )
-session_service = InMemorySessionService()
-memory_service = InMemoryMemoryService()
+session_uri = os.environ.get("ADK_SESSION_SERVICE_URI") or os.environ.get(
+    "DATABASE_URL"
+)
+if _production and not session_uri:
+    raise ValueError(
+        "Production Live deployments require ADK_SESSION_SERVICE_URI or DATABASE_URL "
+        "for shared session persistence"
+    )
+if session_uri:
+    from google.adk.cli.utils.service_factory import create_session_service_from_options
+
+    session_service = create_session_service_from_options(
+        base_dir=os.environ.get("ADK_DATA_DIR", ".adk"),
+        session_service_uri=session_uri,
+    )
+else:
+    session_service = InMemorySessionService()
+memory_uri = os.environ.get("ADK_MEMORY_SERVICE_URI")
+if memory_uri:
+    from google.adk.cli.utils.service_factory import create_memory_service_from_options
+
+    memory_service = create_memory_service_from_options(
+        base_dir=os.environ.get("ADK_DATA_DIR", ".adk"),
+        memory_service_uri=memory_uri,
+    )
+else:
+    memory_service = InMemoryMemoryService()
 capabilities = discover_capabilities()
 _runner: Runner | None = None
 _message_windows: dict[str, deque[float]] = {}
@@ -104,8 +131,13 @@ async def _forward_events(
             ),
         ):
             payload = _event_payload(event)
-            if len(json.dumps(payload).encode("utf-8")) > settings.live_max_message_bytes:
-                await websocket.close(code=1009, reason="Outbound WebSocket message is too large")
+            if (
+                len(json.dumps(payload).encode("utf-8"))
+                > settings.live_max_message_bytes
+            ):
+                await websocket.close(
+                    code=1009, reason="Outbound WebSocket message is too large"
+                )
                 return
             await websocket.send_json(payload)
     except asyncio.CancelledError:
@@ -119,8 +151,13 @@ def _message_is_rate_limited(subject: str) -> bool:
     timestamps = _message_windows.setdefault(subject, deque())
     now = time.monotonic()
     cutoff = now - 60.0
-    while timestamps and timestamps[0] <= cutoff:
-        timestamps.popleft()
+    # Bound the number of retained subjects when clients reconnect frequently.
+    for key, values in list(_message_windows.items()):
+        while values and values[0] <= cutoff:
+            values.popleft()
+        if not values:
+            _message_windows.pop(key, None)
+    timestamps = _message_windows.setdefault(subject, deque())
     if len(timestamps) >= settings.live_max_messages_per_minute:
         return True
     timestamps.append(now)
@@ -192,7 +229,20 @@ async def live(websocket: WebSocket) -> None:
             await websocket.close(code=1011, reason="WebSocket authentication failed")
         return
 
-    user_id = str(claims.get("sub")) if claims and claims.get("sub") else "anonymous"
+    if claims and claims.get("sub"):
+        user_id = str(claims["sub"])
+    elif settings.auth_disabled:
+        # Never put all unauthenticated WebSocket clients in one shared ADK
+        # namespace.  A cookie, when supplied by a browser, gives reconnects
+        # continuity; otherwise each connection gets an isolated subject.
+        cookie = getattr(websocket, "cookies", {}).get("adk_anonymous_id", "")
+        user_id = (
+            f"anonymous:{cookie}"
+            if cookie and all(char.isalnum() or char in "_-" for char in cookie)
+            else f"anonymous:{secrets.token_urlsafe(24)}"
+        )
+    else:
+        user_id = "anonymous"
     session_id = websocket.query_params.get("session_id")
     try:
         session = await _session(user_id, session_id)
@@ -226,27 +276,51 @@ async def live(websocket: WebSocket) -> None:
         while True:
             message = await _receive_json_message(websocket)
             if _message_is_rate_limited(user_id):
-                await websocket.close(code=4429, reason="WebSocket message rate exceeded")
+                await websocket.close(
+                    code=4429, reason="WebSocket message rate exceeded"
+                )
                 return
             if text := message.get("text"):
                 if not isinstance(text, str):
                     await websocket.close(code=1003, reason="text must be a string")
                     return
                 queue.send_content(
-                    types.Content(
-                        role="user", parts=[types.Part.from_text(text=text)]
-                    )
+                    types.Content(role="user", parts=[types.Part.from_text(text=text)])
                 )
             elif audio := message.get("audio"):
-                if not isinstance(audio, dict) or not isinstance(audio.get("data"), str):
-                    await websocket.close(code=1003, reason="audio.data must be a string")
+                if not isinstance(audio, dict) or not isinstance(
+                    audio.get("data"), str
+                ):
+                    await websocket.close(
+                        code=1003, reason="audio.data must be a string"
+                    )
                     return
                 if len(audio["data"]) > settings.live_max_audio_bytes:
-                    await websocket.close(code=1009, reason="Audio payload is too large")
+                    await websocket.close(
+                        code=1009, reason="Audio payload is too large"
+                    )
+                    return
+                try:
+                    decoded_audio = base64.b64decode(audio["data"], validate=True)
+                except (ValueError, TypeError):
+                    await websocket.close(code=1003, reason="audio.data must be base64")
+                    return
+                if len(decoded_audio) > settings.live_max_audio_bytes:
+                    await websocket.close(
+                        code=1009, reason="Audio payload is too large"
+                    )
+                    return
+                mime_type = audio.get("mime_type", "audio/pcm;rate=16000")
+                if not isinstance(mime_type, str) or not mime_type.lower().startswith(
+                    "audio/"
+                ):
+                    await websocket.close(
+                        code=1003, reason="audio.mime_type must be audio/*"
+                    )
                     return
                 queue.send_realtime(
                     types.Blob(
-                        mime_type=audio.get("mime_type", "audio/pcm;rate=16000"),
+                        mime_type=mime_type,
                         data=audio["data"],
                     )
                 )
@@ -262,7 +336,9 @@ async def live(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         logger.info("Live connection closed sub=%s session_id=%s", user_id, session.id)
     except Exception:
-        logger.exception("Live connection failed sub=%s session_id=%s", user_id, session.id)
+        logger.exception(
+            "Live connection failed sub=%s session_id=%s", user_id, session.id
+        )
     finally:
         queue.close()
         if event_task:

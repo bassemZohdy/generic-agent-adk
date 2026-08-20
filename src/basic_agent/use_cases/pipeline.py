@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .base import BaseUseCaseAgent
 from ..strategies import SequentialStrategy
+from .base import BaseUseCaseAgent
 
 
 class PipelineAgent(BaseUseCaseAgent):

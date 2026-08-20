@@ -20,16 +20,16 @@ from .registry import UseCaseRegistry, get_default_registry, load_custom_use_cas
 from .team_coordinator import TeamCoordinatorAgent
 
 __all__ = [
+    "ApprovalGateAgent",
+    "AssistantAgent",
     "BaseUseCaseAgent",
+    "ExpertDispatchAgent",
+    "MultiPerspectiveAgent",
+    "PipelineAgent",
+    "PlanAndExecuteAgent",
+    "RefineUntilGoodAgent",
+    "TeamCoordinatorAgent",
     "UseCaseRegistry",
     "get_default_registry",
     "load_custom_use_cases",
-    "AssistantAgent",
-    "PipelineAgent",
-    "MultiPerspectiveAgent",
-    "RefineUntilGoodAgent",
-    "ExpertDispatchAgent",
-    "TeamCoordinatorAgent",
-    "PlanAndExecuteAgent",
-    "ApprovalGateAgent",
 ]

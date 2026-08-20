@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
 import secrets
+from typing import Any
 
+import jwt
 from fastapi import HTTPException, Request, WebSocket
 from jwt import PyJWKClient
-import jwt
 
 from ..config.settings import settings
-
 
 _jwks_clients: dict[str, PyJWKClient] = {}
 
@@ -55,10 +54,14 @@ def _jwks_client(url: str) -> PyJWKClient:
 def _decode(token: str) -> dict[str, Any]:
     issuer = settings.keycloak_issuer
     if not issuer.strip():
-        raise HTTPException(status_code=503, detail="Keycloak authentication is not configured")
+        raise HTTPException(
+            status_code=503, detail="Keycloak authentication is not configured"
+        )
     jwks_url = settings.keycloak_jwks_url
     if not jwks_url:
-        raise HTTPException(status_code=503, detail="Keycloak JWKS URL is not configured")
+        raise HTTPException(
+            status_code=503, detail="Keycloak JWKS URL is not configured"
+        )
     try:
         signing_key = _jwks_client(jwks_url).get_signing_key_from_jwt(token)
         claims = jwt.decode(
@@ -73,7 +76,9 @@ def _decode(token: str) -> dict[str, Any]:
             raise jwt.InvalidTokenError("Token subject is required")
         return claims
     except (jwt.PyJWTError, ValueError, OSError) as error:
-        raise HTTPException(status_code=401, detail="Invalid Keycloak access token") from error
+        raise HTTPException(
+            status_code=401, detail="Invalid Keycloak access token"
+        ) from error
 
 
 def token_from_request(request: Request) -> str | None:
@@ -140,7 +145,9 @@ def authenticate_request(
         claims = _service_key_claims()
         require_roles(claims, required_roles)
         return claims
-    raise HTTPException(status_code=401, detail="Bearer token or valid service API key required")
+    raise HTTPException(
+        status_code=401, detail="Bearer token or valid service API key required"
+    )
 
 
 def _websocket_auth_subprotocol(websocket: WebSocket) -> str | None:
@@ -164,7 +171,11 @@ def _websocket_header_token(websocket: WebSocket) -> str | None:
 
     if protocol := _websocket_auth_subprotocol(websocket):
         lowered = protocol.lower()
-        prefix = "authorization.bearer." if lowered.startswith("authorization.bearer.") else "bearer."
+        prefix = (
+            "authorization.bearer."
+            if lowered.startswith("authorization.bearer.")
+            else "bearer."
+        )
         return protocol[len(prefix) :].strip()
     return None
 

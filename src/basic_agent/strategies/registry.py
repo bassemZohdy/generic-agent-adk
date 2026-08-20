@@ -97,14 +97,14 @@ def _register_builtin_strategies(registry: AgentStrategyRegistry) -> None:
     """
     # Import here to avoid circular imports
     from .direct import DirectStrategy
-    from .sequential import SequentialStrategy
-    from .parallel import ParallelStrategy
-    from .loop import LoopStrategy
-    from .router import RouterStrategy
-    from .supervisor import SupervisorStrategy
-    from .planner_executor import PlannerExecutorStrategy
     from .evaluator_optimizer import EvaluatorOptimizerStrategy
     from .human_in_loop import HumanInLoopStrategy
+    from .loop import LoopStrategy
+    from .parallel import ParallelStrategy
+    from .planner_executor import PlannerExecutorStrategy
+    from .router import RouterStrategy
+    from .sequential import SequentialStrategy
+    from .supervisor import SupervisorStrategy
 
     strategies = [
         DirectStrategy(),

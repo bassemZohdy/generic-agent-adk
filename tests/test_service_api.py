@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from basic_agent import auth
 from basic_agent.interfaces import service as service_api
@@ -23,7 +23,9 @@ def _patch_both(settings_patch, **changes):
 
 
 class TestStatusEndpointAuthDisabled:
-    def test_auth_disabled_returns_status_without_credentials(self, settings_patch, client):
+    def test_auth_disabled_returns_status_without_credentials(
+        self, settings_patch, client
+    ):
         _patch_both(settings_patch, auth_disabled=True, keycloak_issuer="")
         response = client.get("/status")
         assert response.status_code == 200
@@ -92,7 +94,9 @@ class TestStatusEndpointBearerToken:
         assert response.status_code == 200
         assert response.json()["status"] == "healthy"
 
-    def test_bearer_token_missing_required_role_returns_403(self, settings_patch, client):
+    def test_bearer_token_missing_required_role_returns_403(
+        self, settings_patch, client
+    ):
         _patch_both(
             settings_patch,
             auth_disabled=False,

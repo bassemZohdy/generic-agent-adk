@@ -41,7 +41,10 @@ def test_documented_defaults_match_runtime_defaults():
     assert f"GRAFANA_PORT={GRAFANA_PORT}" in env_example
     assert f"LIVE_ADK_MODEL={LIVE_MODEL}" in env_example
     assert f"ADK_API_PORT:-{API_PORT}" in compose
-    assert "AGENT_SERVICE_API_URL: http://service-api:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}" in compose
+    assert (
+        "AGENT_SERVICE_API_URL: http://service-api:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}"
+        in compose
+    )
     assert f"LIVE_API_PORT:-{LIVE_PORT}" in compose
     assert f"GRAFANA_PORT:-{GRAFANA_PORT}" in compose
     assert "service-api:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}" in compose

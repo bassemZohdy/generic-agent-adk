@@ -16,6 +16,7 @@ from typing import Any
 
 from google.adk.skills import Skill, load_skill_from_dir
 from google.adk.tools import google_search
+from google.adk.tools.function_tool import FunctionTool
 from google.adk.tools.openapi_tool import OpenAPIToolset
 from google.adk.tools.skill_toolset import SkillToolset
 from google.adk.tools.tool_context import ToolContext
@@ -207,7 +208,14 @@ def build_tool(name: str, config) -> Any | None:
 
         return annotate_tool(inspect_runtime, mutating=False)
     if name == "approval":
-        return annotate_tool(request_approval, mutating=False)
+        # The callable also handles direct/unit-test invocation, but the ADK
+        # wrapper must declare the resumable confirmation boundary. Without
+        # this flag Runner can continue the model turn after the callable
+        # emits a confirmation request instead of suspending for the user.
+        return annotate_tool(
+            FunctionTool(request_approval, require_confirmation=True),
+            mutating=False,
+        )
     if name == "knowledge":
         from .knowledge import retrieve_knowledge
 

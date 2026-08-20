@@ -220,12 +220,22 @@ def test_docker_probe_requires_pinned_image_in_production(clean_registry, monkey
     client = FakeDockerClient()
     install_fake_docker(monkeypatch, client)
     assert not ce.DockerContainerCodeExecutionProvider.probe(
-        {"DEPLOYMENT_ENV": "production"}, model="m"
+        {
+            "DEPLOYMENT_ENV": "production",
+            "AGENT_CODE_EXECUTION_DOCKER_IMAGE": "python:3.13-slim",
+        },
+        model="m",
     )
     pinned = "python:3.13-slim@sha256:" + "a" * 64
     assert ce.DockerContainerCodeExecutionProvider.probe(
         {"DEPLOYMENT_ENV": "production", "AGENT_CODE_EXECUTION_DOCKER_IMAGE": pinned},
         model="m",
+    )
+
+
+def test_default_sandbox_image_is_digest_pinned():
+    assert ce.DockerContainerCodeExecutionProvider._image_is_pinned(
+        ce.DEFAULT_SANDBOX_IMAGE
     )
 
 

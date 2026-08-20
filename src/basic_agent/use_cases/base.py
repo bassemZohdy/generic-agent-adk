@@ -165,14 +165,20 @@ class BaseUseCaseAgent:
                 if root.before_agent_callback is not None
                 else resolved.before_agent_callback
             )
-            root.before_agent_callback = _chain(first, lambda ctx: self.before_run(ctx))
+            root.before_agent_callback = _chain(
+                first,
+                lambda callback_context: self.before_run(callback_context),
+            )
         if cls.after_run is not BaseUseCaseAgent.after_run:
             first = (
                 root.after_agent_callback
                 if root.after_agent_callback is not None
                 else resolved.after_agent_callback
             )
-            root.after_agent_callback = _chain(first, lambda ctx: self.after_run(ctx))
+            root.after_agent_callback = _chain(
+                first,
+                lambda callback_context: self.after_run(callback_context),
+            )
         if cls.before_tool is not BaseUseCaseAgent.before_tool:
             for agent in _iter_llm_agents(root):
                 first = agent.before_tool_callback or resolved.before_tool_callback

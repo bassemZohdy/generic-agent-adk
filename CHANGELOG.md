@@ -2,6 +2,21 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-20 — Runner workflows, approval resume, and CI supply-chain checks
+
+- Fixed ADK callback parameter wiring so configured before/after hooks receive
+  `callback_context` under real Runner execution.
+- Added deterministic Runner coverage for all eight example YAML workflows,
+  including real approval suspend/resume tests for both approve and reject
+  decisions.
+- Wrapped the approval tool with ADK's `require_confirmation` boundary so a
+  model turn cannot continue before the human decision.
+- Pinned the default Docker sandbox image by digest and added push/PR plus
+  weekly/manual vulnerability and SBOM verification.
+- Added Pyright, ADK contract guards, GitHub Actions SHA-pin validation,
+  provenance/SBOM build attestations, and configuration-default drift tests.
+- Made Live rate-limit eviction/admission atomic and covered concurrent callers.
+
 ## 2026-08-19 — Coverage expansion, CI/CD extras matrix, and documentation alignment
 
 - **Test coverage expanded to 99.39% (347 tests)**:

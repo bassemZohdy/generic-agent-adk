@@ -189,4 +189,5 @@ and [publishing guide](../.github/PUBLISHING.md) for details):
    (HIGH/CRITICAL), and startup smoke tests must pass **before** the
    verified digest is promoted to any release tag (`latest`, branch,
    semver). A broken or vulnerable image is never reachable under a
-   release tag.
+   release tag. Version tags must descend from `main`, and the temporary
+   `ci-<sha>` tag is removed after the build path completes.

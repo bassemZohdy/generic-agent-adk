@@ -48,3 +48,13 @@ minimum locked ADK version:
 Prototype the four shapes behind a strategy-local feature flag when ADK meets
 the gate. Keep the legacy path as the rollback implementation for one release,
 then remove it after the matrix and a production smoke test are green.
+
+For every `google-adk` upgrade, run the automated guard and then complete the
+manual compatibility steps in
+[ADK-UPGRADE-CHECKLIST.md](ADK-UPGRADE-CHECKLIST.md) before widening the
+dependency bound.
+
+As of 2026-08-20, the upstream discussion on allowing `Workflow` as an
+`LlmAgent` sub-agent still describes that inverse composition as unsupported
+and is pursuing a Node-as-Tool path instead:
+[google/adk-python discussion #5581](https://github.com/google/adk-python/discussions/5581).

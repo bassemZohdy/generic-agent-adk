@@ -68,7 +68,10 @@ DOCKER_IMAGE_ENV = "AGENT_CODE_EXECUTION_DOCKER_IMAGE"
 #: Default sandbox image. ADK publishes none (ADR-004 Appendix B): official
 #: python images are maintained, scanned, and verified to run under the
 #: full hardened constraint set (read-only rootfs + tmpfs + no caps).
-DEFAULT_SANDBOX_IMAGE = "python:3.13-slim"
+DEFAULT_SANDBOX_IMAGE = (
+    "python:3.13-slim@sha256:"
+    "ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a"
+)
 MAX_EXECUTION_OUTPUT_BYTES = 1_048_576
 
 #: Strategy reported when no provider probe succeeds (no executor attached).

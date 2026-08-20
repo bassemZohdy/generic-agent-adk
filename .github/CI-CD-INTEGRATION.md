@@ -46,19 +46,23 @@ only after `verify-image` succeeds.
 
 ### 1. Lint & Format Job
 
-**Steps**: `git diff --check`, Ruff lint/format checks, package compilation and
-build, Keycloak JSON fixture validation, YAML/link validation,
-`docker compose config` validation, and secret scanning via
+**Steps**: `git diff --check`, Ruff lint/format checks, a Pyright check over
+`src/basic_agent/config`, package compilation and build, Keycloak JSON fixture
+validation, YAML/link validation, `docker compose config` validation, and
+secret scanning via
 `gitleaks/gitleaks-action`.
 
 **Triggers**: pushes to `main` or version tags, and pull requests.
 **Duration**: ~5 minutes.
 
-### 2. Sandbox Image Verification Job (optional)
+### 2. Sandbox Image Verification Job
 
-Runs when the repository variable `SANDBOX_IMAGE_DIGEST` is configured. It
-verifies the pinned image reference, scans it for vulnerabilities, and
-generates an SBOM using Trivy and Syft.
+Verifies the pinned image reference, scans it for vulnerabilities, and
+generates an SBOM using Trivy and Syft. The repository variable
+`SANDBOX_IMAGE_DIGEST` may select an approved replacement; otherwise both
+workflows verify the digest-pinned default from ADR-004. Pushes and pull
+requests run the check in `ci.yml`; a separate weekly/manual workflow repeats
+it to catch newly disclosed vulnerabilities in the pinned image.
 
 **Duration**: ~10 minutes.
 
@@ -137,11 +141,19 @@ workflow dispatches.
 **Steps**: `docker buildx imagetools create -t <release-tag> <digest-ref>`
 for each tag computed in the Build job's metadata step (branch, semver,
 `<branch>-<sha>`, and `latest` on the default branch) — pointed at the exact
-digest that passed Verify Staged Image, never rebuilt.
+digest that passed Verify Staged Image, never rebuilt. Version tags must
+descend from `main`; Cosign signs and verifies the digest with GitHub OIDC
+before promotion.
 
 **Duration**: ~5 minutes.
 
-### 9. Notify Success Job
+### 9. Staging Tag Cleanup Job
+
+Runs after the build path, including failed verification/promotion paths, and
+removes the temporary `ci-<sha>` tag. Untagged storage remains subject to GHCR
+retention policy.
+
+### 10. Notify Success Job
 
 Runs `if: always()`. Fails if `build` didn't succeed, or — for non-PR
 events — if `verify-image` or `promote-image` didn't succeed.
@@ -173,7 +185,8 @@ permissions:
 | Pull request    | ✅   | ✅       | ✅   | ✅    | ✅          | ✅ (local only, verified in-job) | — | — |
 | Manual dispatch | ✅   | ✅       | ✅   | ✅    | ✅          | ✅ (push staging tag) | ✅ | ✅ |
 
-`*` The Sandbox job is skipped when `SANDBOX_IMAGE_DIGEST` is unset.
+`*` The Sandbox job uses `SANDBOX_IMAGE_DIGEST` when set, otherwise the
+ADR-004 default digest.
 
 ### Scheduled verification (separate workflow)
 

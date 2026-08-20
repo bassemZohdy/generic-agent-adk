@@ -71,10 +71,19 @@ The workflow automatically generates multiple tags:
 
 ### 5. Promote Verified Image Job (non-PR only)
 - Runs only after Verify Staged Image succeeds
+- Installs Cosign and signs the verified digest with GitHub Actions keyless
+  signing, then verifies the signature against this repository's CI workflow
+  certificate and GitHub's OIDC issuer
 - Uses `docker buildx imagetools create` to attach the real release tags
   (`latest`, branch name, semver, `<branch>-<sha>`) to the **already-verified
   digest** — so a vulnerable or broken image is never reachable under a
   release tag, even transiently
+
+### 6. Staging Tag Cleanup
+
+Runs after the build path, including failed verification/promotion paths, and
+removes the temporary `ci-<sha>` tag from GHCR. The digest may remain as
+untagged registry storage subject to the registry retention policy.
 
 ## Usage
 
@@ -206,7 +215,7 @@ The `GITHUB_TOKEN` used in workflows:
 
 1. **Never commit credentials** - Use secrets management
 2. **Use version tags** for production deployments
-3. **Verify image signatures** when available
+3. **Verify image signatures** before deployment
 4. **Scan images** for vulnerabilities (see below)
 
 ## Image Scanning
@@ -223,6 +232,17 @@ trivy image ghcr.io/bassemzohdy/generic-agent-adk:latest
 
 # Using grype
 grype ghcr.io/bassemzohdy/generic-agent-adk:latest
+```
+
+To verify the keyless signature on a promoted digest, resolve the immutable
+digest first and run:
+
+```bash
+cosign verify \
+  "ghcr.io/bassemzohdy/generic-agent-adk@sha256:<DIGEST>" \
+  --certificate-identity-regexp \
+    'https://github.com/bassemZohdy/generic-agent-adk/.github/workflows/ci.yml@.*' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
 ## Examples

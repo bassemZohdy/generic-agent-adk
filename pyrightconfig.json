@@ -1,0 +1,7 @@
+{
+  "include": ["src/basic_agent/config"],
+  "typeCheckingMode": "basic",
+  "reportMissingModuleSource": "none",
+  "venvPath": ".",
+  "venv": ".venv"
+}

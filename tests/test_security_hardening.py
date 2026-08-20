@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -627,6 +628,26 @@ def test_rate_limit_evicts_timestamps_older_than_window(monkeypatch, settings_pa
     assert live_server._message_is_rate_limited("subject-evict") is False
     assert live_server._message_is_rate_limited("subject-evict") is False
     assert list(live_server._message_windows["subject-evict"]) == [100.0]
+
+
+def test_rate_limit_is_bounded_under_concurrent_calls(settings_patch):
+    from basic_agent.interfaces import live as live_server
+
+    settings_patch(live_server, live_max_messages_per_minute=5)
+    subject = "subject-concurrent"
+    live_server._message_windows.pop(subject, None)
+    try:
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            results = list(
+                executor.map(
+                    lambda _index: live_server._message_is_rate_limited(subject),
+                    range(20),
+                )
+            )
+        assert results.count(False) == 5
+        assert results.count(True) == 15
+    finally:
+        live_server._message_windows.pop(subject, None)
 
 
 def test_receive_json_message_returns_parsed_dict():

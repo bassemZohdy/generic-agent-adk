@@ -385,11 +385,11 @@ def _build_runtime_context(config: AgentConfig) -> RuntimeContext:
         ),
         output_schema=output_schema,
         output_key=output_key,
-        before_agent_callback=lambda context: logger.info(
-            "Agent started: %s", context.invocation_id
+        before_agent_callback=lambda callback_context: logger.info(
+            "Agent started: %s", callback_context.invocation_id
         ),
-        after_agent_callback=lambda context: logger.info(
-            "Agent completed: %s", context.invocation_id
+        after_agent_callback=lambda callback_context: logger.info(
+            "Agent completed: %s", callback_context.invocation_id
         ),
         max_iterations=execution.max_iterations if execution else 3,
         require_approval=execution.require_approval if execution else False,

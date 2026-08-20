@@ -11,6 +11,7 @@ import os
 import secrets
 import time
 from collections import deque
+from threading import Lock
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -74,6 +75,7 @@ else:
 capabilities = discover_capabilities()
 _runner: Runner | None = None
 _message_windows: dict[str, deque[float]] = {}
+_message_windows_lock = Lock()
 
 
 def _get_runner() -> Runner:
@@ -148,20 +150,23 @@ async def _forward_events(
 
 def _message_is_rate_limited(subject: str) -> bool:
     """Apply the message budget per authenticated subject across connections."""
-    timestamps = _message_windows.setdefault(subject, deque())
-    now = time.monotonic()
-    cutoff = now - 60.0
-    # Bound the number of retained subjects when clients reconnect frequently.
-    for key, values in list(_message_windows.items()):
-        while values and values[0] <= cutoff:
-            values.popleft()
-        if not values:
-            _message_windows.pop(key, None)
-    timestamps = _message_windows.setdefault(subject, deque())
-    if len(timestamps) >= settings.live_max_messages_per_minute:
-        return True
-    timestamps.append(now)
-    return False
+    with _message_windows_lock:
+        timestamps = _message_windows.setdefault(subject, deque())
+        now = time.monotonic()
+        cutoff = now - 60.0
+        # Bound the number of retained subjects when clients reconnect
+        # frequently. The lock keeps eviction and admission atomic when
+        # multiple ASGI workers share this process.
+        for key, values in list(_message_windows.items()):
+            while values and values[0] <= cutoff:
+                values.popleft()
+            if not values:
+                _message_windows.pop(key, None)
+        timestamps = _message_windows.setdefault(subject, deque())
+        if len(timestamps) >= settings.live_max_messages_per_minute:
+            return True
+        timestamps.append(now)
+        return False
 
 
 async def _receive_json_message(websocket: WebSocket) -> dict[str, Any]:

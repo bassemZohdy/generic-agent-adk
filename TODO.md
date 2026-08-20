@@ -1,15 +1,20 @@
 # TODO — Whole-project audit backlog
 
-Audit date: **2026-08-17**. Scope: application code, tests, examples,
+Audit date: **2026-08-20**. Scope: application code, tests, examples,
 configuration, authentication, deployment, CI/CD, packaging, and documentation.
 
 Baseline and post-change verification:
 
-- `331 passed`; total coverage **92.62%** (threshold: 90%).
+- `379 passed`; total coverage **95.57%** (threshold: 90%) after the latest
+  workflow, sandbox, and configuration tests.
 - Python compilation, both Keycloak JSON files, default Compose, the
   `code-exec` Compose profile, and `git diff --check` all pass.
 - This was a source/configuration audit. It did not call a real LLM, deploy to
   Cloud Run, exercise an external OIDC server, or run the Docker sandbox live.
+
+Status summary: **22 complete**, **8 partial**, **1 deferred pending upstream
+parity**. Partial items retain only deployment, external-service, or manual
+upgrade evidence that cannot be proven in this local worktree.
 
 Checked and partial items below were implemented in this worktree to the extent
 possible locally. Unchecked/residual work requires external services,
@@ -38,12 +43,13 @@ Completed work belongs in [CHANGELOG.md](CHANGELOG.md); code-execution design
 and its completed P1–P11 patch record remain in
 [ADR-004](docs/ADR-004-pluggable-code-execution.md) and git history.
 
-## Cleanup completed — 2026-08-19
+## Cleanup completed — 2026-08-20
 
-- [x] Expanded test coverage to 99.39% across all modules (347 tests passing), covering edge cases and defensive branches in `agent`, `auth`, `autoconfig`, `config`, `interfaces`, `knowledge`, `telemetry`, and `tools`.
+- [x] Expanded and revalidated coverage at 95.57% across all modules (379 tests passing), including deterministic Runner invocations for all eight example YAML workflows, approval resume decisions, and concurrent Live rate-limit admission.
 - [x] Expanded CI/CD `test-extras` in `.github/workflows/ci.yml` into a matrix running both `docker` and `gke` optional extras.
 - [x] Aligned `.github/CI-CD-INTEGRATION.md` architecture diagram, job dependencies, and trigger matrix.
 - [x] Re-audited O1 against `google.adk` 2.6.3 and confirmed gate status (ADR-003).
+- [x] Revalidated locked dependencies, package build, Compose profiles, YAML/JSON fixtures, Markdown links, Ruff, Pyright, workflow-action SHA pins, and ADK API assumptions.
 
 ## Cleanup completed — 2026-08-17
 
@@ -72,7 +78,9 @@ and its completed P1–P11 patch record remain in
   end-to-end approve, reject, disconnect, and resume tests; replace the current
   unit tests that assert the inverted gate behavior.
   The ADK confirmation boundary, rejection handling, and completer guard are
-  implemented. Full external Runner disconnect/resume coverage remains T19.
+  implemented; `tests/test_workflow_invocations.py` proves a real Runner
+  suspends until both approve and reject responses. Full external transport
+  disconnect/resume coverage remains T19.
 
 - [x] **T03 — Respect an explicit empty tool list.** In
   `agent._build_runtime_context()`, `tools.enabled: []` is falsy and therefore
@@ -135,16 +143,14 @@ and its completed P1–P11 patch record remain in
   stdout/stderr, close probe clients, test concurrency/timeouts, and define
   cleanup behavior during shutdown.
 
-- [~] **T10 — Pin and continuously verify the sandbox image.** Runtime code
-  execution pulls mutable `python:3.13-slim`, but CI scans only the application
-  image. Pin an approved digest (while retaining an intentional update
-  process), scan/SBOM the sandbox image on change and on a schedule, and fail
-  closed if an unapproved image override is used in production.
-  Production resolution now fails closed for unpinned overrides, and
-  `scripts/verify-sandbox-image.sh` plus a scheduled CI hook enforce digest,
-  vulnerability, and SBOM checks when the approved digest repository variable
-  is configured. The default development image still needs an approved full
-  digest before this item can be marked complete.
+- [x] **T10 — Pin and continuously verify the sandbox image.** Runtime code
+  execution now uses the approved full digest
+  `python:3.13-slim@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a`.
+  Production resolution fails closed for unpinned overrides;
+  `scripts/verify-sandbox-image.sh` scans and generates an SBOM on pushes/PRs,
+  and `.github/workflows/verify-sandbox-image.yml` repeats that check weekly
+  and manually. `SANDBOX_IMAGE_DIGEST` can select a separately approved
+  digest.
 
 - [~] **T11 — Make cloud code-executor probes match the “usable now” contract.**
   Vertex AI, Agent Engine, and GKE probes only check identifier presence; they
@@ -203,6 +209,8 @@ and its completed P1–P11 patch record remain in
   ports deliberately and add deployment smoke tests.
   Manifest hardening, local bind defaults, and development-only Keycloak
   guardrails are implemented; a real Cloud Run/IdP smoke deployment remains.
+  The local Keycloak smoke attempt was unable to pull the pinned fixture image
+  because the quay.io layer request returned HTTP 403.
 
 ## P2 — Test, operations, and maintainability improvements
 
@@ -220,30 +228,33 @@ and its completed P1–P11 patch record remain in
   JSON entries. Add TTL/LRU eviction, decoded audio/MIME validation, knowledge
   file and result byte/token limits, schema validation, safe reload errors, and
   concurrency tests.
-  Live eviction, strict audio/JSON limits, and bounded fail-closed knowledge
-  loading are implemented; broader concurrency/load tests remain T19.
+  Live eviction, strict audio/JSON limits, bounded fail-closed knowledge
+  loading, and concurrent rate-limit admission tests are implemented; broader
+  multi-instance/load tests remain T19.
 
-- [ ] **T19 — Add behavior-level workflow tests.** Current high coverage mainly
+- [~] **T19 — Add behavior-level workflow tests.** Current high coverage mainly
   proves parsing, callback helpers, and agent-tree construction. Add a fake or
   deterministic model/runner suite that exercises all example YAML files
   through complete invocations: state handoff, branch joining, iteration exit,
   routing/delegation, structured output, confirmation/resume, role tools, and
   error paths. Keep a small authenticated REST/Live integration matrix.
   Construction, policy, aggregation, and input-boundary regressions were added
-  in this pass; full deterministic Runner invocations and transport disconnect/
-  resume coverage remain.
+  in this pass. `tests/test_workflow_invocations.py` now drives all eight
+  examples through a deterministic ADK `Runner` and covers approval
+  suspend/resume decisions; authenticated REST/Live integration and transport
+  disconnect/resume coverage remain.
 
-- [~] **T20 — Add real static-quality gates.** The CI job named “Lint & Format”
+- [x] **T20 — Add real static-quality gates.** The CI job named “Lint & Format”
   only runs `git diff --check`; there is no Python linter, formatter check, or
   type check. Add Ruff (and a practical type-checking target), validate YAML and
   Markdown links, run a package build/metadata check, and keep generated
   coverage/cache/egg-info artifacts out of review worktrees.
-  Ruff lint/format, compile, wheel/sdist build, JSON/Compose validation, and
-  coverage gates are now in CI, including YAML and relative Markdown-link
-  validation; generated build/SBOM artifacts are ignored. A practical
-  type-check remains outstanding.
+  Ruff lint/format, targeted Pyright checking for configuration, compile,
+  wheel/sdist build, JSON/Compose validation, and coverage gates are now in CI,
+  including YAML and relative Markdown-link validation; generated build/SBOM
+  artifacts are ignored.
 
-- [~] **T21 — Improve CI reproducibility and release supply-chain controls.**
+- [x] **T21 — Improve CI reproducibility and release supply-chain controls.**
   Pin the uv tool version instead of `latest`, pin third-party Actions by commit
   SHA, avoid running the Python 3.13 test suite twice for coverage, and run the
   dependency audit once per lock rather than once per interpreter. Generate an
@@ -251,17 +262,21 @@ and its completed P1–P11 patch record remain in
   guidance, restrict release tags to approved/main ancestry, and define cleanup
   for unverified `ci-<sha>` registry tags.
   uv is version-pinned, coverage is no longer run twice, dependency auditing is
-  a single job, and an optional scheduled sandbox SBOM/scan job was added.
-  Action commit-SHA pinning, signed provenance/SBOM promotion, release ancestry
-  enforcement, and registry cleanup still require repository policy decisions.
+  a single job, all Actions are commit-SHA pinned, build attestations request
+  provenance/SBOM for registry-bound images, and sandbox SBOM/scan checks run
+  on change and weekly; promoted digests are signed and verified with
+  GitHub OIDC-backed Cosign, version tags must descend from `main`, and the
+  temporary `ci-<sha>` tag is cleaned up after the build path. Untagged registry
+  storage remains subject to the registry's retention policy.
 
-- [~] **T22 — Centralize duplicated defaults and version metadata.** App
+- [x] **T22 — Centralize duplicated defaults and version metadata.** App
   version, model defaults, tool defaults, ports, and image coordinates are
   repeated across Python settings, Compose, `.env.example`, Cloud Run, README,
   and CI. Establish one source or add drift tests so releases cannot report one
   version/configuration while running another.
-  Shared Python defaults are centralized in `config/defaults.py`; Compose,
-  `.env.example`, Cloud Run, and CI drift tests/source generation remain.
+  Shared Python defaults are centralized in `config/defaults.py`, and
+  `tests/test_configuration_defaults.py` checks the documented values across
+  `.env.example`, Compose, Cloud Run, README, CI, and `pyproject.toml`.
 
 ## P3 — Deferred and documentation work
 
@@ -279,20 +294,25 @@ and its completed P1–P11 patch record remain in
   URLs/classifiers, supported-version policy, and release/versioning policy if
   this repository is intended for public reuse. Validate the built wheel and
   sdist rather than relying only on an editable source checkout.
-  Project URLs, authorship, supported-version classifiers, and CI build checks
-  are now present. A repository-approved license and release/versioning policy
-  are intentionally not invented here; the local build could not fetch the
-  isolated `setuptools` build dependency without network access.
+  Project URLs, authorship, supported-version classifiers, SemVer policy in
+  `docs/SUPPORT.md`, and CI build checks are now present. A repository-approved
+  license is still required before this can be closed; the wheel and sdist
+  build now pass locally.
 
 - [ ] **T25 — Migrate deprecated ADK workflow nodes when upstream parity is
   available** ([ADR-003](docs/ADR-003-adk-workflow-migration.md)). Prototype
   sequential, parallel/join, bounded loop, and human-approval shapes behind a
   strategy-local flag; run the eight-use-case compatibility matrix; retain the
   legacy rollback path for one release; then remove the deprecation filter.
+  The upstream Workflow-as-sub-agent capability remains unsupported as of
+  2026-08-20; the current upstream direction is Node-as-Tool, so migration is
+  correctly deferred pending a supported API and parity test matrix.
 
-- [ ] **T26 — Re-verify ADK-coupled assumptions on every `google-adk` upgrade.**
+- [~] **T26 — Re-verify ADK-coupled assumptions on every `google-adk` upgrade.**
   Review the `BaseAgentConfig`, `plugins=`, and Workflow warning filters; the
   ADR-003 migration gate; ADR-004 Appendices A/B; Docker executor internals and
   kwargs; socket-proxy ACL semantics; built-in tool/model compatibility; and
-  callback confirmation/resume contracts. Record the checked ADK version and
-  evidence in the upgrade PR.
+  callback confirmation/resume contracts. `scripts/check-adk-assumptions.py`
+  now guards the locked version, imports, Runner/confirmation signatures, and
+  socket-proxy ACL assumptions; `docs/ADK-UPGRADE-CHECKLIST.md` records the
+  remaining manual matrix and upgrade-PR evidence requirement.

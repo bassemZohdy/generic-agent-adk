@@ -4,6 +4,11 @@ All notable changes to this project are recorded here, newest first.
 
 ## 2026-08-20 — Runner workflows, approval resume, and CI supply-chain checks
 
+- Updated the sandbox default to the OS-clean, digest-pinned Python 3.13
+  bookworm image and scoped its Trivy gate to Debian runtime packages; the
+  official image's embedded build-time wheel SBOM is not an installed runtime
+  dependency. Application images continue to scan their resolved Python
+  dependencies separately.
 - Fixed ADK callback parameter wiring so configured before/after hooks receive
   `callback_context` under real Runner execution.
 - Added deterministic Runner coverage for all eight example YAML workflows,

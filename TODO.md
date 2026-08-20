@@ -145,12 +145,14 @@ and its completed P1–P11 patch record remain in
 
 - [x] **T10 — Pin and continuously verify the sandbox image.** Runtime code
   execution now uses the approved full digest
-  `python:3.13-slim@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a`.
+  `python:3.13-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1`.
   Production resolution fails closed for unpinned overrides;
-  `scripts/verify-sandbox-image.sh` scans and generates an SBOM on pushes/PRs,
-  and `.github/workflows/verify-sandbox-image.yml` repeats that check weekly
-  and manually. `SANDBOX_IMAGE_DIGEST` can select a separately approved
-  digest.
+  `scripts/verify-sandbox-image.sh` scans Debian runtime packages and generates
+  an SBOM on pushes/PRs, and `.github/workflows/verify-sandbox-image.yml`
+  repeats that check weekly and manually. The official Python image embeds
+  build-time wheel SBOM entries that are not installed in the runtime layer;
+  application images scan their resolved Python dependencies separately.
+  `SANDBOX_IMAGE_DIGEST` can select a separately approved digest.
 
 - [~] **T11 — Make cloud code-executor probes match the “usable now” contract.**
   Vertex AI, Agent Engine, and GKE probes only check identifier presence; they

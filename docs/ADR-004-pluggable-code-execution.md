@@ -499,7 +499,7 @@ building one vs using an existing public image:
 
 | Candidate | Verdict | Notes (verified live on Docker 29.6.2) |
 |---|---|---|
-| `python:3.13-slim@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a` | **RECOMMENDED DEFAULT** | 178 MB; `which python3` ✓ (Cpython 3.13.15 at `/usr/local/bin/python3`); **verified running under the full hardened constraint set** (`--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges --memory 512m --pids-limit 128 --network none`): executes `python3 -c`, writes to tmpfs, root fs read-only. glibc ⇒ best wheel compatibility. |
+| `python:3.13-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1` | **RECOMMENDED DEFAULT** | 178 MB; `which python3` ✓ (Cpython 3.13.15 at `/usr/local/bin/python3`); **verified running under the full hardened constraint set** (`--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges --memory 512m --pids-limit 128 --network none`): executes `python3 -c`, writes to tmpfs, root fs read-only. glibc ⇒ best wheel compatibility. Trivy scans the Debian runtime packages; the official image's embedded build-time Python SBOM is excluded because it describes non-installed wheel contents. |
 | `python:3.13-alpine` | Documented alternative | 70.3 MB, digest `sha256:540c7d91…`; `which python3` ✓; same constraints work. musl breaks some C-extension wheels — fine for pure-stdlib snippets, worse if model code `pip install`s (it can't anyway: no network). |
 | `python:3.12-slim` | Supported via config | 179 MB, digest `sha256:57cd7c3a…`; use if a 3.12 runtime is required. |
 | jupyter `docker-stacks` | Rejected | Notebook-oriented, ~2 GB, ships a full userland we don't need. |
@@ -509,7 +509,7 @@ building one vs using an existing public image:
 **Decisions for implementation:**
 
 - Default image constant in `execution/resolver.py`:
-  `DEFAULT_SANDBOX_IMAGE = "python:3.13-slim@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a"`.
+  `DEFAULT_SANDBOX_IMAGE = "python:3.13-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1"`.
 - Operator override: `AGENT_CODE_EXECUTION_DOCKER_IMAGE` env /
   `execution.code_execution.docker_image` YAML (P5 plumbing).
 - README (P10) documents digest pinning for production

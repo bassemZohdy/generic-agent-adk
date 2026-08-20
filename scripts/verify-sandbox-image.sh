@@ -16,7 +16,12 @@ if [ "${#digest}" -ne 64 ] || ! printf '%s\n' "$digest" | tr -d '0123456789abcde
 fi
 
 if command -v trivy >/dev/null 2>&1; then
-  trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed "$image"
+  # The official Python image embeds a third-party SBOM for build-time wheel
+  # contents (including packages that are not installed in the runtime layer).
+  # Scan the Debian runtime packages here; application images separately scan
+  # their resolved Python dependencies with the full Trivy package set.
+  trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed \
+    --pkg-types os "$image"
 else
   echo "trivy is required to scan the sandbox image" >&2
   exit 1

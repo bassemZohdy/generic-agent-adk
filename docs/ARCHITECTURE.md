@@ -137,8 +137,11 @@ The `docker_container` provider builds `HardenedContainerCodeExecutor`:
 defined inside a cached factory (subclassing `ContainerCodeExecutor`
 triggers ADK's lazy import, which must not happen at module scope on
 Docker-less deployments), adding mem/cpu/pids limits, read-only rootfs +
-`/tmp` tmpfs, and a wall-clock `execute_code` timeout that SIGKILLs and
-restarts the reused container. Verified internals and upgrade
+`/tmp` tmpfs, a numeric non-root user, and a wall-clock `execute_code` timeout
+that SIGKILLs and restarts the reused container. The published application
+image includes the optional Docker SDK; the provider still remains inactive
+unless code execution is configured and a Docker endpoint probes successfully.
+Verified internals and upgrade
 re-verification duties are recorded in ADR-004 Appendices A/B.
 
 ## Request path (compose deployment)

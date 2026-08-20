@@ -338,6 +338,11 @@ far, item by item:
   docker-py's graceful `stop()` with its 10s default grace period —
   15.6s wall for the 5s timeout; `_recover_container` now SIGKILLs.
   Commit `2d80e2f`.)
+- ✅ The published application image includes the Docker SDK, the Compose
+  `code-exec` profile points the resolver at its scoped proxy by default, and
+  CI creates a real child sandbox from the built image to verify execution,
+  rootless operation, read-only rootfs, no network, resource limits, and
+  cleanup (`scripts/verify-sandbox-runtime.sh`).
 
 ### Corrections recorded during implementation research
 

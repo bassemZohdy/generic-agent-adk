@@ -387,17 +387,32 @@ def _hardened_executor_cls_get() -> type:
                 """ADK's ``__init_container`` plus ``self._hardening``."""
                 if self.docker_path:
                     self._build_docker_image()  # inherited from ADK
-                self._container = self._client.containers.run(
+                container = self._client.containers.run(
                     image=self.image,
                     detach=True,
                     tty=True,
-                    # ADK's own hardening, kept exactly as it ships it:
-                    network_disabled=not self.network_enabled,
+                    # Keep code execution rootless and in the writable tmpfs.
+                    # Numeric IDs work even when the image has no named user.
+                    user="65532:65532",
+                    working_dir="/tmp",
+                    # Network access is never part of this hardened provider,
+                    # regardless of inherited ADK model defaults.
+                    network_disabled=True,
                     cap_drop=["ALL"],
                     security_opt=["no-new-privileges"],
                     **self._hardening,
                 )
-                self._verify_python_installation()  # inherited from ADK
+                self._container = container
+                try:
+                    self._verify_python_installation()  # inherited from ADK
+                except Exception:
+                    # Do not leak a container if startup verification fails
+                    # before the atexit cleanup hook is registered.
+                    try:
+                        container.remove(force=True)
+                    except Exception:
+                        logger.debug("sandbox startup cleanup failed", exc_info=True)
+                    raise
 
             def _cleanup_container(self) -> None:
                 with self._execution_lock:
@@ -446,6 +461,7 @@ def _hardened_executor_cls_get() -> type:
                 """
                 timeout = self.timeout_seconds or 60
                 result_box: dict[str, Any] = {}
+                container = self._container
 
                 def _bounded_output(output: Any) -> tuple[str, str]:
                     stdout = bytearray()
@@ -498,14 +514,14 @@ def _hardened_executor_cls_get() -> type:
                 def _run() -> None:
                     try:
                         try:
-                            result_box["exec"] = self._container.exec_run(
+                            result_box["exec"] = container.exec_run(
                                 ["python3", "-c", code_execution_input.code],
                                 demux=True,
                                 stream=True,
                             )
                         except TypeError:
                             # Compatibility with older docker-py and test doubles.
-                            result_box["exec"] = self._container.exec_run(
+                            result_box["exec"] = container.exec_run(
                                 ["python3", "-c", code_execution_input.code],
                                 demux=True,
                             )

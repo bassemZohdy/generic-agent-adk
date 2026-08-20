@@ -62,7 +62,9 @@ vulnerabilities, and generates an SBOM using Trivy and Syft. The official
 Python image embeds build-time wheel SBOM entries for packages that are not
 installed in the runtime layer, so the sandbox script uses Trivy's `os`
 package scope. Application-image verification retains the full Trivy package
-scope. The repository variable
+scope and runs `verify-sandbox-runtime.sh` against the built image; that smoke
+test creates a real child sandbox, executes a snippet, and inspects its
+hardening flags. The repository variable
 `SANDBOX_IMAGE_DIGEST` may select an approved replacement; otherwise both
 workflows verify the digest-pinned default from ADR-004. Pushes and pull
 requests run the check in `ci.yml`; a separate weekly/manual workflow repeats
@@ -77,6 +79,10 @@ it to catch newly disclosed vulnerabilities in the pinned image.
 2. `pytest tests/ -v --tb=short --cov=basic_agent --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}`
 3. Upload coverage artifacts (Python 3.13 run only)
 4. Optional, non-blocking Codecov upload
+
+The Docker image build includes the `docker` extra by default so the Compose
+`code-exec` profile can use its scoped socket proxy. The runtime smoke test
+still verifies that the SDK is inert unless a Docker endpoint is selected.
 
 **Triggers**: pushes to `main` or version tags, and pull requests.
 **Duration**: ~15 minutes per Python version, matrix runs in parallel with

@@ -336,6 +336,10 @@ jobs:
           curl -fsS http://localhost:18002/docs >/dev/null && echo "default CMD serves /docs OK"
           docker rm -f "$cid" >/dev/null
 
+      - name: "[PR] Verify sandbox runtime hardening"
+        if: github.event_name == 'pull_request'
+        run: sh scripts/verify-sandbox-runtime.sh "${{ steps.tag.outputs.value }}"
+
   verify-image:
     name: Verify Staged Image
     runs-on: ubuntu-latest
@@ -386,6 +390,9 @@ jobs:
           done
           curl -fsS http://localhost:18002/docs >/dev/null && echo "default CMD serves /docs OK"
           docker rm -f "$cid" >/dev/null
+
+      - name: Verify sandbox runtime hardening
+        run: sh scripts/verify-sandbox-runtime.sh "${{ needs.build.outputs.image-tag }}"
 
   promote-image:
     name: Promote Verified Image

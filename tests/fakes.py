@@ -26,12 +26,14 @@ class FakeContainer:
 
     def __init__(self, client):
         self._client = client
-        self.id = f"fake-container-{len(client.run_calls)}"
+        self.id = f"fake-container-{len(client.run_calls) - 1}"
 
-    def exec_run(self, cmd, demux=False):
+    def exec_run(self, cmd, demux=False, stream=False):
         cmd = list(cmd)
         if cmd == ["which", "python3"]:
             # ADK's _verify_python_installation() requires exit 0 here.
+            if self._client.python_missing:
+                return FakeExecResult(1, (b"", b"python3 missing\n"))
             return FakeExecResult(0, (b"/usr/local/bin/python3\n", b""))
         if self._client.exec_handler is not None:
             return self._client.exec_handler(cmd)
@@ -43,7 +45,7 @@ class FakeContainer:
     def kill(self):
         self._client.kill_calls.append(self.id)
 
-    def remove(self):
+    def remove(self, force=False):
         self._client.remove_calls.append(self.id)
 
 
@@ -57,6 +59,7 @@ class FakeDockerClient:
         self.kill_calls: list[str] = []
         self.remove_calls: list[str] = []
         self.ping_raises: Exception | None = None
+        self.python_missing = False
         self.exec_handler: Callable[[list[str]], FakeExecResult] | None = None
 
     def ping(self):

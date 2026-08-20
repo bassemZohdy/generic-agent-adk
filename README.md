@@ -192,7 +192,8 @@ docker compose --profile live up --build
 docker compose --profile observability up --build
 
 # Add the code execution sandbox
-docker compose --profile code-exec up --build
+AGENT_TOOLS=knowledge,search,code_execution \
+  docker compose --profile code-exec up --build
 
 # Add the demo service API (port 8001) backing the mcp/openapi tools
 docker compose --profile demo up --build

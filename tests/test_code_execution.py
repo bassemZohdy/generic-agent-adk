@@ -254,10 +254,21 @@ def test_hardened_executor_container_kwargs(clean_registry, monkeypatch):
     assert kwargs["pids_limit"] == 128
     assert kwargs["read_only"] is True
     assert kwargs["tmpfs"] == {"/tmp": "size=64m,rw"}
+    assert kwargs["user"] == "65532:65532"
+    assert kwargs["working_dir"] == "/tmp"
     # ADK's own hardening, kept exactly as shipped:
     assert kwargs["network_disabled"] is True
     assert kwargs["cap_drop"] == ["ALL"]
     assert kwargs["security_opt"] == ["no-new-privileges"]
+
+
+def test_hardened_executor_forces_network_off_even_if_adk_flag_is_true(
+    clean_registry, monkeypatch
+):
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
+    ce._hardened_executor_cls_get()(network_enabled=True)
+    assert client.run_calls[0]["network_disabled"] is True
 
 
 def test_hardened_executor_rejects_stateful(clean_registry, monkeypatch):
@@ -272,6 +283,18 @@ def test_hardened_executor_requires_image_or_docker_path(clean_registry, monkeyp
     install_fake_docker(monkeypatch, client)
     with pytest.raises(ValueError, match="image or docker_path"):
         ce._hardened_executor_cls_get()(image=None)
+
+
+def test_hardened_executor_cleans_up_when_python_verification_fails(
+    clean_registry, monkeypatch
+):
+    client = FakeDockerClient()
+    client.python_missing = True
+    install_fake_docker(monkeypatch, client)
+
+    with pytest.raises(ValueError, match="python3"):
+        ce._hardened_executor_cls_get()()
+    assert client.remove_calls == ["fake-container-0"]
 
 
 def test_hardened_executor_timeout_kills_and_recovers(clean_registry, monkeypatch):
@@ -319,6 +342,23 @@ def test_hardened_executor_streams_demuxed_output(clean_registry, monkeypatch):
     result = executor.execute_code(None, _code_input("print('x')"))
     assert result.stdout == "out-line\n"
     assert result.stderr == "err-line\n"
+
+
+def test_hardened_executor_supports_legacy_exec_run_without_stream(
+    clean_registry, monkeypatch
+):
+    client = FakeDockerClient()
+    install_fake_docker(monkeypatch, client)
+    executor = ce._hardened_executor_cls_get()(timeout_seconds=5)
+
+    def legacy_exec_run(cmd, demux=False):
+        assert demux is True
+        return FakeExecResult(0, b"legacy-output\n")
+
+    executor._container.exec_run = legacy_exec_run
+    result = executor.execute_code(None, _code_input("print('x')"))
+    assert result.stdout == "legacy-output\n"
+    assert result.stderr == ""
 
 
 def test_hardened_executor_caps_stdout_and_stderr(clean_registry, monkeypatch):

@@ -48,6 +48,13 @@ means no tools. OpenAPI, skills, MCP, and Application Integration are opt-in.
 Role tool names are resolved through the same factory and safety policy as root
 tools. Unknown names and unsupported output schemas fail before an agent starts.
 
+To use the Docker-backed sandbox with Compose, include `code_execution` in
+`AGENT_TOOLS` and start the `code-exec` profile. The profile supplies the
+scoped Docker socket proxy and defaults `AGENT_CODE_EXECUTION_DOCKER_HOST` to
+`tcp://code-exec-socket-proxy:2375`; the application image includes the
+Docker SDK but does not activate it unless the resolver selects the Docker
+strategy.
+
 ## Environment overrides and limits
 
 `AGENT_USE_CASE`, `ADK_MODEL`, `AGENT_INSTRUCTION`, `AGENT_TOOLS`,

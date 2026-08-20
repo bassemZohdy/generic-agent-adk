@@ -37,9 +37,23 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
 
-RUN uv sync --frozen --no-dev --no-install-project
+# The application image must be able to use the Docker-backed sandbox when
+# it is connected to the narrowly-scoped code-exec socket proxy. Keep the
+# source install optional (`uv sync --extra docker`), but include the SDK in
+# the published image by default; importing it remains deferred until the
+# docker_container strategy is actually selected.
+ARG INSTALL_DOCKER_EXTRA=1
+RUN if [ "$INSTALL_DOCKER_EXTRA" = "1" ]; then \
+      uv sync --frozen --no-dev --no-install-project --extra docker; \
+    else \
+      uv sync --frozen --no-dev --no-install-project; \
+    fi
 COPY src ./src
-RUN uv sync --frozen --no-dev \
+RUN if [ "$INSTALL_DOCKER_EXTRA" = "1" ]; then \
+      uv sync --frozen --no-dev --extra docker; \
+    else \
+      uv sync --frozen --no-dev; \
+    fi \
     && mkdir -p /app/.adk/artifacts \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
     && chown -R appuser:appuser /app \

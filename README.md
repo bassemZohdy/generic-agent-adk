@@ -2,8 +2,8 @@
 
 An AI agent that adapts to your needs. Choose what you want it to do, configure it with environment variables, and run it with one Docker command.
 
-[![Tests](https://img.shields.io/badge/tests-379%20passing-brightgreen)](./tests/)
-[![Coverage](https://img.shields.io/badge/coverage-95.57%25-brightgreen)](./tests/)
+[![Tests](https://img.shields.io/badge/tests-392%20passing-brightgreen)](./tests/)
+[![Coverage](https://img.shields.io/badge/coverage-95.63%25-brightgreen)](./tests/)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-active%20%2F%20staging-yellow)](.)
 
@@ -29,13 +29,13 @@ export OPENAI_API_KEY=your-key
 # 2. Run the agent
 # Local-only demo: AUTH_DISABLED creates an isolated anonymous cookie/session;
 # use Keycloak/OIDC before exposing this beyond localhost.
-docker run -p 127.0.0.1:8002:8002 \
+docker run -p 127.0.0.1:${ADK_API_PORT:-8002}:8002 \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
-  -e ADK_MODEL=openai/gpt-4o \
+  -e ADK_MODEL=openai/gpt-5.6 \
   -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 
-# 3. Open http://localhost:8002/docs to try it
+# 3. Open http://localhost:${ADK_API_PORT:-8002}/docs to try it
 ```
 
 That's it! The agent runs as a REST API you can call from any application.
@@ -46,20 +46,25 @@ That's it! The agent runs as a REST API you can call from any application.
 
 Set `AGENT_USE_CASE` to pick a behavior:
 
-| What you want | Use case | Example |
-|---|---|---|
-| Answer questions, use tools when needed | `assistant` | "What's our Q3 revenue?" |
-| Run steps in order | `pipeline` | "Fetch data → analyze → summarize" |
-| Get multiple perspectives | `multi_perspective` | "What do different experts think?" |
-| Keep improving until it's good | `refine_until_good` | "Write a better version" |
-| Route to the right specialist | `expert_dispatch` | "Billing question → billing AI" |
-| Coordinate a team | `team_coordinator` | "Research, write, and review this" |
-| Plan then execute | `plan_and_execute` | "Break this into steps and do them" |
-| Ask before acting | `approval_gate` | "Should I send this email?" |
+| What you want | Use case | Interfaces | Example |
+|---|---|---|---|
+| Answer questions, use tools when needed | `assistant` | REST, Web, CLI, Live | "What's our Q3 revenue?" |
+| Run fixed steps in order | `pipeline` | REST, Web, CLI | "Fetch data → analyze → summarize" |
+| Compare independent perspectives | `multi_perspective` | REST, Web, CLI | "What do different experts think?" |
+| Critique and improve until a quality bar is met | `refine_until_good` | REST, Web, CLI | "Write a better version" |
+| Route to a fixed specialist roster | `expert_dispatch` | REST, Web, CLI | "Billing question → billing AI" |
+| Decompose work and delegate to workers | `team_coordinator` | REST, Web, CLI | "Research, write, and review this" |
+| Plan first, then execute step by step | `plan_and_execute` | REST, Web, CLI | "Break this into steps and do them" |
+| Hold risky actions for human approval | `approval_gate` | REST, Web, CLI | "Should I send this email?" |
+
+These are the eight built-in canonical keys. They currently have no built-in
+aliases. Custom modules may register additional keys; see
+`AGENT_USE_CASE_MODULE` and `AGENT_USE_CASE_MODULE_ALLOWLIST` in
+[`.env.example`](./.env.example).
 
 ```bash
 docker run -e AGENT_USE_CASE=pipeline \
-  -e ADK_MODEL=openai/gpt-4o \
+  -e ADK_MODEL=openai/gpt-5.6 \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
   -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
@@ -71,6 +76,11 @@ Gemini uses ADK's native model integration. To use LiteLLM as the model
 provider, set `model.provider` to `litellm` in YAML and put LiteLLM's
 underlying provider/model string in `model.name`. For environment-only
 configuration, put that same `provider/model` string in `ADK_MODEL`.
+Model IDs are owned by each provider and are not validated by this runtime;
+the examples below use the current OpenAI `openai/gpt-5.6` alias. Check the
+[OpenAI model catalog](https://developers.openai.com/api/docs/models) and
+[LiteLLM provider catalog](https://docs.litellm.ai/docs/providers) before
+deploying a different model.
 
 | Underlying provider | LiteLLM model string | Typical environment variables |
 |---|---|---|
@@ -86,10 +96,10 @@ Examples:
 
 ```bash
 # OpenAI
-docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=...
+docker run -e ADK_MODEL=openai/gpt-5.6 -e OPENAI_API_KEY=...
 
-# Anthropic
-docker run -e ADK_MODEL=anthropic/claude-sonnet-5 -e ANTHROPIC_API_KEY=...
+# Anthropic (replace with an ID currently available to your account)
+docker run -e ADK_MODEL=anthropic/<current-model-id> -e ANTHROPIC_API_KEY=...
 
 # DeepSeek
 docker run -e ADK_MODEL=deepseek/<model-name> -e DEEPSEEK_API_KEY=...
@@ -115,15 +125,15 @@ agent:
 
 model:
   provider: litellm
-  name: openai/gpt-4o
+  name: openai/gpt-5.6
   api_key: "${OPENAI_API_KEY}"
   # Useful for an OpenAI-compatible gateway or self-hosted endpoint.
   base_url: "${OPENAI_API_BASE:https://api.openai.com/v1}"
 ```
 
 When using LiteLLM, keep the underlying provider prefix in `model.name` (for
-example, `openai/gpt-4o`); `name: gpt-4o` with `provider: litellm` would resolve
-to the invalid `litellm/gpt-4o` route. With environment-only configuration,
+example, `openai/gpt-5.6`); `name: gpt-5.6` with `provider: litellm` would resolve
+to the invalid `litellm/gpt-5.6` route. With environment-only configuration,
 set `ADK_MODEL` to the complete `provider/model` value; the provider's
 standard LiteLLM environment variables are then used automatically. See the [ADK LiteLLM
 guide](https://adk.dev/agents/models/litellm/) and [LiteLLM provider
@@ -136,7 +146,7 @@ Add tools to make your agent more capable:
 
 ```bash
 docker run -e AGENT_TOOLS=knowledge,search,code_execution \
-  -e ADK_MODEL=openai/gpt-4o \
+  -e ADK_MODEL=openai/gpt-5.6 \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
   -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
@@ -155,6 +165,34 @@ Available tools (default: `knowledge,search,mcp,approval,runtime,structured_outp
 - `application_integration` — trigger GCP Application Integrations
 
 `mcp` and `openapi` need a reachable backend — run the bundled example with the compose `demo` profile (`docker compose --profile demo up`).
+
+### Code-execution sandbox
+
+The `code_execution` capability is opt-in. Add it to `AGENT_TOOLS`; it is not
+enabled by the default tool list. The resolver first honors an explicit
+`AGENT_CODE_EXECUTION_STRATEGY`, then probes managed Vertex AI, Agent Engine,
+GKE, the Docker container sandbox, and finally ADK's Gemini built-in executor.
+`unsafe_local` is an explicit development-only escape hatch and must not be
+used as a production sandbox.
+
+For Docker Compose, start the dedicated profile so the application uses the
+scoped proxy rather than Traefik's read-only discovery proxy:
+
+```bash
+AGENT_TOOLS=knowledge,search,code_execution \
+  docker compose --profile code-exec up --build
+```
+
+The Docker executor runs the pinned Python image with a non-root numeric user,
+read-only root filesystem plus a writable `/tmp`, no network, dropped Linux
+capabilities, `no-new-privileges`, 512 MiB memory, one CPU, and a 128-process
+limit. Override the strategy with `AGENT_CODE_EXECUTION_STRATEGY`, the Docker
+endpoint with `AGENT_CODE_EXECUTION_DOCKER_HOST`, or the image with
+`AGENT_CODE_EXECUTION_DOCKER_IMAGE` (or matching YAML fields). Production image
+overrides must remain digest-pinned. CI creates a real child container from
+the application image and verifies these controls with
+`scripts/verify-sandbox-runtime.sh`; the complete threat model
+and provider behavior are in [ADR-004](./docs/ADR-004-pluggable-code-execution.md).
 
 ## Run with Docker Compose (full stack)
 
@@ -175,29 +213,38 @@ echo "DEMO_MODE=true" >> .env
 docker compose up --build -d
 
 # 4. Get a token and call the API
-curl -s -X POST http://localhost:8080/realms/basic-agent/protocol/openid-connect/token \
+curl -s -X POST "http://localhost:${KEYCLOAK_PORT:-8080}/realms/basic-agent/protocol/openid-connect/token" \
   -d client_id=basic-agent -d username=demo -d password=demo -d grant_type=password \
   | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])"
 ```
 
-The API at `http://localhost:8002` requires that token (`Authorization: Bearer …`) — every request passes through Keycloak verification. Without `DEMO_MODE=true`, the production realm is imported (no demo user, no direct password grants) — bring your own users.
+The API at `http://localhost:${ADK_API_PORT:-8002}` requires that token
+(`Authorization: Bearer …`) — every request passes through Keycloak
+verification. Without `DEMO_MODE=true`, the production realm is imported (no
+demo user, no direct password grants) — bring your own users.
 
 Add features with profiles:
 
 ```bash
-# Add live WebSocket support (port 8003)
+# Add live WebSocket support (default host port ${LIVE_API_PORT:-8003})
 docker compose --profile live up --build
 
-# Add monitoring dashboards (Grafana on localhost:3000)
+# Add monitoring dashboards (default host port ${GRAFANA_PORT:-3000})
 docker compose --profile observability up --build
 
 # Add the code execution sandbox
 AGENT_TOOLS=knowledge,search,code_execution \
   docker compose --profile code-exec up --build
 
-# Add the demo service API (port 8001) backing the mcp/openapi tools
+# Add the demo service API (default host port ${AGENT_SERVICE_API_PORT:-8001})
 docker compose --profile demo up --build
 ```
+
+Compose host ports are configurable; the values in parentheses are defaults.
+Set the corresponding `*_PORT` and `*_BIND_ADDRESS` variables in `.env`.
+Container-to-container URLs intentionally keep stable internal listener ports
+(`8001`–`8003`, `8080`, and `8010`), so changing a host port does not require
+changing service discovery URLs. See the [port matrix](./docs/CONFIGURATION.md#interfaces-and-ports).
 
 ## Configure with YAML (advanced)
 
@@ -214,7 +261,7 @@ agent:
   description: "Customer support dispatcher"
 
 model:
-  name: "openai/gpt-4o"
+  name: "openai/gpt-5.6"
 
 roles:
   billing:
@@ -253,27 +300,27 @@ For production, use Keycloak or your own OIDC provider — the API fails closed 
 
 ### Simple Q&A agent
 ```bash
-docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+docker run -e ADK_MODEL=openai/gpt-5.6 -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 ### Agent with web search
 ```bash
-docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+docker run -e ADK_MODEL=openai/gpt-5.6 -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
   -e AGENT_TOOLS=knowledge,search \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 ### Agent that writes and runs code
 ```bash
-docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+docker run -e ADK_MODEL=openai/gpt-5.6 -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
   -e AGENT_TOOLS=knowledge,search,code_execution \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
 
 ### Multi-step workflow
 ```bash
-docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
+docker run -e ADK_MODEL=openai/gpt-5.6 -e OPENAI_API_KEY=your-key -e AUTH_DISABLED=true \
   -e AGENT_USE_CASE=pipeline \
   -e AGENT_INSTRUCTION="First research the topic, then write a summary, then review it." \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
@@ -294,7 +341,7 @@ docker run -e ADK_MODEL=openai/gpt-4o -e OPENAI_API_KEY=your-key -e AUTH_DISABLE
 | `503` from the API | Auth not configured — set `KEYCLOAK_ISSUER` or explicitly `AUTH_DISABLED=true` |
 | Compose won't start | `KEYCLOAK_ADMIN_PASSWORD` (and `GRAFANA_ADMIN_PASSWORD` with observability) must be set in `.env` |
 | Wrong behavior | Check the startup log for which config was loaded |
-| Keycloak won't start | Make sure port 8080 is free |
+| Keycloak won't start | Make sure the configured `KEYCLOAK_PORT` (default `8080`) is free |
 | Import errors | Run `uv sync --upgrade` |
 
 ## For developers
@@ -308,7 +355,7 @@ cp .env.example .env
 uvx pre-commit install       # gitleaks secret scan
 
 # Run locally (same server compose uses)
-uv run uvicorn basic_agent.interfaces.rest:app --port 8002
+uv run uvicorn basic_agent.interfaces.rest:app --port "${ADK_API_PORT:-8002}"
 
 # Or via the ADK CLI
 uv run adk api_server src/basic_agent

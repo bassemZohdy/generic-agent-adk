@@ -45,8 +45,8 @@ Google ADK agent tree
 |---|---|
 | `agent.py` | Entrypoint (~250 lines). Resolves config, builds the `RuntimeContext` (tool construction, model, code executor, instruction assembly), asks the use-case registry for the agent tree, exposes `root_agent`, the observability plugin, and `inspect_runtime`. Tool construction and knowledge retrieval live in focused companion modules. |
 | `config/` | Configuration package. `settings.py`: `Settings` frozen dataclass snapshotted from the environment once at import. `loader.py`: YAML ↔ env merge, `AgentConfig` dataclass tree, provenance logging. |
-| `auth/` | Authentication package. `core.py`: JWT validation primitives shared by all adapters. `gateway.py`: Traefik forward-auth endpoint (port 8010). |
-| `interfaces/` | Interface adapters. `rest.py`: REST/A2A (port 8002). `live.py`: Live WebSocket (port 8003). `service.py`: demo OpenAPI backend. `mcp.py`: Model Context Protocol. |
+| `auth/` | Authentication package. `core.py`: JWT validation primitives shared by all adapters. `gateway.py`: Traefik forward-auth endpoint (internal port 8010). |
+| `interfaces/` | Interface adapters. `rest.py`: REST/A2A (internal listener 8002; host default `ADK_API_PORT`). `live.py`: Live WebSocket (internal listener 8003; host default `LIVE_API_PORT`). `service.py`: demo OpenAPI backend. `mcp.py`: Model Context Protocol. |
 | `execution/` | Code-execution sandbox resolution (ADR-004). `resolver.py`: provider specs, `resolve_code_executor()`, `CE_FIELD_ENV_MAP`, hardened Docker executor factory. |
 | `tools.py` | Tool building factories (`build_tool`, MCP/OpenAPI/Skill/ApplicationIntegration toolsets) and the before/after-tool audit callbacks. |
 | `knowledge.py` | Knowledge file caching and `retrieve_knowledge` tool function. |
@@ -147,14 +147,19 @@ re-verification duties are recorded in ADR-004 Appendices A/B.
 ## Request path (compose deployment)
 
 ```
-client ──► api-proxy (Traefik :8002/:8003)
+client ──► api-proxy (host ${ADK_API_PORT:-8002}/${LIVE_API_PORT:-8003} → internal :8002/:8003)
               │  forward-auth middleware
               ▼
-          auth-gateway (:8010) ──► Keycloak JWKS (:8080)
+          auth-gateway (:8010) ──► Keycloak JWKS (internal :8080; host default ${KEYCLOAK_PORT:-8080})
               │  injects verified identity
               ▼
           adk-api (:8002) ──► root_agent (ADK) ──► tools
 ```
+
+The ports shown after the arrows are stable container listener contracts.
+Published host ports are environment-driven; see the [configuration port
+matrix](./CONFIGURATION.md#interfaces-and-ports). The auth gateway is an
+internal-only service and has no host port mapping.
 
 - Traefik discovers containers through the read-only
   `docker-socket-proxy` (`POST=0`) — discovery only, never mutation.

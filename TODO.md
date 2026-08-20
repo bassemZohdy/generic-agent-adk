@@ -6,7 +6,7 @@ history.
 
 ## Verification baseline
 
-- Local suite: **379 passed**, **95.57% coverage** with a 90% minimum.
+- Local suite: **392 passed**, **95.63% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
   ADK contract guards, SHA-pinned workflow validation, package build, YAML and
   JSON parsing, Markdown relative links, Python compilation, Compose profiles,

@@ -55,6 +55,39 @@ scoped Docker socket proxy and defaults `AGENT_CODE_EXECUTION_DOCKER_HOST` to
 Docker SDK but does not activate it unless the resolver selects the Docker
 strategy.
 
+Set `AGENT_CODE_EXECUTION_STRATEGY` to pin a provider, or leave it empty for
+ordered capability detection. Docker-specific overrides are
+`AGENT_CODE_EXECUTION_DOCKER_HOST` and
+`AGENT_CODE_EXECUTION_DOCKER_IMAGE`; the YAML equivalents are under
+`execution.code_execution`. The image should be digest-pinned in production.
+`unsafe_local` executes in the application process and is not a sandbox.
+
+## Interfaces and ports
+
+Compose publishes host ports from environment variables. The defaults below
+are convenience values, not required host assignments. `*_BIND_ADDRESS`
+controls the host interface; change both settings when exposing a service on a
+different interface.
+
+| Component | Host variables | Default host port | Internal container port |
+|---|---|---:|---:|
+| REST/A2A API through Traefik | `ADK_API_BIND_ADDRESS`, `ADK_API_PORT` | `8002` | `8002` |
+| Live WebSocket through Traefik | `LIVE_API_BIND_ADDRESS`, `LIVE_API_PORT` | `8003` | `8003` |
+| Keycloak | `KEYCLOAK_BIND_ADDRESS`, `KEYCLOAK_PORT` | `8080` | `8080` |
+| Demo service API (`demo` profile) | `AGENT_SERVICE_API_BIND_ADDRESS`, `AGENT_SERVICE_API_PORT` | `8001` | `8001` |
+| Grafana (`observability` profile) | `GRAFANA_BIND_ADDRESS`, `GRAFANA_PORT` | `3000` | `3000` |
+| OTLP gRPC (`observability` profile) | `OTLP_BIND_ADDRESS`, `OTLP_GRPC_PORT` | `4317` | `4317` |
+| OTLP HTTP (`observability` profile) | `OTLP_BIND_ADDRESS`, `OTLP_HTTP_PORT` | `4318` | `4318` |
+
+The authentication gateway listens on internal port `8010` and is not
+published to the host. Compose service URLs use the internal ports, so changing
+a host port does not change URLs such as `http://keycloak:8080` or
+`http://service-api:8001`. Cloud Run is different: its platform-provided
+`PORT` controls the container listener, and local Compose host-port variables
+do not apply. For a process running outside Compose, update public URLs such as
+`KEYCLOAK_ISSUER` and `AGENT_SERVICE_API_URL` yourself when their corresponding
+host ports change.
+
 ## Environment overrides and limits
 
 `AGENT_USE_CASE`, `ADK_MODEL`, `AGENT_INSTRUCTION`, `AGENT_TOOLS`,

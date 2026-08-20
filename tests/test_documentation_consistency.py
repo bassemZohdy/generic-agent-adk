@@ -40,17 +40,22 @@ def test_port_documentation_exposes_host_overrides_and_internal_contracts():
 
     for variable in (
         "ADK_API_PORT",
+        "ADK_API_CONTAINER_PORT",
         "LIVE_API_PORT",
+        "LIVE_API_CONTAINER_PORT",
         "KEYCLOAK_PORT",
+        "KEYCLOAK_CONTAINER_PORT",
         "AGENT_SERVICE_API_PORT",
+        "AGENT_SERVICE_API_CONTAINER_PORT",
+        "AUTH_GATEWAY_CONTAINER_PORT",
         "GRAFANA_PORT",
         "OTLP_GRPC_PORT",
         "OTLP_HTTP_PORT",
     ):
         assert variable in configuration
         assert variable in env_example
-    assert "Internal container port" in configuration
-    assert "stable container listener contracts" in architecture
+    assert "Container variable" in configuration
+    assert "environment-driven" in architecture
 
 
 def test_sandbox_documentation_covers_activation_configuration_and_verification():

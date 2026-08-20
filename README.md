@@ -29,9 +29,10 @@ export OPENAI_API_KEY=your-key
 # 2. Run the agent
 # Local-only demo: AUTH_DISABLED creates an isolated anonymous cookie/session;
 # use Keycloak/OIDC before exposing this beyond localhost.
-docker run -p 127.0.0.1:${ADK_API_PORT:-8002}:8002 \
+docker run -p 127.0.0.1:${ADK_API_PORT:-8002}:${ADK_API_CONTAINER_PORT:-8002} \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
   -e ADK_MODEL=openai/gpt-5.6 \
+  -e PORT=${ADK_API_CONTAINER_PORT:-8002} \
   -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 
@@ -240,11 +241,11 @@ AGENT_TOOLS=knowledge,search,code_execution \
 docker compose --profile demo up --build
 ```
 
-Compose host ports are configurable; the values in parentheses are defaults.
-Set the corresponding `*_PORT` and `*_BIND_ADDRESS` variables in `.env`.
-Container-to-container URLs intentionally keep stable internal listener ports
-(`8001`–`8003`, `8080`, and `8010`), so changing a host port does not require
-changing service discovery URLs. See the [port matrix](./docs/CONFIGURATION.md#interfaces-and-ports).
+Compose host and application container ports are independently configurable;
+the values in parentheses are defaults. Set the corresponding `*_PORT`,
+`*_CONTAINER_PORT`, and `*_BIND_ADDRESS` variables in `.env`. Service URLs use
+the container-port variables, so host port changes do not require changing
+service discovery URLs. See the [port matrix](./docs/CONFIGURATION.md#interfaces-and-ports).
 
 ## Configure with YAML (advanced)
 

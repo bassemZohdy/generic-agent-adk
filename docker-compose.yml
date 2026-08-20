@@ -47,12 +47,13 @@ services:
           realm_file=/opt/keycloak/data/import/realm-basic-agent.json;
         fi;
         /opt/keycloak/bin/kc.sh import --file "$${realm_file}" --override false;
-        exec /opt/keycloak/bin/kc.sh start-dev
+        exec /opt/keycloak/bin/kc.sh start-dev --http-port "$${KEYCLOAK_CONTAINER_PORT:-8080}"
     ports:
-      - "${KEYCLOAK_BIND_ADDRESS:-127.0.0.1}:${KEYCLOAK_PORT:-8080}:8080"
+      - "${KEYCLOAK_BIND_ADDRESS:-127.0.0.1}:${KEYCLOAK_PORT:-8080}:${KEYCLOAK_CONTAINER_PORT:-8080}"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD must be set}
+      KEYCLOAK_CONTAINER_PORT: ${KEYCLOAK_CONTAINER_PORT:-8080}
       DEPLOYMENT_ENV: ${DEPLOYMENT_ENV:-docker-compose}
       DEMO_MODE: ${DEMO_MODE:-false}
     volumes:
@@ -62,7 +63,7 @@ services:
 
   auth-gateway:
     <<: [*app-image, *resource-limits]
-    command: ["uvicorn", "basic_agent.auth.gateway:app", "--host", "0.0.0.0", "--port", "8010"]
+    command: ["uvicorn", "basic_agent.auth.gateway:app", "--host", "0.0.0.0", "--port", "${AUTH_GATEWAY_CONTAINER_PORT:-8010}"]
     environment:
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
@@ -82,12 +83,12 @@ services:
       AGENT_KNOWLEDGE_MAX_RESULT_BYTES: ${AGENT_KNOWLEDGE_MAX_RESULT_BYTES:-65536}
       AGENT_MCP_TOOLS: ${AGENT_MCP_TOOLS:-get_service_status}
       AGENT_MCP_TOOL_PREFIX: ${AGENT_MCP_TOOL_PREFIX:-mcp_}
-      AGENT_OPENAPI_URL: http://service-api:8001
+      AGENT_OPENAPI_URL: http://service-api:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}
       AGENT_OPENAPI_PATH: ${AGENT_OPENAPI_PATH:-/status}
       AGENT_OPENAPI_TITLE: ${AGENT_OPENAPI_TITLE:-Configured Service API}
       AGENT_OPENAPI_TOOL_PREFIX: ${AGENT_OPENAPI_TOOL_PREFIX:-api_}
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
-      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:${KEYCLOAK_PORT:-8080}/realms/basic-agent}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:${KEYCLOAK_CONTAINER_PORT:-8080}/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-basic-agent}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
       KEYCLOAK_REQUIRED_ROLES: ${KEYCLOAK_REQUIRED_ROLES:-agent-user}
@@ -95,7 +96,7 @@ services:
       - keycloak
     labels:
       traefik.enable: "true"
-      traefik.http.middlewares.keycloak-auth.forwardauth.address: http://auth-gateway:8010/verify
+      traefik.http.middlewares.keycloak-auth.forwardauth.address: http://auth-gateway:${AUTH_GATEWAY_CONTAINER_PORT:-8010}/verify
       traefik.http.middlewares.keycloak-auth.forwardauth.trustForwardHeader: "false"
       traefik.http.middlewares.keycloak-auth.forwardauth.authRequestHeaders: Authorization
       traefik.http.middlewares.keycloak-auth.forwardauth.authResponseHeaders: X-Auth-User
@@ -105,14 +106,14 @@ services:
     <<: *resource-limits
     image: traefik:v3.6.2
     command:
-      - --entrypoints.adkapi.address=:8002
-      - --entrypoints.live.address=:8003
+      - --entrypoints.adkapi.address=:${ADK_API_CONTAINER_PORT:-8002}
+      - --entrypoints.live.address=:${LIVE_API_CONTAINER_PORT:-8003}
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --api.dashboard=false
     ports:
-      - "${ADK_API_BIND_ADDRESS:-127.0.0.1}:${ADK_API_PORT:-8002}:8002"
-      - "${LIVE_API_BIND_ADDRESS:-127.0.0.1}:${LIVE_API_PORT:-8003}:8003"
+      - "${ADK_API_BIND_ADDRESS:-127.0.0.1}:${ADK_API_PORT:-8002}:${ADK_API_CONTAINER_PORT:-8002}"
+      - "${LIVE_API_BIND_ADDRESS:-127.0.0.1}:${LIVE_API_PORT:-8003}:${LIVE_API_CONTAINER_PORT:-8003}"
     environment:
       DOCKER_HOST: tcp://docker-socket-proxy:2375
     depends_on:
@@ -123,7 +124,7 @@ services:
 
   adk-api:
     <<: [*app-image, *resource-limits]
-    command: ["uvicorn", "basic_agent.interfaces.rest:app", "--host", "0.0.0.0", "--port", "8002", "--limit-concurrency", "100"]
+    command: ["uvicorn", "basic_agent.interfaces.rest:app", "--host", "0.0.0.0", "--port", "${ADK_API_CONTAINER_PORT:-8002}", "--limit-concurrency", "100"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       APP_NAME: ${APP_NAME:-basic_agent}
@@ -143,14 +144,14 @@ services:
       AGENT_KNOWLEDGE_MAX_FILE_BYTES: ${AGENT_KNOWLEDGE_MAX_FILE_BYTES:-2097152}
       AGENT_KNOWLEDGE_MAX_RESULT_BYTES: ${AGENT_KNOWLEDGE_MAX_RESULT_BYTES:-65536}
       AGENT_MCP_TOOLS: ${AGENT_MCP_TOOLS:-get_service_status}
-      AGENT_OPENAPI_URL: http://service-api:8001
+      AGENT_OPENAPI_URL: http://service-api:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}
       AGENT_OPENAPI_PATH: ${AGENT_OPENAPI_PATH:-/status}
       AGENT_OPENAPI_TITLE: ${AGENT_OPENAPI_TITLE:-Configured Service API}
       ADK_MODEL: ${ADK_MODEL:-gemini-3.6-flash}
-      AGENT_SERVICE_API_URL: http://service-api:8001
+      AGENT_SERVICE_API_URL: http://service-api:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}
       AGENT_SERVICE_API_KEY: ${AGENT_SERVICE_API_KEY:-}
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
-      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:${KEYCLOAK_PORT:-8080}/realms/basic-agent}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:${KEYCLOAK_CONTAINER_PORT:-8080}/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-basic-agent}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
       AGENT_SERVICE_API_ROLES: ${AGENT_SERVICE_API_ROLES:-agent-user}
@@ -185,15 +186,15 @@ services:
       traefik.http.routers.adk-api.rule: PathPrefix(`/`)
       traefik.http.routers.adk-api.middlewares: keycloak-auth
       traefik.http.routers.adk-api.service: adk-api
-      traefik.http.services.adk-api.loadbalancer.server.port: "8002"
+      traefik.http.services.adk-api.loadbalancer.server.port: "${ADK_API_CONTAINER_PORT:-8002}"
     restart: unless-stopped
 
   service-api:
     <<: [*app-image, *resource-limits]
     profiles: ["demo"]
-    command: ["uvicorn", "basic_agent.interfaces.service:app", "--host", "0.0.0.0", "--port", "8001", "--limit-concurrency", "50"]
+    command: ["uvicorn", "basic_agent.interfaces.service:app", "--host", "0.0.0.0", "--port", "${AGENT_SERVICE_API_CONTAINER_PORT:-8001}", "--limit-concurrency", "50"]
     ports:
-      - "${AGENT_SERVICE_API_BIND_ADDRESS:-127.0.0.1}:${AGENT_SERVICE_API_PORT:-8001}:8001"
+      - "${AGENT_SERVICE_API_BIND_ADDRESS:-127.0.0.1}:${AGENT_SERVICE_API_PORT:-8001}:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}"
     environment:
       APP_NAME: ${APP_NAME:-basic_agent}
       APP_VERSION: ${APP_VERSION:-0.1.0}
@@ -207,11 +208,11 @@ services:
       AGENT_TOOLS: ${AGENT_TOOLS:-knowledge,search,mcp,approval,runtime,structured_output}
       AGENT_READ_ONLY_TOOLS: ${AGENT_READ_ONLY_TOOLS:-request_approval,inspect_runtime,retrieve_knowledge,google_search,get_service_status,mcp_get_service_status,api_getconfiguredservicestatus}
       AGENT_MUTATING_TOOLS: ${AGENT_MUTATING_TOOLS:-}
-      AGENT_OPENAPI_URL: http://service-api:8001
+      AGENT_OPENAPI_URL: http://service-api:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}
       AGENT_OPENAPI_PATH: ${AGENT_OPENAPI_PATH:-/status}
       AGENT_SERVICE_API_KEY: ${AGENT_SERVICE_API_KEY:-}
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
-      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:${KEYCLOAK_PORT:-8080}/realms/basic-agent}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:${KEYCLOAK_CONTAINER_PORT:-8080}/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-basic-agent}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
       AGENT_SERVICE_API_ROLES: ${AGENT_SERVICE_API_ROLES:-agent-user}
@@ -222,7 +223,7 @@ services:
   live-api:
     <<: [*app-image, *resource-limits]
     profiles: ["live"]
-    command: ["uvicorn", "basic_agent.interfaces.live:app", "--host", "0.0.0.0", "--port", "8003", "--limit-concurrency", "50"]
+    command: ["uvicorn", "basic_agent.interfaces.live:app", "--host", "0.0.0.0", "--port", "${LIVE_API_CONTAINER_PORT:-8003}", "--limit-concurrency", "50"]
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       APP_NAME: ${APP_NAME:-basic_agent}
@@ -263,8 +264,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4317}
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SERVICE_NAME: basic-adk-live-api
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:8080/realms/basic-agent}
-      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/basic-agent/protocol/openid-connect/certs}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:${KEYCLOAK_PORT:-8080}/realms/basic-agent}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:${KEYCLOAK_CONTAINER_PORT:-8080}/realms/basic-agent/protocol/openid-connect/certs}
       KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-basic-agent}
       KEYCLOAK_ROLE_CLAIM: ${KEYCLOAK_ROLE_CLAIM:-realm_access.roles}
       LIVE_API_ROLES: ${LIVE_API_ROLES:-agent-user}
@@ -277,7 +278,7 @@ services:
       traefik.http.routers.live-api.rule: PathPrefix(`/live`)
       traefik.http.routers.live-api.middlewares: keycloak-auth,live-rate-limit
       traefik.http.routers.live-api.service: live-api
-      traefik.http.services.live-api.loadbalancer.server.port: "8003"
+      traefik.http.services.live-api.loadbalancer.server.port: "${LIVE_API_CONTAINER_PORT:-8003}"
       traefik.http.middlewares.live-rate-limit.ratelimit.average: "30"
       traefik.http.middlewares.live-rate-limit.ratelimit.period: 1s
       traefik.http.middlewares.live-rate-limit.ratelimit.burst: "10"

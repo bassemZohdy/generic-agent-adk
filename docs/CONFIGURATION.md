@@ -69,24 +69,28 @@ are convenience values, not required host assignments. `*_BIND_ADDRESS`
 controls the host interface; change both settings when exposing a service on a
 different interface.
 
-| Component | Host variables | Default host port | Internal container port |
+| Component | Host variables | Container variable | Default host / container port |
 |---|---|---:|---:|
-| REST/A2A API through Traefik | `ADK_API_BIND_ADDRESS`, `ADK_API_PORT` | `8002` | `8002` |
-| Live WebSocket through Traefik | `LIVE_API_BIND_ADDRESS`, `LIVE_API_PORT` | `8003` | `8003` |
-| Keycloak | `KEYCLOAK_BIND_ADDRESS`, `KEYCLOAK_PORT` | `8080` | `8080` |
-| Demo service API (`demo` profile) | `AGENT_SERVICE_API_BIND_ADDRESS`, `AGENT_SERVICE_API_PORT` | `8001` | `8001` |
-| Grafana (`observability` profile) | `GRAFANA_BIND_ADDRESS`, `GRAFANA_PORT` | `3000` | `3000` |
-| OTLP gRPC (`observability` profile) | `OTLP_BIND_ADDRESS`, `OTLP_GRPC_PORT` | `4317` | `4317` |
-| OTLP HTTP (`observability` profile) | `OTLP_BIND_ADDRESS`, `OTLP_HTTP_PORT` | `4318` | `4318` |
+| REST/A2A API through Traefik | `ADK_API_BIND_ADDRESS`, `ADK_API_PORT` | `ADK_API_CONTAINER_PORT` | `8002 / 8002` |
+| Live WebSocket through Traefik | `LIVE_API_BIND_ADDRESS`, `LIVE_API_PORT` | `LIVE_API_CONTAINER_PORT` | `8003 / 8003` |
+| Keycloak | `KEYCLOAK_BIND_ADDRESS`, `KEYCLOAK_PORT` | `KEYCLOAK_CONTAINER_PORT` | `8080 / 8080` |
+| Demo service API (`demo` profile) | `AGENT_SERVICE_API_BIND_ADDRESS`, `AGENT_SERVICE_API_PORT` | `AGENT_SERVICE_API_CONTAINER_PORT` | `8001 / 8001` |
+| Authentication gateway (internal only) | — | `AUTH_GATEWAY_CONTAINER_PORT` | `8010` |
+| Grafana (`observability` profile) | `GRAFANA_BIND_ADDRESS`, `GRAFANA_PORT` | image listener | `3000 / 3000` |
+| OTLP gRPC (`observability` profile) | `OTLP_BIND_ADDRESS`, `OTLP_GRPC_PORT` | image listener | `4317 / 4317` |
+| OTLP HTTP (`observability` profile) | `OTLP_BIND_ADDRESS`, `OTLP_HTTP_PORT` | image listener | `4318 / 4318` |
 
-The authentication gateway listens on internal port `8010` and is not
-published to the host. Compose service URLs use the internal ports, so changing
-a host port does not change URLs such as `http://keycloak:8080` or
-`http://service-api:8001`. Cloud Run is different: its platform-provided
-`PORT` controls the container listener, and local Compose host-port variables
-do not apply. For a process running outside Compose, update public URLs such as
-`KEYCLOAK_ISSUER` and `AGENT_SERVICE_API_URL` yourself when their corresponding
-host ports change.
+Host and container ports are independent for the application, API, Live,
+Keycloak, and demo services. The authentication gateway is internal-only and
+has no host mapping. Grafana and OTLP use fixed listeners supplied by the
+observability image; their `*_PORT` variables change only the published host
+side. Compose service URLs use the container variables, so changing a host
+port does not change URLs such as `http://keycloak:${KEYCLOAK_CONTAINER_PORT}`
+or `http://service-api:${AGENT_SERVICE_API_CONTAINER_PORT}`. Cloud Run is
+different: its platform-provided `PORT` controls the container listener, and
+local Compose port variables do not apply. For a process running outside
+Compose, update public URLs such as `KEYCLOAK_ISSUER` and
+`AGENT_SERVICE_API_URL` yourself when their corresponding host ports change.
 
 ## Environment overrides and limits
 

@@ -10,7 +10,6 @@ from basic_agent.config.defaults import (
     LIVE_MODEL,
     LIVE_PORT,
     MODEL,
-    SERVICE_API_PORT,
     SERVICE_API_URL,
 )
 
@@ -36,13 +35,21 @@ def test_documented_defaults_match_runtime_defaults():
     assert f"ADK_API_PORT={API_PORT}" in env_example
     assert f"LIVE_API_PORT={LIVE_PORT}" in env_example
     assert f"KEYCLOAK_PORT={KEYCLOAK_PORT}" in env_example
+    assert f"ADK_API_CONTAINER_PORT={API_PORT}" in env_example
+    assert f"LIVE_API_CONTAINER_PORT={LIVE_PORT}" in env_example
+    assert f"KEYCLOAK_CONTAINER_PORT={KEYCLOAK_PORT}" in env_example
     assert f"GRAFANA_PORT={GRAFANA_PORT}" in env_example
     assert f"LIVE_ADK_MODEL={LIVE_MODEL}" in env_example
     assert f"ADK_API_PORT:-{API_PORT}" in compose
-    assert f"AGENT_SERVICE_API_URL: http://service-api:{SERVICE_API_PORT}" in compose
+    assert "AGENT_SERVICE_API_URL: http://service-api:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}" in compose
     assert f"LIVE_API_PORT:-{LIVE_PORT}" in compose
     assert f"GRAFANA_PORT:-{GRAFANA_PORT}" in compose
-    assert f"service-api:{SERVICE_API_PORT}" in compose
+    assert "service-api:${AGENT_SERVICE_API_CONTAINER_PORT:-8001}" in compose
+    assert "${ADK_API_CONTAINER_PORT:-8002}" in compose
+    assert "${LIVE_API_CONTAINER_PORT:-8003}" in compose
+    assert "${KEYCLOAK_CONTAINER_PORT:-8080}" in compose
+    assert "${AGENT_SERVICE_API_CONTAINER_PORT:-8001}" in compose
+    assert "${AUTH_GATEWAY_CONTAINER_PORT:-8010}" in compose
     assert f"containerPort: {API_PORT}" in cloud_run
     assert f"value: {MODEL}" in cloud_run
     assert f"IMAGE_NAME: {IMAGE_NAME.removeprefix('ghcr.io/')}" in ci

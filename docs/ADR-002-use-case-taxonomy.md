@@ -92,5 +92,6 @@ matrix covering the no-config default, mounted YAML, env-only configuration,
 environment-over-YAML merging, hooks, and custom modules. Those counts are a
 historical snapshot; the current tree is verified by the CI workflow.
 
-Current snapshot (2026-08-17): `uv run pytest tests/` reports 311 passing tests
-and 96% coverage.
+Current snapshot (2026-08-20): `uv run pytest tests/` reports 379 passing tests
+and 95.57% coverage; the latest published main pipeline passed all jobs. See
+the [CI/CD workflow history](https://github.com/bassemZohdy/generic-agent-adk/actions/workflows/ci.yml).

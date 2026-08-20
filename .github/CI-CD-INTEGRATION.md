@@ -57,8 +57,12 @@ secret scanning via
 
 ### 2. Sandbox Image Verification Job
 
-Verifies the pinned image reference, scans it for vulnerabilities, and
-generates an SBOM using Trivy and Syft. The repository variable
+Verifies the pinned image reference, scans its Debian runtime packages for
+vulnerabilities, and generates an SBOM using Trivy and Syft. The official
+Python image embeds build-time wheel SBOM entries for packages that are not
+installed in the runtime layer, so the sandbox script uses Trivy's `os`
+package scope. Application-image verification retains the full Trivy package
+scope. The repository variable
 `SANDBOX_IMAGE_DIGEST` may select an approved replacement; otherwise both
 workflows verify the digest-pinned default from ADR-004. Pushes and pull
 requests run the check in `ci.yml`; a separate weekly/manual workflow repeats
@@ -186,7 +190,8 @@ permissions:
 | Manual dispatch | ✅   | ✅       | ✅   | ✅    | ✅          | ✅ (push staging tag) | ✅ | ✅ |
 
 `*` The Sandbox job uses `SANDBOX_IMAGE_DIGEST` when set, otherwise the
-ADR-004 default digest.
+ADR-004 default digest; its Trivy gate scans OS packages because this image is
+an execution runtime, not the application dependency environment.
 
 ### Scheduled verification (separate workflow)
 
@@ -222,7 +227,9 @@ freshly built image to reproduce.
 ## Manual Verification Before Pushing
 
 ```bash
-uv run pytest tests/ -v --cov=basic_agent
+uv run pytest tests/ -v --cov=basic_agent --cov-fail-under=90
+uv run python scripts/check-doc-links.py
+uv run python scripts/check-workflow-pins.py
 git diff --check
 python -m json.tool keycloak/realm-basic-agent.json
 GRAFANA_ADMIN_PASSWORD=x KEYCLOAK_ADMIN_PASSWORD=x docker compose config

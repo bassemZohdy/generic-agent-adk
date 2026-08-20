@@ -289,8 +289,9 @@ actively recovered.
 
 ## Verification
 
-Implemented as patch series P1–P11 in `TODO.md` (see the status table
-there for commits). Verified so far, item by item:
+Implemented as patch series P1–P11 in git history and recorded in
+`CHANGELOG.md`. The current residual work is tracked in `TODO.md`. Verified so
+far, item by item:
 
 - ✅ Docker probe: success, unreachable daemon, `docker` package not
   installed — none of the three raise, only the last two differ in log
@@ -512,8 +513,8 @@ building one vs using an existing public image:
   `DEFAULT_SANDBOX_IMAGE = "python:3.13-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1"`.
 - Operator override: `AGENT_CODE_EXECUTION_DOCKER_IMAGE` env /
   `execution.code_execution.docker_image` YAML (P5 plumbing).
-- README (P10) documents digest pinning for production
-  (`python@sha256:ffb752e1…`) and the alpine/smaller-variant tradeoff.
+- README (P10) documents digest pinning for production and the
+  alpine/smaller-variant tradeoff.
 - Compose (P8) keeps `IMAGES=1` so a missing image is auto-pulled on first
   use; hardened deployments may pre-pull + drop `IMAGES` to `0` (then a
   missing image fails fast at first execution instead of pulling).

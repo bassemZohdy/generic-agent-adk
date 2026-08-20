@@ -182,8 +182,9 @@ and [publishing guide](../.github/PUBLISHING.md) for details):
 1. **lint** — formatting, JSON fixture validation, compose config
    validation (default **and** `code-exec` profile shapes), gitleaks over
    full history.
-2. **test** — Python 3.10–3.13 matrix + an extras job
-   (`uv sync --frozen --extra docker`), coverage ≥ 90%, pip-audit.
+2. **test** — Python 3.10–3.13 matrix plus `docker` and `gke` extras jobs,
+   with coverage ≥ 90%; the separate **audit** job runs `pip-audit` once per
+   lockfile.
 3. **build → verify-image → promote-image** — the image is built to an
    unverified `ci-<sha>` tag, then locked-dependency checks, Trivy
    (HIGH/CRITICAL), and startup smoke tests must pass **before** the

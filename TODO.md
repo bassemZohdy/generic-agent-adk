@@ -1,320 +1,103 @@
-# TODO — Whole-project audit backlog
+# TODO — Current backlog
 
-Audit date: **2026-08-20**. Scope: application code, tests, examples,
-configuration, authentication, deployment, CI/CD, packaging, and documentation.
+Last audited: **2026-08-20**. This file contains unfinished work only;
+completed audit work is recorded in [CHANGELOG.md](CHANGELOG.md) and git
+history.
 
-Baseline and post-change verification:
+## Verification baseline
 
-- `379 passed`; total coverage **95.57%** (threshold: 90%) after the latest
-  workflow, sandbox, and configuration tests.
-- Python compilation, both Keycloak JSON files, default Compose, the
-  `code-exec` Compose profile, and `git diff --check` all pass.
-- This was a source/configuration audit. It did not call a real LLM, deploy to
-  Cloud Run, exercise an external OIDC server, or run the Docker sandbox live.
+- Local suite: **379 passed**, **95.57% coverage** with a 90% minimum.
+- Local checks passed: locked dependency validation, Ruff, targeted Pyright,
+  ADK contract guards, SHA-pinned workflow validation, package build, YAML and
+  JSON parsing, Markdown relative links, Python compilation, Compose profiles,
+  and the pinned sandbox Trivy/Syft check.
+- The latest published main pipeline passed its Python matrix, optional extras,
+  lint/static gates, dependency audit, sandbox scan, Docker build, staged-image
+  verification, Cosign promotion, cleanup, and workflow-complete jobs; see the
+  [CI/CD workflow history](https://github.com/bassemZohdy/generic-agent-adk/actions/workflows/ci.yml).
+- Not proven locally: real LLM calls, authenticated external REST/Live
+  transport, Cloud Run deployment, external OIDC, managed persistence,
+  multi-instance staging, and upstream Workflow migration.
 
-Status summary: **22 complete**, **8 partial**, **1 deferred pending upstream
-parity**. Partial items retain only deployment, external-service, or manual
-upgrade evidence that cannot be proven in this local worktree.
+## Status summary
 
-Checked and partial items below were implemented in this worktree to the extent
-possible locally. Unchecked/residual work requires external services,
-release-policy decisions, or an upstream ADK change.
+**17 complete · 8 partial · 1 deferred pending upstream parity.**
 
-Implementation notes for checked work:
+`[~]` means the local implementation is complete enough to protect the
+runtime, but deployment, external-service, policy, or manual-upgrade evidence
+remains. `[ ]` means implementation is intentionally blocked by upstream API
+parity.
 
-- T01–T04: runtime-policy composition, ADK confirmation callbacks, explicit
-  tool policy, unknown-tool validation, and regression tests.
-- T05–T08: indexed multi-perspective branches plus synthesizer, all previously
-  inert YAML fields wired, role model/tool resolution, and strict path-aware
-  YAML validation.
-- T09–T12: serialized/bounded Docker execution, optional-provider probes,
-  external ADK service-factory wiring, production persistence guardrails, and
-  deployment settings.
-- T13–T18: opt-in OpenAPI/model capability checks, ADK 2.6.x dependency bounds,
-  anonymous-session isolation, Cloud Run/local hardening, resolved-runtime
-  telemetry, and Live/knowledge input limits.
+## Remaining work
 
-Priority meanings: **P0** = safety or core behavior is misleading/broken;
-**P1** = production correctness/reliability; **P2** = maintainability and
-operational hardening; **P3** = deferred/upstream/documentation work. `[~]`
-marks a locally implemented portion with an explicitly documented residual.
+### P0/P1 — Safety and production reliability
 
-Completed work belongs in [CHANGELOG.md](CHANGELOG.md); code-execution design
-and its completed P1–P11 patch record remain in
-[ADR-004](docs/ADR-004-pluggable-code-execution.md) and git history.
+- [~] **T02 — Complete external approval/resume coverage.** ADK confirmation
+  now suspends a real Runner until approve or reject, and the mutating path is
+  guarded. Add authenticated REST/Live disconnect, reconnect, and resume tests
+  against the deployed transport boundary; the deterministic Runner coverage
+  is already in `tests/test_workflow_invocations.py`.
 
-## Cleanup completed — 2026-08-20
+- [~] **T11 — Verify cloud code-executor usability in deployment.** Local
+  provider probes validate optional imports, configuration, and remediation,
+  but Vertex AI, Agent Engine, and GKE credential reachability and any adopted
+  `k8s_agent_sandbox` mode still require a real deployment.
 
-- [x] Expanded and revalidated coverage at 95.57% across all modules (379 tests passing), including deterministic Runner invocations for all eight example YAML workflows, approval resume decisions, and concurrent Live rate-limit admission.
-- [x] Expanded CI/CD `test-extras` in `.github/workflows/ci.yml` into a matrix running both `docker` and `gke` optional extras.
-- [x] Aligned `.github/CI-CD-INTEGRATION.md` architecture diagram, job dependencies, and trigger matrix.
-- [x] Re-audited O1 against `google.adk` 2.6.3 and confirmed gate status (ADR-003).
-- [x] Revalidated locked dependencies, package build, Compose profiles, YAML/JSON fixtures, Markdown links, Ruff, Pyright, workflow-action SHA pins, and ADK API assumptions.
+- [~] **T12 — Verify managed persistence operations.** External ADK service
+  factories and production fail-closed settings are wired. Run staging
+  multi-instance tests and document database migration, artifact retention,
+  backup, and restore evidence before calling persistence production-ready.
 
-## Cleanup completed — 2026-08-17
+- [~] **T16 — Run a real Cloud Run/IdP smoke deployment.** Cloud Run manifest
+  hardening and development-only Keycloak guardrails are present. Verify a
+  deployed service account, readiness behavior, external OIDC, and scaling;
+  the local Keycloak pull is currently blocked by a quay.io HTTP 403.
 
-## P0 — Safety and core behavior
+### P2 — Operations and behavior coverage
 
-- [x] **T01 — Preserve runtime safety and operator instructions in every LLM
-  node.** `AgentStrategy.llm()` treats a role instruction as a complete
-  replacement for `RuntimeContext.instruction`. Consequently, generated or
-  YAML role prompts in `sequential.py`, `router.py`, `supervisor.py`,
-  `planner_executor.py`, `evaluator_optimizer.py`, and `human_in_loop.py`
-  discard both the operator's `AGENT_INSTRUCTION` and the fixed untrusted-data /
-  approval guardrail assembled in `agent._build_runtime_context()`.
-  Separate immutable policy instructions from task/role instructions and
-  compose them for every `LlmAgent`. Add a tree-walk test proving every LLM in
-  all eight use cases retains the safety prefix and operator instruction.
+- [~] **T18 — Exercise multi-instance and load limits.** Local Live eviction,
+  strict audio/JSON bounds, bounded knowledge loading, and concurrent rate
+  limit admission are covered. Add process-level or distributed load tests for
+  memory, rate-limit consistency, disconnects, and large inputs.
 
-## Open items — 2026-08-19
+- [~] **T19 — Add authenticated interface integration tests.** All eight
+  examples now run through a deterministic ADK Runner, including approval
+  suspend/resume. Add a small authenticated REST/Live matrix covering session
+  isolation, reconnect/resume, transport errors, and external service
+  boundaries.
 
-- [~] **T02 — Implement a real approval/resume boundary.** The current
-  `approval_gate` blocks the `request_approval` tool until
-  `state["human_approved"]` is already true, no code in the project sets that
-  state, and `HumanInLoopStrategy` is only an unconditional proposer →
-  completer `SequentialAgent`. Use ADK tool confirmation or a resumable
-  workflow node so the proposal can request approval, rejection terminates the
-  action, and the completer/mutating tool cannot run before confirmation. Add
-  end-to-end approve, reject, disconnect, and resume tests; replace the current
-  unit tests that assert the inverted gate behavior.
-  The ADK confirmation boundary, rejection handling, and completer guard are
-  implemented; `tests/test_workflow_invocations.py` proves a real Runner
-  suspends until both approve and reject responses. Full external transport
-  disconnect/resume coverage remains T19.
+### P3 — Release policy and upstream work
 
-- [x] **T03 — Respect an explicit empty tool list.** In
-  `agent._build_runtime_context()`, `tools.enabled: []` is falsy and therefore
-  falls back to all environment/default tools. An operator attempting to
-  disable tools instead enables `knowledge`, search, MCP, OpenAPI, approval,
-  and runtime inspection. Distinguish “tools section absent” from “explicitly
-  empty,” add YAML/env regression tests, and fail on unknown configured tool
-  names instead of silently skipping them in production.
-
-- [x] **T04 — Replace name-based mutation detection with explicit tool policy.**
-  `_is_mutating_tool()` can miss state-changing names such as `publish`,
-  `deploy`, `trigger`, `upload`, `transfer`, `set`, and `add`, while blocking
-  read-only tools such as `run_report`. This is especially risky for MCP,
-  OpenAPI, skills, and Application Integration tools. Introduce tool metadata
-  or an operator allow/deny policy, default external actions to approval when
-  semantics are unknown, bind confirmation to the exact tool and arguments,
-  and test both bypass and false-positive cases.
-
-## P1 — Production correctness and reliability
-
-- [x] **T05 — Repair multi-perspective data flow and final synthesis.** Every
-  parallel worker writes `output_key="last_response"`, while
-  `MultiPerspectiveAgent.after_run()` scans for `perspective_*` keys that no
-  strategy ever creates. Parallel branches can overwrite one another and no
-  aggregator LLM produces the balanced final answer promised by the example.
-  Give branches unique output keys, add an explicit join/synthesis step, make
-  ordering deterministic, and test actual state/event flow rather than calling
-  `after_run()` with hand-built state.
-
-- [x] **T06 — Either wire or remove the public configuration fields that are
-  currently inert.** `agent.name`, `instructions.file`, `output.schema`,
-  `output.key`, `state.enabled`, and nested `mcp/openapi/skills.enabled` are
-  parsed but ignored or overridden by hard-coded runtime values. Define the
-  supported contract, implement each retained field end to end, document path
-  and schema loading rules, and add behavior tests. Removing unsupported fields
-  is preferable to accepting configuration that appears to work.
-
-- [x] **T07 — Resolve per-role models and tools before building agents.** YAML
-  `roles.<name>.tools` is parsed as a list of strings and passed directly to
-  `LlmAgent`, which raises a Pydantic validation error (for example,
-  `tools: [search]`). Per-role provider/model strings also bypass
-  `resolve_model()`. Resolve role tool names through the same factory/policy as
-  shared tools, resolve role models consistently, validate unknown names, and
-  add YAML build/run tests for both fields.
-
-- [x] **T08 — Replace the permissive YAML parser with strict, actionable
-  validation.** Several sections assume mappings without checking; booleans,
-  strings, lists, model fields, roles, and unknown keys can survive parsing and
-  fail much later with unrelated errors. Use strict typed models (or equivalent
-  validators), reject unknown keys and wrong container/scalar types, validate
-  specialist/role references consistently, and include the complete field path
-  in every error. Add negative tests for every section.
-
-- [x] **T09 — Make the Docker executor safe under concurrent API requests and
-  bounded output.** One executor/container is attached to the singleton root
-  agent. Concurrent `execute_code()` calls share and mutate `_container`; a
-  timeout can kill another request's execution and simultaneous recovery can
-  race. Docker SDK output is also collected without a host-side byte limit.
-  Serialize execution/recovery or isolate containers per invocation, cap
-  stdout/stderr, close probe clients, test concurrency/timeouts, and define
-  cleanup behavior during shutdown.
-
-- [x] **T10 — Pin and continuously verify the sandbox image.** Runtime code
-  execution now uses the approved full digest
-  `python:3.13-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1`.
-  Production resolution fails closed for unpinned overrides;
-  `scripts/verify-sandbox-image.sh` scans Debian runtime packages and generates
-  an SBOM on pushes/PRs, and `.github/workflows/verify-sandbox-image.yml`
-  repeats that check weekly and manually. The official Python image embeds
-  build-time wheel SBOM entries that are not installed in the runtime layer;
-  application images scan their resolved Python dependencies separately.
-  `SANDBOX_IMAGE_DIGEST` can select a separately approved digest.
-
-- [~] **T11 — Make cloud code-executor probes match the “usable now” contract.**
-  Vertex AI, Agent Engine, and GKE probes only check identifier presence; they
-  do not verify optional imports, credential/config shape, or reachability.
-  Auto-detection can therefore select a provider and fail later with an opaque
-  import/configuration error. Add dependency/config probes, preserve bounded
-  startup time, and surface provider-specific remediation. If GKE sandbox mode
-  is adopted, verify and pin `k8s_agent_sandbox` in the `gke` extra.
-  Optional dependency/resource probes and explicit remediation are implemented;
-  provider credential reachability and optional sandbox-mode adoption remain
-  deployment-specific.
-
-- [~] **T12 — Add production-grade session, artifact, and memory persistence.**
-  REST hard-codes local SQLite/local artifacts/in-memory memory; Live is fully
-  in-memory. `DATABASE_URL`, `STORAGE_BUCKET`, and the other discovered
-  capabilities are telemetry only and do not configure ADK services. Cloud Run
-  instances can therefore lose state on restart and disagree when autoscaled.
-  Wire supported external providers (or clearly remove passive “provider”
-  claims), add migration/retention/backup guidance, and run multi-instance
-  persistence tests. Until then, document the runtime as ephemeral and constrain
-  production scaling accordingly.
-  External ADK service-factory wiring, production session fail-closed behavior,
-  and Cloud Run configuration are implemented. Backup/retention verification
-  and multi-instance staging tests remain operational follow-up.
-
-- [x] **T13 — Do not enable unreachable or model-incompatible tools by
-  default.** OpenAPI is in the default tool list, but its service exists only
-  under Compose's `demo` profile and is absent from plain `docker run`; its
-  default URL is therefore dead. Validate tool prerequisites at startup or
-  remove optional integrations from defaults. Also add a provider capability
-  matrix so Gemini-specific built-ins such as Google Search are rejected or
-  replaced when a LiteLLM model cannot use them.
-
-- [x] **T14 — Fix the declared dependency compatibility range.** The package
-  declares `google-adk[a2a,mcp]>=1.0.0`, while the code and ADRs depend on ADK
-  2.6.3 APIs and even mirrored 2.6.3 internals. Set the minimum to the oldest
-  version actually tested, add a justified upper bound or upgrade policy, and
-  test both minimum and locked versions. Review whether direct dependencies
-  such as `msgpack` are intentionally pinned for security or can remain
-  transitive.
-
-- [x] **T15 — Isolate unauthenticated sessions.** With `AUTH_DISABLED=true`,
-  all REST and Live clients become `anonymous`; persistent session IDs and the
-  Live rate-limit bucket are shared across callers. Prevent session reuse in
-  unauthenticated mode or issue an unforgeable per-client identity, and refuse
-  `AUTH_DISABLED=true` outside an explicitly local/test deployment. Update the
-  quick-start warning because `docker run -p 8002:8002` can expose the service
-  beyond localhost.
-
-- [~] **T16 — Harden deployment manifests and local identity infrastructure.**
-  Add an explicit least-privilege Cloud Run runtime service account,
-  startup/readiness probes, scaling/concurrency/timeout policy, and persistent
-  service configuration. Treat Compose Keycloak (`start-dev`, HTTP, no external
-  database) as development-only; provide production IdP guidance instead of
-  calling only the realm file “production.” Bind locally exposed Keycloak/demo
-  ports deliberately and add deployment smoke tests.
-  Manifest hardening, local bind defaults, and development-only Keycloak
-  guardrails are implemented; a real Cloud Run/IdP smoke deployment remains.
-  The local Keycloak smoke attempt was unable to pull the pinned fixture image
-  because the quay.io layer request returned HTTP 403.
-
-## P2 — Test, operations, and maintainability improvements
-
-- [x] **T17 — Report the resolved runtime, not import-time defaults.**
-  `inspect_runtime()` returns `settings.model` and `settings.enabled_tools`, so
-  YAML model/tool overrides are reported incorrectly; telemetry also omits the
-  resolved use case/model and does not reliably close/error spans if a run
-  fails. Store a redacted resolved-runtime snapshot, add low-cardinality use
-  case/model/provider attributes, record exception status, and guarantee span
-  cleanup.
-
-- [~] **T18 — Bound long-lived process memory and untrusted input sizes.** The
-  Live `_message_windows` dictionary never removes subject keys, and knowledge
-  files/entries can inject unbounded content into a prompt or fail on malformed
-  JSON entries. Add TTL/LRU eviction, decoded audio/MIME validation, knowledge
-  file and result byte/token limits, schema validation, safe reload errors, and
-  concurrency tests.
-  Live eviction, strict audio/JSON limits, bounded fail-closed knowledge
-  loading, and concurrent rate-limit admission tests are implemented; broader
-  multi-instance/load tests remain T19.
-
-- [~] **T19 — Add behavior-level workflow tests.** Current high coverage mainly
-  proves parsing, callback helpers, and agent-tree construction. Add a fake or
-  deterministic model/runner suite that exercises all example YAML files
-  through complete invocations: state handoff, branch joining, iteration exit,
-  routing/delegation, structured output, confirmation/resume, role tools, and
-  error paths. Keep a small authenticated REST/Live integration matrix.
-  Construction, policy, aggregation, and input-boundary regressions were added
-  in this pass. `tests/test_workflow_invocations.py` now drives all eight
-  examples through a deterministic ADK `Runner` and covers approval
-  suspend/resume decisions; authenticated REST/Live integration and transport
-  disconnect/resume coverage remain.
-
-- [x] **T20 — Add real static-quality gates.** The CI job named “Lint & Format”
-  only runs `git diff --check`; there is no Python linter, formatter check, or
-  type check. Add Ruff (and a practical type-checking target), validate YAML and
-  Markdown links, run a package build/metadata check, and keep generated
-  coverage/cache/egg-info artifacts out of review worktrees.
-  Ruff lint/format, targeted Pyright checking for configuration, compile,
-  wheel/sdist build, JSON/Compose validation, and coverage gates are now in CI,
-  including YAML and relative Markdown-link validation; generated build/SBOM
-  artifacts are ignored.
-
-- [x] **T21 — Improve CI reproducibility and release supply-chain controls.**
-  Pin the uv tool version instead of `latest`, pin third-party Actions by commit
-  SHA, avoid running the Python 3.13 test suite twice for coverage, and run the
-  dependency audit once per lock rather than once per interpreter. Generate an
-  SBOM/provenance, sign promoted image digests, verify signatures in deployment
-  guidance, restrict release tags to approved/main ancestry, and define cleanup
-  for unverified `ci-<sha>` registry tags.
-  uv is version-pinned, coverage is no longer run twice, dependency auditing is
-  a single job, all Actions are commit-SHA pinned, build attestations request
-  provenance/SBOM for registry-bound images, and sandbox SBOM/scan checks run
-  on change and weekly; promoted digests are signed and verified with
-  GitHub OIDC-backed Cosign, version tags must descend from `main`, and the
-  temporary `ci-<sha>` tag is cleaned up after the build path. Untagged registry
-  storage remains subject to the registry's retention policy.
-
-- [x] **T22 — Centralize duplicated defaults and version metadata.** App
-  version, model defaults, tool defaults, ports, and image coordinates are
-  repeated across Python settings, Compose, `.env.example`, Cloud Run, README,
-  and CI. Establish one source or add drift tests so releases cannot report one
-  version/configuration while running another.
-  Shared Python defaults are centralized in `config/defaults.py`, and
-  `tests/test_configuration_defaults.py` checks the documented values across
-  `.env.example`, Compose, Cloud Run, README, CI, and `pyproject.toml`.
-
-## P3 — Deferred and documentation work
-
-- [x] **T23 — Correct current documentation drift.** Add `pre-commit` to the
-  dev dependencies (or change `uv run pre-commit install`), remove/fix the
-  missing `docs/SECURITY-HARDENING-2026-08-15.md` link, document that the build
-  job also depends on `test-extras`, and temper the “production ready” badge
-  until P0/P1 items and a real staging deployment pass. Add a generated YAML/env
-  configuration reference and support/status policy.
-  Implemented by switching the install command to `uvx pre-commit`, fixing the
-  stale security link, documenting build dependencies, adding
-  `docs/CONFIGURATION.md`, and changing the status badge to active/staging.
-
-- [~] **T24 — Complete package/repository metadata.** Add a license, project
-  URLs/classifiers, supported-version policy, and release/versioning policy if
-  this repository is intended for public reuse. Validate the built wheel and
-  sdist rather than relying only on an editable source checkout.
-  Project URLs, authorship, supported-version classifiers, SemVer policy in
-  `docs/SUPPORT.md`, and CI build checks are now present. A repository-approved
-  license is still required before this can be closed; the wheel and sdist
-  build now pass locally.
+- [~] **T24 — Approve and add the repository license.** Project metadata,
+  URLs, authorship, supported Python policy, SemVer policy, and wheel/sdist
+  validation are present. A repository-approved license still requires an
+  owner decision; do not invent one in an automated cleanup.
 
 - [ ] **T25 — Migrate deprecated ADK workflow nodes when upstream parity is
-  available** ([ADR-003](docs/ADR-003-adk-workflow-migration.md)). Prototype
-  sequential, parallel/join, bounded loop, and human-approval shapes behind a
-  strategy-local flag; run the eight-use-case compatibility matrix; retain the
-  legacy rollback path for one release; then remove the deprecation filter.
-  The upstream Workflow-as-sub-agent capability remains unsupported as of
-  2026-08-20; the current upstream direction is Node-as-Tool, so migration is
-  correctly deferred pending a supported API and parity test matrix.
+  available.** Prototype sequential, parallel/join, bounded-loop, and
+  approval shapes behind a strategy-local flag; pass the eight-use-case matrix,
+  retain the legacy rollback for one release, then remove the deprecation
+  filter. As of 2026-08-20, Workflow-as-an-LlmAgent-sub-agent remains
+  unsupported; track [upstream discussion #5581](https://github.com/google/adk-python/discussions/5581).
 
-- [~] **T26 — Re-verify ADK-coupled assumptions on every `google-adk` upgrade.**
-  Review the `BaseAgentConfig`, `plugins=`, and Workflow warning filters; the
-  ADR-003 migration gate; ADR-004 Appendices A/B; Docker executor internals and
-  kwargs; socket-proxy ACL semantics; built-in tool/model compatibility; and
-  callback confirmation/resume contracts. `scripts/check-adk-assumptions.py`
-  now guards the locked version, imports, Runner/confirmation signatures, and
-  socket-proxy ACL assumptions; `docs/ADK-UPGRADE-CHECKLIST.md` records the
-  remaining manual matrix and upgrade-PR evidence requirement.
+- [~] **T26 — Re-run the ADK upgrade matrix for every dependency upgrade.**
+  `scripts/check-adk-assumptions.py` guards the locked version, imports,
+  Runner/confirmation signatures, and socket-proxy ACL assumptions. Complete
+  the manual matrix in [ADK-UPGRADE-CHECKLIST.md](docs/ADK-UPGRADE-CHECKLIST.md)
+  and record version, commands, and evidence in each upgrade PR.
+
+## Closed in the 2026-08-20 audit
+
+T01, T03–T10, T13–T15, T17, and T20–T23 are closed. The delivered work
+includes runtime-policy composition, strict configuration and tool resolution,
+safe Docker execution, pinned sandbox verification, deployment guardrails,
+resolved-runtime telemetry, security input bounds, deterministic workflow
+coverage, static-quality gates, supply-chain controls, centralized defaults,
+and documentation/support-policy cleanup.
+
+## Backlog update rules
+
+When closing an item, add the test, deployment, policy, or upstream evidence
+that justifies the change. Keep external validation tasks `[~]` until the
+evidence exists, and keep T25 open until the ADK migration gate in
+[ADR-003](docs/ADR-003-adk-workflow-migration.md) is satisfied.

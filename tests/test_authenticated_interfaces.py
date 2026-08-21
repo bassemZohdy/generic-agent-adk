@@ -11,22 +11,17 @@ Covers T02, T18, and T19:
 
 from __future__ import annotations
 
-import asyncio
 import base64
-import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi import FastAPI, HTTPException, WebSocketDisconnect
+from fastapi import FastAPI, WebSocketDisconnect
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from basic_agent import auth
-from basic_agent.auth.core import _jwks_client
-from basic_agent.config import settings
 from basic_agent.interfaces import live as live_module
 from basic_agent.interfaces import rest as rest_module
 
@@ -308,19 +303,23 @@ class TestLiveWebSocketMatrix:
     def test_websocket_first_frame_invalid_token_closed(
         self, live_client, rsa_keypair, mock_jwks
     ):
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with live_client.websocket_connect("/live") as ws:
-                ws.send_json({"type": "auth", "access_token": "invalid.token.here"})
-                ws.receive_json()
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            live_client.websocket_connect("/live") as ws,
+        ):
+            ws.send_json({"type": "auth", "access_token": "invalid.token.here"})
+            ws.receive_json()
         assert exc.value.code == 4401
 
     def test_websocket_first_frame_missing_auth_type_closed(
         self, live_client, rsa_keypair, mock_jwks
     ):
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with live_client.websocket_connect("/live") as ws:
-                ws.send_json({"text": "hello before authenticating"})
-                ws.receive_json()
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            live_client.websocket_connect("/live") as ws,
+        ):
+            ws.send_json({"text": "hello before authenticating"})
+            ws.receive_json()
         assert exc.value.code == 4401
 
     def test_websocket_session_ownership_isolation(
@@ -348,41 +347,47 @@ class TestLiveWebSocketMatrix:
             ws.send_json({"close": True})
 
         # 3. Bob attempts to connect using Alice's session_id -> rejected with 4403
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with live_client.websocket_connect(
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            live_client.websocket_connect(
                 f"/live?session_id={alice_session_id}",
                 headers={"authorization": f"Bearer {bob_token}"},
-            ) as ws:
-                ws.receive_json()
+            ) as ws,
+        ):
+            ws.receive_json()
         assert exc.value.code == 4403
 
     def test_websocket_rate_limit_exceeded(self, live_client, rsa_keypair, mock_jwks):
         token = make_token(rsa_keypair, sub="rate-limited-user")
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with live_client.websocket_connect(
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            live_client.websocket_connect(
                 "/live",
                 headers={"authorization": f"Bearer {token}"},
-            ) as ws:
-                ws.receive_json()  # session frame
-                # Send more messages than allowed limit (limit is 5)
-                for i in range(10):
-                    ws.send_json({"text": f"msg {i}"})
-                ws.receive_json()
+            ) as ws,
+        ):
+            ws.receive_json()  # session frame
+            # Send more messages than allowed limit (limit is 5)
+            for i in range(10):
+                ws.send_json({"text": f"msg {i}"})
+            ws.receive_json()
         assert exc.value.code == 4429
 
     def test_websocket_oversized_payload_rejected(
         self, live_client, rsa_keypair, mock_jwks
     ):
         token = make_token(rsa_keypair, sub="oversized-user")
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with live_client.websocket_connect(
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            live_client.websocket_connect(
                 "/live",
                 headers={"authorization": f"Bearer {token}"},
-            ) as ws:
-                ws.receive_json()
-                # Send text exceeding 1024 bytes
-                ws.send_json({"text": "A" * 2048})
-                ws.receive_json()
+            ) as ws,
+        ):
+            ws.receive_json()
+            # Send text exceeding 1024 bytes
+            ws.send_json({"text": "A" * 2048})
+            ws.receive_json()
         assert exc.value.code == 1009
 
     def test_websocket_oversized_audio_rejected(
@@ -390,49 +395,55 @@ class TestLiveWebSocketMatrix:
     ):
         token = make_token(rsa_keypair, sub="audio-user")
         huge_audio = base64.b64encode(b"0" * 4096).decode("utf-8")
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with live_client.websocket_connect(
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            live_client.websocket_connect(
                 "/live",
                 headers={"authorization": f"Bearer {token}"},
-            ) as ws:
-                ws.receive_json()
-                ws.send_json(
-                    {
-                        "audio": {
-                            "data": huge_audio,
-                            "mime_type": "audio/pcm;rate=16000",
-                        }
+            ) as ws,
+        ):
+            ws.receive_json()
+            ws.send_json(
+                {
+                    "audio": {
+                        "data": huge_audio,
+                        "mime_type": "audio/pcm;rate=16000",
                     }
-                )
-                ws.receive_json()
+                }
+            )
+            ws.receive_json()
         assert exc.value.code in {1009, 1003}
 
     def test_websocket_invalid_json_frame_rejected(
         self, live_client, rsa_keypair, mock_jwks
     ):
         token = make_token(rsa_keypair, sub="json-user")
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with live_client.websocket_connect(
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            live_client.websocket_connect(
                 "/live",
                 headers={"authorization": f"Bearer {token}"},
-            ) as ws:
-                ws.receive_json()
-                ws.send_text("not a valid json")
-                ws.receive_json()
+            ) as ws,
+        ):
+            ws.receive_json()
+            ws.send_text("not a valid json")
+            ws.receive_json()
         assert exc.value.code == 1003
 
     def test_websocket_unsupported_message_rejected(
         self, live_client, rsa_keypair, mock_jwks
     ):
         token = make_token(rsa_keypair, sub="unsupported-user")
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with live_client.websocket_connect(
+        with (
+            pytest.raises(WebSocketDisconnect) as exc,
+            live_client.websocket_connect(
                 "/live",
                 headers={"authorization": f"Bearer {token}"},
-            ) as ws:
-                ws.receive_json()
-                ws.send_json({"unknown_field": 123})
-                ws.receive_json()
+            ) as ws,
+        ):
+            ws.receive_json()
+            ws.send_json({"unknown_field": 123})
+            ws.receive_json()
         assert exc.value.code == 1003
 
     def test_websocket_activity_start_and_end(

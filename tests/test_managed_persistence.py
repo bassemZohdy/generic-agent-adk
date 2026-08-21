@@ -9,20 +9,14 @@ Covers T12:
 
 from __future__ import annotations
 
-import asyncio
-import os
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from google.adk.cli.utils.service_factory import create_session_service_from_options
 from google.adk.events import Event
-from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from basic_agent.config.settings import Settings, load_settings
 from basic_agent.interfaces import rest as rest_module
-from basic_agent.interfaces.live import session_service as default_live_session_service
 
 
 @pytest.fixture
@@ -122,11 +116,11 @@ class TestProductionPersistenceFailClosed:
         monkeypatch.delenv("DATABASE_URL", raising=False)
 
         # Ensure settings reflect production
-        with patch.object(rest_module, "is_production", return_value=True):
-            with pytest.raises(
-                ValueError, match="Production REST deployments require"
-            ):
-                rest_module.create_app()
+        with (
+            patch.object(rest_module, "is_production", return_value=True),
+            pytest.raises(ValueError, match="Production REST deployments require"),
+        ):
+            rest_module.create_app()
 
     def test_artifact_uri_generation_from_storage_bucket(self, monkeypatch, tmp_path):
         monkeypatch.setenv("STORAGE_BUCKET", "my-gcp-bucket")
@@ -134,9 +128,11 @@ class TestProductionPersistenceFailClosed:
         monkeypatch.setenv("ADK_SESSION_SERVICE_URI", "sqlite:///test.db")
         monkeypatch.delenv("ADK_ARTIFACT_SERVICE_URI", raising=False)
 
-        with patch("google.adk.cli.fast_api.get_fast_api_app") as mock_get_app:
-            with patch.object(rest_module, "is_production", return_value=False):
-                rest_module.create_app()
-                assert mock_get_app.called
-                _, kwargs = mock_get_app.call_args
-                assert kwargs["artifact_service_uri"] == "gs://my-gcp-bucket/adk-artifacts"
+        with (
+            patch("google.adk.cli.fast_api.get_fast_api_app") as mock_get_app,
+            patch.object(rest_module, "is_production", return_value=False),
+        ):
+            rest_module.create_app()
+            assert mock_get_app.called
+            _, kwargs = mock_get_app.call_args
+            assert kwargs["artifact_service_uri"] == "gs://my-gcp-bucket/adk-artifacts"

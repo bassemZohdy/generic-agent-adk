@@ -44,9 +44,7 @@ def settings_patch(monkeypatch):
         ):
             issuer = effective_changes["keycloak_issuer"]
             effective_changes["keycloak_jwks_url"] = (
-                f"{issuer.rstrip('/')}/protocol/openid-connect/certs"
-                if issuer
-                else ""
+                f"{issuer.rstrip('/')}/protocol/openid-connect/certs" if issuer else ""
             )
 
         target = module.settings if hasattr(module, "settings") else module

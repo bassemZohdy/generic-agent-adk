@@ -1,6 +1,5 @@
 """Integration tests for strategy registry and configuration loader."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -68,7 +67,6 @@ state:
     assert isinstance(agent, Agent)
     assert agent.model == "gemini-2.0-flash"
     assert agent.instruction == "Test instruction"
-
 
 
 def test_registry_all_strategies_buildable():
@@ -286,7 +284,6 @@ state:
 
     assert isinstance(agent, LoopAgent)
     assert agent.max_iterations == 10
-
 
 
 def test_all_examples_are_loadable():

@@ -9,9 +9,10 @@ Covers T11:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
+from fakes import install_fake_kubernetes
 
 from basic_agent.autoconfig import ProviderConfigurationError
 from basic_agent.execution.resolver import (
@@ -22,7 +23,6 @@ from basic_agent.execution.resolver import (
     VERTEX_RESOURCE_ENV,
     resolve_code_executor,
 )
-from fakes import install_fake_kubernetes
 
 
 class TestCloudCodeExecutorResolution:
@@ -101,4 +101,3 @@ class TestCloudCodeExecutorResolution:
             resolve_code_executor(env, model="gemini-2.0-flash")
         assert "gke" in str(exc.value)
         assert "unavailable" in str(exc.value)
-

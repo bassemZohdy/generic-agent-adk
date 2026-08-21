@@ -153,13 +153,20 @@ def authenticate_request(
 def _websocket_auth_subprotocol(websocket: WebSocket) -> str | None:
     # Browser clients cannot set Authorization reliably.  Accept a token in a
     # negotiated subprotocol without ever reading it from a URL query string.
-    # Supported forms are ``bearer.<token>`` and ``authorization.bearer.<token>``.
-    for protocol in websocket.headers.get("sec-websocket-protocol", "").split(","):
-        value = protocol.strip()
+    # Supported forms are ``bearer.<token>``, ``authorization.bearer.<token>``,
+    # and ``bearer, <token>``.
+    protocols = [
+        p.strip()
+        for p in websocket.headers.get("sec-websocket-protocol", "").split(",")
+        if p.strip()
+    ]
+    for i, value in enumerate(protocols):
         lowered = value.lower()
         for prefix in ("bearer.", "authorization.bearer."):
             if lowered.startswith(prefix) and value[len(prefix) :].strip():
                 return value
+        if lowered == "bearer" and i + 1 < len(protocols) and protocols[i + 1]:
+            return f"bearer,{protocols[i + 1]}"
     return None
 
 
@@ -171,6 +178,8 @@ def _websocket_header_token(websocket: WebSocket) -> str | None:
 
     if protocol := _websocket_auth_subprotocol(websocket):
         lowered = protocol.lower()
+        if lowered.startswith("bearer,"):
+            return protocol[7:].strip()
         prefix = (
             "authorization.bearer."
             if lowered.startswith("authorization.bearer.")

@@ -3,6 +3,7 @@ name = "basic-adk-agent"
 version = "0.1.0"
 description = "A generic configuration-driven Google ADK agent"
 readme = "README.md"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.10,<3.14"
 authors = [{ name = "Generic Agent ADK contributors" }]
 classifiers = [

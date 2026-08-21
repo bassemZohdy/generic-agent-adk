@@ -2,6 +2,24 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-21 — Authenticated interface integration, cloud executor & persistence tests, and Apache 2.0 license
+
+- **Authenticated interface integration matrix (`tests/test_authenticated_interfaces.py`)**:
+  - Added REST authentication, token verification, role enforcement, and IDOR protection tests.
+  - Added Live WebSocket transport authentication across Authorization header, `Sec-WebSocket-Protocol`, and first-frame JSON auth.
+  - Added session ownership isolation, session resume across reconnects, and rate limiting / payload bounds enforcement.
+- **Managed persistence operations (`tests/test_managed_persistence.py`, `docs/PERSISTENCE.md`)**:
+  - Added multi-instance session consistency tests across independent service instances using SQLite and external URI backends.
+  - Added fail-closed verification for production deployments without configured persistence URIs.
+  - Documented operational procedures for database migration, backup, restore, and artifact lifecycle management.
+- **Cloud code execution verification (`tests/test_cloud_execution_deployment.py`, `docs/STAGING-VERIFICATION.md`)**:
+  - Added test matrix for Vertex AI Code Interpreter, Agent Engine sandbox, and GKE code executor resolution.
+  - Added staging verification runbook covering Cloud Run deployment, service account permissions, OIDC verification, and horizontal scaling.
+- **Repository licensing & compliance**:
+  - Added standard Apache 2.0 `LICENSE` file.
+  - Added `license = { text = "Apache-2.0" }` metadata in `pyproject.toml`.
+  - Added cross-platform UTF-8 explicit encoding handling in regression tests.
+
 ## 2026-08-20 — Runner workflows, approval resume, and CI supply-chain checks
 
 - Updated the sandbox default to the OS-clean, digest-pinned Python 3.13

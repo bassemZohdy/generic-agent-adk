@@ -24,12 +24,11 @@ def _strategy_for_use_case(use_case: str):
     return get_use_case_registry().resolve(use_case)[1].strategy
 
 
-def test_registry_integration_with_config_loader():
+def test_registry_integration_with_config_loader(tmp_path):
     """End-to-end: YAML config -> AgentConfig -> Strategy -> Agent."""
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_file = Path(tmpdir) / "agent.yaml"
-        config_file.write_text("""
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text("""
 agent:
   use_case: assistant
   description: Direct test agent
@@ -48,28 +47,28 @@ tools:
 state:
   enabled: true
 """)
+    config = load_config_from_yaml(config_file)
 
-        config = load_config_from_yaml(config_file)
+    # Resolve strategy via the use-case facade
+    strategy = _strategy_for_use_case(config.use_case)
+    assert strategy.agent_type == "DIRECT"
 
-        # Resolve strategy via the use-case facade
-        strategy = _strategy_for_use_case(config.use_case)
-        assert strategy.agent_type == "DIRECT"
+    # Build runtime context
+    runtime = RuntimeContext(
+        model=config.model.name,
+        instruction=config.instructions.value,
+        tools=[],
+        description=config.description,
+    )
 
-        # Build runtime context
-        runtime = RuntimeContext(
-            model=config.model.name,
-            instruction=config.instructions.value,
-            tools=[],
-            description=config.description,
-        )
+    # Build agent via strategy
+    context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
+    agent = strategy.build(context)
 
-        # Build agent via strategy
-        context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
-        agent = strategy.build(context)
+    assert isinstance(agent, Agent)
+    assert agent.model == "gemini-2.0-flash"
+    assert agent.instruction == "Test instruction"
 
-        assert isinstance(agent, Agent)
-        assert agent.model == "gemini-2.0-flash"
-        assert agent.instruction == "Test instruction"
 
 
 def test_registry_all_strategies_buildable():
@@ -102,11 +101,10 @@ def test_registry_all_strategies_buildable():
             raise
 
 
-def test_sequential_strategy_with_config():
+def test_sequential_strategy_with_config(tmp_path):
     """Test SEQUENTIAL strategy with configuration."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_file = Path(tmpdir) / "agent.yaml"
-        config_file.write_text("""
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text("""
 agent:
   use_case: pipeline
   description: Sequential pipeline
@@ -128,33 +126,32 @@ state:
   enabled: true
 """)
 
-        config = load_config_from_yaml(config_file)
-        strategy = _strategy_for_use_case(config.use_case)
-        assert strategy.agent_type == "SEQUENTIAL"
+    config = load_config_from_yaml(config_file)
+    strategy = _strategy_for_use_case(config.use_case)
+    assert strategy.agent_type == "SEQUENTIAL"
 
-        runtime = RuntimeContext(
-            model=config.model.name,
-            instruction=config.instructions.value,
-            tools=[],
-            description=config.description,
-        )
+    runtime = RuntimeContext(
+        model=config.model.name,
+        instruction=config.instructions.value,
+        tools=[],
+        description=config.description,
+    )
 
-        context = AgentStrategyContext(
-            agent_type=strategy.agent_type,
-            runtime=runtime,
-            extra_config={"steps": 3},
-        )
-        agent = strategy.build(context)
+    context = AgentStrategyContext(
+        agent_type=strategy.agent_type,
+        runtime=runtime,
+        extra_config={"steps": 3},
+    )
+    agent = strategy.build(context)
 
-        assert isinstance(agent, SequentialAgent)
-        assert len(agent.sub_agents) == 3
+    assert isinstance(agent, SequentialAgent)
+    assert len(agent.sub_agents) == 3
 
 
-def test_parallel_strategy_with_config():
+def test_parallel_strategy_with_config(tmp_path):
     """Test PARALLEL strategy with configuration."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_file = Path(tmpdir) / "agent.yaml"
-        config_file.write_text("""
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text("""
 agent:
   use_case: multi_perspective
   description: Parallel workers
@@ -176,34 +173,33 @@ state:
   enabled: true
 """)
 
-        config = load_config_from_yaml(config_file)
-        strategy = _strategy_for_use_case(config.use_case)
-        assert strategy.agent_type == "PARALLEL"
+    config = load_config_from_yaml(config_file)
+    strategy = _strategy_for_use_case(config.use_case)
+    assert strategy.agent_type == "PARALLEL"
 
-        runtime = RuntimeContext(
-            model=config.model.name,
-            instruction=config.instructions.value,
-            tools=[],
-            description=config.description,
-        )
+    runtime = RuntimeContext(
+        model=config.model.name,
+        instruction=config.instructions.value,
+        tools=[],
+        description=config.description,
+    )
 
-        context = AgentStrategyContext(
-            agent_type=strategy.agent_type,
-            runtime=runtime,
-            extra_config={"workers": 4},
-        )
-        agent = strategy.build(context)
+    context = AgentStrategyContext(
+        agent_type=strategy.agent_type,
+        runtime=runtime,
+        extra_config={"workers": 4},
+    )
+    agent = strategy.build(context)
 
-        assert isinstance(agent, ParallelAgent)
-        assert len(agent.sub_agents) == 4
+    assert isinstance(agent, ParallelAgent)
+    assert len(agent.sub_agents) == 4
 
 
-def test_router_strategy_with_specialists():
+def test_router_strategy_with_specialists(tmp_path):
     """Test ROUTER strategy with specialist configuration."""
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_file = Path(tmpdir) / "agent.yaml"
-        config_file.write_text("""
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text("""
 agent:
   use_case: expert_dispatch
   description: Router with specialists
@@ -228,31 +224,30 @@ state:
   enabled: true
 """)
 
-        config = load_config_from_yaml(config_file)
-        strategy = _strategy_for_use_case(config.use_case)
-        assert strategy.agent_type == "ROUTER"
+    config = load_config_from_yaml(config_file)
+    strategy = _strategy_for_use_case(config.use_case)
+    assert strategy.agent_type == "ROUTER"
 
-        runtime = RuntimeContext(
-            model=config.model.name,
-            instruction=config.instructions.value,
-            tools=[],
-            description=config.description,
-            specialists=tuple(config.execution.specialists),
-        )
+    runtime = RuntimeContext(
+        model=config.model.name,
+        instruction=config.instructions.value,
+        tools=[],
+        description=config.description,
+        specialists=tuple(config.execution.specialists),
+    )
 
-        context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
-        agent = strategy.build(context)
+    context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
+    agent = strategy.build(context)
 
-        assert isinstance(agent, LlmAgent)
-        assert len(agent.sub_agents) == 3
+    assert isinstance(agent, LlmAgent)
+    assert len(agent.sub_agents) == 3
 
 
-def test_loop_strategy_respects_max_iterations():
+def test_loop_strategy_respects_max_iterations(tmp_path):
     """Test LOOP strategy with iteration limits."""
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        config_file = Path(tmpdir) / "agent.yaml"
-        config_file.write_text("""
+    config_file = tmp_path / "agent.yaml"
+    config_file.write_text("""
 agent:
   use_case: refine_until_good
   description: Loop with limit
@@ -274,23 +269,24 @@ state:
   enabled: true
 """)
 
-        config = load_config_from_yaml(config_file)
-        strategy = _strategy_for_use_case(config.use_case)
-        assert strategy.agent_type == "EVALUATOR_OPTIMIZER"
+    config = load_config_from_yaml(config_file)
+    strategy = _strategy_for_use_case(config.use_case)
+    assert strategy.agent_type == "EVALUATOR_OPTIMIZER"
 
-        runtime = RuntimeContext(
-            model=config.model.name,
-            instruction=config.instructions.value,
-            tools=[],
-            description=config.description,
-            max_iterations=10,
-        )
+    runtime = RuntimeContext(
+        model=config.model.name,
+        instruction=config.instructions.value,
+        tools=[],
+        description=config.description,
+        max_iterations=10,
+    )
 
-        context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
-        agent = strategy.build(context)
+    context = AgentStrategyContext(agent_type=strategy.agent_type, runtime=runtime)
+    agent = strategy.build(context)
 
-        assert isinstance(agent, LoopAgent)
-        assert agent.max_iterations == 10
+    assert isinstance(agent, LoopAgent)
+    assert agent.max_iterations == 10
+
 
 
 def test_all_examples_are_loadable():

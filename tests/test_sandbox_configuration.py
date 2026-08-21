@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).parents[1]
 
 
 def test_compose_code_exec_profile_points_adk_at_scoped_proxy():
-    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
     api = compose["services"]["adk-api"]
     proxy = compose["services"]["code-exec-socket-proxy"]
 
@@ -27,14 +29,14 @@ def test_compose_code_exec_profile_points_adk_at_scoped_proxy():
 
 
 def test_published_image_installs_docker_extra_by_default():
-    dockerfile = (ROOT / "Dockerfile").read_text()
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "ARG INSTALL_DOCKER_EXTRA=1" in dockerfile
     assert "--no-install-project --extra docker" in dockerfile
     assert "uv sync --frozen --no-dev --extra docker" in dockerfile
 
 
 def test_ci_runs_real_sandbox_runtime_smoke():
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "verify-sandbox-runtime.sh" in workflow
 
 
@@ -57,6 +59,8 @@ def _fake_scanners(directory: Path, *, trivy_status: int = 0) -> None:
 
 
 def _run_image_verifier(tmp_path: Path, image: str, *, trivy_status: int = 0):
+    if shutil.which("sh") is None:
+        pytest.skip("POSIX sh is not available on this platform")
     scanner_dir = tmp_path / "bin"
     scanner_dir.mkdir()
     _fake_scanners(scanner_dir, trivy_status=trivy_status)
@@ -105,8 +109,8 @@ def test_sandbox_image_verifier_scans_os_and_writes_sbom(tmp_path):
     image = "python:3.13-slim@sha256:" + "a" * 64
     result, args_file, syft_args, output = _run_image_verifier(tmp_path, image)
     assert result.returncode == 0, result.stderr
-    assert "--pkg-types os" in args_file.read_text()
-    assert "cyclonedx-json=" in syft_args.read_text()
+    assert "--pkg-types os" in args_file.read_text(encoding="utf-8")
+    assert "cyclonedx-json=" in syft_args.read_text(encoding="utf-8")
     assert output.exists()
     assert "Sandbox image verification passed" in result.stdout
 

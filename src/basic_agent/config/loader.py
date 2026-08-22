@@ -13,6 +13,13 @@ import yaml
 
 from ..strategies.base import RoleConfig
 from ..util import split_csv
+from .graph import GraphEdgeSpec, GraphNodeSpec, GraphSpec, RetrySpec
+from .sugar import (
+    LoopSugar,
+    ParallelSugar,
+    SequenceSugar,
+    expand_sugar,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +141,7 @@ class AgentConfig:
     output: OutputConfig | None = None
     state: StateConfig | None = None
     roles: dict[str, RoleConfig] = field(default_factory=dict)
+    graph: GraphSpec | None = None
 
     def validate(self) -> None:
         """Validate structural configuration requirements.
@@ -152,6 +160,8 @@ class AgentConfig:
                 value = getattr(self.execution, key)
                 if value is not None:
                     _positive_int(value, f"execution.{key}")
+        if self.graph is not None:
+            self.graph.validate()
 
 
 def _split_names(raw: str) -> list[str]:
@@ -183,6 +193,7 @@ _CONFIG_KEYS = {
     "output",
     "state",
     "roles",
+    "graph",
 }
 
 
@@ -578,6 +589,259 @@ def _parse_code_execution_config(
     )
 
 
+_GRAPH_NODE_KEYS = {
+    "name",
+    "kind",
+    "role",
+    "retry",
+    "timeout",
+    "input_schema",
+    "output_schema",
+    "state_schema",
+    "output_key",
+    "options",
+    "graph",
+}
+_GRAPH_EDGE_KEYS = {"from", "to", "route"}
+_GRAPH_RETRY_KEYS = {
+    "max_attempts",
+    "initial_delay",
+    "max_delay",
+    "backoff_factor",
+    "jitter",
+}
+_GRAPH_ROLE_KEYS = {"instruction", "model", "tools"}
+
+
+def _parse_float(value: Any, name: str) -> float:
+    """Validate a positive float from YAML input."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(  # noqa: TRY004 - preserve actionable config error type
+            f"{name} must be a number; got {value!r}"
+        )
+    return float(value)
+
+
+def _parse_graph_retry(data: dict, path: str) -> RetrySpec:
+    """Parse a graph node ``retry`` mapping (field-aligned with RetryConfig)."""
+    data = _mapping(data, f"{path}.retry")
+    _keys(data, _GRAPH_RETRY_KEYS, f"{path}.retry")
+    for name in ("max_attempts",):
+        if data.get(name) is not None:
+            _positive_int(data[name], f"{path}.retry.{name}")
+    for name in ("initial_delay", "max_delay", "backoff_factor", "jitter"):
+        if data.get(name) is not None:
+            _parse_float(data[name], f"{path}.retry.{name}")
+    return RetrySpec(
+        max_attempts=data.get("max_attempts"),
+        initial_delay=data.get("initial_delay"),
+        max_delay=data.get("max_delay"),
+        backoff_factor=data.get("backoff_factor"),
+        jitter=data.get("jitter"),
+    )
+
+
+def _parse_graph_role(data: dict, path: str) -> RoleConfig:
+    """Parse a graph node ``role`` mapping into a RoleConfig."""
+    _keys(data, _GRAPH_ROLE_KEYS, f"{path}.role")
+    for name in ("instruction", "model"):
+        if data.get(name) is not None:
+            _string(data[name], f"{path}.role.{name}")
+    role_tools = None
+    if "tools" in data and data["tools"] is not None:
+        role_tools = _string_list(data["tools"], f"{path}.role.tools")
+    return RoleConfig(
+        instruction=data.get("instruction"),
+        model=data.get("model"),
+        tools=role_tools,
+    )
+
+
+def _parse_graph_edge(data: Any, path: str) -> GraphEdgeSpec:
+    """Parse one graph edge mapping (``{from, to, route}``)."""
+    edge = _mapping(data, path)
+    _keys(edge, _GRAPH_EDGE_KEYS, path)
+    source = _string(edge.get("from", ""), f"{path}.from", allow_empty=False)
+    target_raw = edge.get("to")
+    target: str | list[str]
+    if isinstance(target_raw, list):
+        target = _string_list(target_raw, f"{path}.to")
+        if not target:
+            raise ValueError(f"{path}.to must not be an empty list")
+    else:
+        target = _string(target_raw, f"{path}.to", allow_empty=False)
+    route = edge.get("route")
+    return GraphEdgeSpec(source=source, target=target, route=route)
+
+
+def _parse_graph_node(data: Any, path: str) -> GraphNodeSpec:
+    """Parse one graph node mapping."""
+    node = _mapping(data, path)
+    _keys(node, _GRAPH_NODE_KEYS, path)
+    name = _string(node.get("name", ""), f"{path}.name", allow_empty=False)
+    kind = _string(node.get("kind", ""), f"{path}.kind", allow_empty=False)
+
+    role = None
+    if node.get("role") is not None:
+        role = _parse_graph_role(_mapping(node["role"], f"{path}.role"), path)
+
+    retry = (
+        _parse_graph_retry(_mapping(node["retry"], f"{path}.retry"), path)
+        if node.get("retry") is not None
+        else None
+    )
+
+    timeout = None
+    if node.get("timeout") is not None:
+        timeout = _parse_float(node["timeout"], f"{path}.timeout")
+        if timeout <= 0:
+            raise ValueError(
+                f"{path}.timeout must be a positive number; got {timeout!r}"
+            )
+
+    for schema_name in ("input_schema", "output_schema", "state_schema"):
+        if node.get(schema_name) is not None:
+            _string(node[schema_name], f"{path}.{schema_name}")
+    output_key = None
+    if node.get("output_key") is not None:
+        output_key = _string(node["output_key"], f"{path}.output_key")
+
+    options: dict[str, Any] = {}
+    if node.get("options") is not None:
+        options = dict(_mapping(node["options"], f"{path}.options"))
+
+    nested = None
+    if node.get("graph") is not None:
+        nested = _parse_graph_spec(node["graph"], f"{path}.graph")
+
+    return GraphNodeSpec(
+        name=name,
+        kind=kind,
+        role=role,
+        retry=retry,
+        timeout=timeout,
+        input_schema=node.get("input_schema"),
+        output_schema=node.get("output_schema"),
+        state_schema=node.get("state_schema"),
+        output_key=output_key,
+        options=options,
+        graph=nested,
+    )
+
+
+def _parse_loop_mapping(data: Any, path: str) -> LoopSugar:
+    """Parse a ``loop`` mapping into a LoopSugar."""
+    loop = _mapping(data, path)
+    _keys(loop, {"body", "max_iterations"}, path)
+    body = _string(loop.get("body", ""), f"{path}.body", allow_empty=False)
+    max_iterations = _positive_int(loop.get("max_iterations"), f"{path}.max_iterations")
+    return LoopSugar(body=body, max_iterations=max_iterations)
+
+
+def _parse_sugar_item(data: Any, path: str) -> str | ParallelSugar | LoopSugar:
+    """Parse one sequence item: a node name or a nested sugar form."""
+    if isinstance(data, str):
+        if not data.strip():
+            raise ValueError(f"{path} must not be empty")
+        return data.strip()
+    if isinstance(data, dict):
+        _keys(data, {"parallel", "loop"}, path)
+        if "parallel" in data:
+            names = _string_list(data["parallel"], f"{path}.parallel")
+            if len(names) < 2:
+                raise ValueError(f"{path}.parallel must have at least two names")
+            return ParallelSugar(items=names)
+        if "loop" in data:
+            return _parse_loop_mapping(data["loop"], f"{path}.loop")
+        raise ValueError(
+            f"{path} must be a node name or a nested sugar form ('parallel' or 'loop')"
+        )
+    raise ValueError(
+        f"{path} must be a node name string or a sugar mapping; "
+        f"got {type(data).__name__}"
+    )
+
+
+def _parse_sugar_form(
+    data: dict, path: str, nodes: list[GraphNodeSpec]
+) -> SequenceSugar | ParallelSugar | LoopSugar:
+    """Parse exactly one top-level sugar form referencing named nodes."""
+    present = [
+        key for key in ("sequence", "parallel", "loop") if data.get(key) is not None
+    ]
+    if len(present) != 1:
+        raise ValueError(
+            f"{path}: exactly one of 'sequence', 'parallel', 'loop' must be "
+            f"provided; got {present or 'none'}"
+        )
+    key = present[0]
+    if not isinstance(nodes, list):
+        raise ValueError(  # noqa: TRY004 - preserve actionable config error type
+            f"{path}.nodes must be a list"
+        )
+    if key == "sequence":
+        items = data["sequence"]
+        if not isinstance(items, list) or not items:
+            raise ValueError(f"{path}.sequence must be a non-empty list of node names")
+        return SequenceSugar(
+            items=[
+                _parse_sugar_item(item, f"{path}.sequence[{index}]")
+                for index, item in enumerate(items)
+            ]
+        )
+    if key == "parallel":
+        names = _string_list(data["parallel"], f"{path}.parallel")
+        if len(names) < 2:
+            raise ValueError(f"{path}.parallel must have at least two names")
+        return ParallelSugar(items=names)
+    return _parse_loop_mapping(data["loop"], f"{path}.loop")
+
+
+def _parse_graph_spec(data: Any, path: str = "graph") -> GraphSpec:
+    """Parse a recursive graph spec mapping (``nodes`` + ``edges``)."""
+    spec = _mapping(data, path)
+    _keys(spec, {"nodes", "edges", "sequence", "parallel", "loop"}, path)
+
+    nodes_data = spec.get("nodes", [])
+    if not isinstance(nodes_data, list):
+        raise ValueError(  # noqa: TRY004 - preserve actionable config error type
+            f"{path}.nodes must be a list; got {type(nodes_data).__name__}"
+        )
+    nodes = [
+        _parse_graph_node(item, f"{path}.nodes[{index}]")
+        for index, item in enumerate(nodes_data)
+    ]
+
+    edges_data = spec.get("edges", [])
+    if not isinstance(edges_data, list):
+        raise ValueError(  # noqa: TRY004 - preserve actionable config error type
+            f"{path}.edges must be a list; got {type(edges_data).__name__}"
+        )
+
+    sugar_keys = ("sequence", "parallel", "loop")
+    if any(spec.get(key) is not None for key in sugar_keys):
+        if edges_data:
+            raise ValueError(
+                f"{path}: sugar forms ('sequence'/'parallel'/'loop') cannot "
+                "be combined with explicit 'edges'"
+            )
+        sugar = _parse_sugar_form(spec, path, nodes)
+        by_name = {node.name: node for node in nodes}
+        parsed = expand_sugar(sugar, by_name)
+    else:
+        edges = [
+            _parse_graph_edge(item, f"{path}.edges[{index}]")
+            for index, item in enumerate(edges_data)
+        ]
+        parsed = GraphSpec(nodes=nodes, edges=edges)
+
+    try:
+        parsed.validate()
+    except ValueError as error:
+        raise ValueError(f"{path}: {error}") from error
+    return parsed
+
+
 def _parse_agent_config(data: dict) -> AgentConfig:
     """Parse raw dictionary into AgentConfig.
 
@@ -782,6 +1046,10 @@ def _parse_agent_config(data: dict) -> AgentConfig:
             tools=role_tools,
         )
 
+    graph_config = None
+    if data.get("graph") is not None:
+        graph_config = _parse_graph_spec(data["graph"])
+
     return AgentConfig(
         use_case=use_case,
         name=_string(agent_data.get("name", ""), "agent.name"),
@@ -793,4 +1061,5 @@ def _parse_agent_config(data: dict) -> AgentConfig:
         output=output_config,
         state=state_config,
         roles=roles,
+        graph=graph_config,
     )

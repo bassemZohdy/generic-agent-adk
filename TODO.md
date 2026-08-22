@@ -8,7 +8,7 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **427 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
+- Local suite: **459 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
   and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
   **96% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
@@ -32,8 +32,9 @@ contains unfinished work only; completed audit work is recorded in
 
 **25 complete · 0 partial · 1 architecture program in progress (Phases A–F
 below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
-complete 2026-08-23 (gate spike — ADR-005 accepted); code-review findings
-R01–R05 closed 2026-08-23.**
+complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C in progress
+(C1–C2 complete 2026-08-23); code-review findings R01–R05 closed
+2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -297,7 +298,7 @@ Reuse the fake-model/Runner harness patterns from
 
 #### Phase C — Externalized graph configuration (the generic core)
 
-- [ ] **C1 — Define the graph-spec config model.**
+- [x] **C1 — Define the graph-spec config model.**
   *Depends on*: B4. *Files*: new `src/basic_agent/config/graph.py`
   (dataclasses, no ADK imports — keep the schema framework-independent);
   parsing branch in `src/basic_agent/config/loader.py`.
@@ -321,7 +322,14 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: parse + validation unit tests pass (valid specs, and one
   failing test per validation rule asserting the error message), pyright
   clean, `config/graph.py` imports no `google.adk` module.
-- [ ] **C2 — Define the sugar forms.**
+  **Done (2026-08-23).** `config/graph.py` (pure dataclasses:
+  `GraphSpec`/`GraphNodeSpec`/`GraphEdgeSpec`/`RetrySpec`, `START` and
+  `DEFAULT_ROUTE` sentinels — AST-verified framework-free), loader branch
+  (recursive parse incl. nesting), and the exact C1 validation rules with
+  one failing test each (`tests/test_graph_config.py`, 17 tests). Node
+  shape gained `output_key` per ADR-005 decision §1 (B1 proved LlmAgent
+  outputs land in state via `output_key`).
+- [x] **C2 — Define the sugar forms.**
   *Depends on*: C1. *Files*: `src/basic_agent/config/graph.py` (or sibling
   `sugar.py`).
   *Steps*: pure functions expanding `sequence: [n1, n2, …]`,
@@ -332,6 +340,14 @@ Reuse the fake-model/Runner harness patterns from
   expected node names per preset).
   *Done when*: unit tests assert exact expanded structures for each sugar
   form, including nesting (a `parallel` inside a `sequence`).
+  **Done (2026-08-23).** `config/sugar.py` (pure, no ADK imports):
+  deterministic naming (`<first>_join`, `<body>_loop_counter`,
+  `sub_<index>`), `AGAIN_ROUTE`/`DEFAULT_ROUTE` routing for bounded loops,
+  nested sugars become `graph`-kind subgraph nodes;
+  `tests/test_sugar_forms.py` pins exact structures incl. nesting (15
+  tests). Loader sugar branch: exactly one of `sequence`/`parallel`/`loop`
+  per graph (mutually exclusive with explicit `edges`), name references
+  resolved against declared nodes.
 - [ ] **C3 — Implement the graph compilers.**
   *Depends on*: C1, C2, B3, B4. *Files*: new
   `src/basic_agent/compile/workflow.py` (full spec → `Workflow`) and

@@ -17,6 +17,15 @@ ADR-003, and this checklist agree.
 
 ## Manual compatibility matrix
 
+- Re-verify the workflow/graph surface (ADR-005, Phase B): `google.adk.workflow`
+  exports, `BaseNode` pydantic fields, `Runner(node=...)` root construction,
+  the `google.adk.workflow._llm_agent_wrapper` task-mode wrapper, and
+  `FINISH_TASK_TOOL_NAME` in `google.adk.agents.llm.task._finish_task_tool`.
+  These surfaces are **younger than the legacy
+  `SequentialAgent`/`ParallelAgent`/`LoopAgent` classes** and must be
+  re-verified on every upgrade; `scripts/check-adk-assumptions.py` asserts
+  their existence and signatures, and `tests/test_workflow_gates.py` proves
+  they run (Phase B).
 - Run all eight YAML examples through a real ADK `Runner` and confirm the
   expected final agent/output event.
 - Exercise approval confirmation with approve, reject, disconnect, and resume

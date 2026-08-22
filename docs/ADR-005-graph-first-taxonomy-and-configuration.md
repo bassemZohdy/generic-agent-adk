@@ -1,8 +1,9 @@
 # ADR-005: Graph-first taxonomy and externalized configuration
 
-**Status:** Proposed — direction accepted 2026-08-23; final acceptance gated
-on the Phase B verification spike (TODO.md, "Workflow re-architecture
-program"). **Supersedes** the taxonomy and strategy layers of
+**Status:** Accepted — gates B1–B3 verified 2026-08-23 (tests in
+`tests/test_workflow_gates.py`; evidence appended to
+[ADR-003](./ADR-003-adk-workflow-migration.md#phase-b-spike-results-2026-08-23--gates-verified-evidence-in-tests)).
+**Supersedes** the taxonomy and strategy layers of
 [ADR-002](./ADR-002-use-case-taxonomy.md) (its catalog, config-resolution,
 custom-module, and hook concepts survive) and absorbs the migration plan of
 [ADR-003](./ADR-003-adk-workflow-migration.md).  
@@ -116,26 +117,48 @@ hatch.**
    Node-as-Tool settles upstream. Re-evaluated on every ADK upgrade via the
    existing upgrade checklist.
 
-7. **Hooks get a graph-native attachment point.** Per-`LlmAgent` tool
-   callbacks survive inside wrapped nodes; root-level before/after-run and
-   tree-wide policy wiring move to boundary `FunctionNode`s or an ADK
-   plugin — Phase B3 prototypes both and this ADR records the choice at
-   acceptance.
+7. **Hooks get a graph-native attachment point.** Chosen at acceptance
+   (B3, pros/cons below): **boundary `FunctionNode`s are the policy
+   attachment point for per-run, tree-wide wiring** (`policies.approval`,
+   `policies.synthesis` compile to boundary/named nodes in the spec);
+   **ADK plugins are the observability layer** (root-level
+   `before_run_callback`/`after_run_callback` and per-node
+   `*_agent_callback` hooks — verified to fire for workflow roots). A rule
+   proven by the spike: `before_tool_callback` on a task-mode `LlmAgent`
+   node receives the synthetic `finish_task` call, and **vetoing it
+   deadlocks completion** — every policy callback must pass `finish_task`
+   and `_TaskAgentTool` delegations through un-gated.
+   *Pros* — boundary nodes: declarative in the config spec, ordered
+   deterministically by graph edges, no plugin-manager ordering concerns,
+   tested as ordinary nodes, and policies reduce to named node templates.
+   *Cons* — they appear in the event stream as extra nodes (audited), and a
+   node that should not exist on the legacy backend needs a compiler guard.
+   *Pros* — plugin: single attachment for transport-level concerns
+   (rate limits, metrics), fires once per run and per node without graph
+   changes. *Cons* — plugin methods are global (no per-node instance
+   config), ordering across plugins is manager-defined, and plugins are a
+   separate execution path from the graph (harder to snapshot-test as
+   config data).
 
-## Open questions (resolved by the Phase B spike before acceptance)
+## Open questions (resolved 2026-08-23 by the Phase B spike)
 
-- **B1**: Workflow root served through our api_server/live interfaces —
-  event stream, session, and auth contracts intact?
-- **B2**: resume/replay + HITL interrupts vs our session-event, state-key,
-  and approval semantics (the contracts pinned by
-  `tests/test_workflow_invocations.py` and
-  `tests/test_authenticated_interfaces.py`)?
-- **B3**: hook/policy attachment (boundary nodes vs plugin), including the
-  task-mode wrapper's `finish_task` tool interaction with tool callbacks and
-  the approval veto.
-- Should `expert_dispatch` move to routing-node form immediately (structured
-  route emission — more testable) or stay on delegation until
-  `team_coordinator` moves too? Working default: move it.
+- **B1 — Workflow root served through our api_server/live interfaces: PASS.**
+  Chain, fan-out+join, and routed-loop graphs run to completion via
+  `Runner(node=...)`; `cli/api_server.py` handles non-agent (`BaseNode`)
+  roots. Transport middleware is orthogonal to graph execution; pointing
+  the served root at a compiled workflow happens in Phase C3/E2.
+- **B2 — resume/replay + HITL interrupts: PASS.** `RequestInput` interrupt
+  events (`adk_request_input`, `long_running_tool_ids`), resume with the
+  same `invocation_id` + `FunctionResponse`, and the `rerun_on_resume`
+  true/false contracts all match the legacy pins.
+- **B3 — hook/policy attachment: PASS.** Boundary `FunctionNode`s and ADK
+  plugins both work; choice recorded in Decision §7; the `finish_task`
+  passthrough rule is proven and pinned by a test.
+- **Should `expert_dispatch` move to routing-node form immediately?**
+  **Yes — resolved.** The routed-loop gate proves route emission/`RoutingMap`
+  matching on 2.6.3, so `expert_dispatch` compiles to a routing-node graph
+  (Phase E2 default), staying synchronized with `team_coordinator`'s
+  delegation escape hatch on upgrades.
 
 ## Consequences
 

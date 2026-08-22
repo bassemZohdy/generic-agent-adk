@@ -51,6 +51,7 @@ def main() -> None:
 
     from google.adk.runners import Runner
     from google.adk.tools.tool_context import ToolContext
+    from google.adk.workflow import BaseNode
 
     runner_params = inspect.signature(Runner.run_async).parameters
     for required in ("invocation_id", "new_message", "state_delta"):
@@ -62,6 +63,44 @@ def main() -> None:
             raise RuntimeError(
                 f"ToolContext.request_confirmation lost required parameter: {required}"
             )
+
+    # B0 — workflow/graph surface (ADR-005, Phase B). These symbols are younger
+    # than the legacy SequentialAgent/ParallelAgent/LoopAgent classes and must
+    # be re-verified on every google-adk upgrade (ADK-UPGRADE-CHECKLIST.md).
+    for attribute in (
+        "Workflow",
+        "Edge",
+        "JoinNode",
+        "FunctionNode",
+        "Node",
+        "node",
+        "RetryConfig",
+        "START",
+        "DEFAULT_ROUTE",
+    ):
+        _require_import("google.adk.workflow", attribute)
+
+    if "node" not in inspect.signature(Runner.__init__).parameters:
+        raise RuntimeError("Runner lost the `node` BaseNode-root parameter")
+    for field in (
+        "retry_config",
+        "timeout",
+        "input_schema",
+        "output_schema",
+        "state_schema",
+        "rerun_on_resume",
+    ):
+        if field not in BaseNode.model_fields:
+            raise RuntimeError(f"BaseNode lost required field: {field}")
+
+    importlib.import_module("google.adk.workflow._llm_agent_wrapper")
+    finish_tool_name = getattr(
+        importlib.import_module("google.adk.agents.llm.task._finish_task_tool"),
+        "FINISH_TASK_TOOL_NAME",
+        "",
+    )
+    if not isinstance(finish_tool_name, str) or not finish_tool_name:
+        raise RuntimeError("FINISH_TASK_TOOL_NAME is missing from _finish_task_tool")
 
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     if not re.search(r"POST\s*:\s*[\"']?1|POST=1", compose) or not re.search(

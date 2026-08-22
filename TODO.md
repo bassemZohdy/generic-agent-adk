@@ -8,22 +8,22 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **418 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
+- Local suite: **427 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
   and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
-  **96%+ coverage** with a 90% minimum.
+  **96% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
   ADK contract guards, SHA-pinned workflow validation, package build, YAML and
   JSON parsing, Markdown relative links, Python compilation, Compose profiles,
   and the pinned sandbox Trivy/Syft check.
 - The latest published main pipeline passed all jobs; see the
   [CI/CD workflow history](https://github.com/bassemZohdy/generic-agent-adk/actions/workflows/ci.yml).
-- Not proven locally: real upstream Workflow migration. Update 2026-08-23: the
-  pinned google-adk 2.6.3 ships `google.adk.workflow` (graph `Workflow` as a
-  `BaseNode`, routed edges, `JoinNode`, dynamic node scheduling, engine-level
-  HITL interrupts) and `runners.py` accepts a `BaseNode` root — the migration
-  is no longer wholesale blocked. Only Workflow-as-an-LlmAgent-sub-agent
-  remains unsupported upstream ([discussion #5581](https://github.com/google/adk-python/discussions/5581)),
-  which affects delegation embedding only. Verification is Phase B below.
+- Workflow migration is proven locally through Phase B: graph roots (chain,
+  fan-out+join, routed loop), `RequestInput` interrupts/resume, and the
+  hook/policy attachment (boundary nodes + plugin, `finish_task` passthrough
+  rule) are pinned by `tests/test_workflow_gates.py` (2026-08-23). Workflow
+  as an `LlmAgent` sub-agent remains unsupported upstream
+  ([discussion #5581](https://github.com/google/adk-python/discussions/5581)),
+  which affects delegation embedding only (ADRs 003/005).
 - Not proven locally: cloud execution, Cloud Run, and external OIDC were
   verified by mocked tests + documentation only — no real cloud backend,
   Cloud Run, or IdP deployment has been executed (see R04).
@@ -31,8 +31,9 @@ contains unfinished work only; completed audit work is recorded in
 ## Status summary
 
 **25 complete · 0 partial · 1 architecture program in progress (Phases A–F
-below, absorbing former T25/T27). Phase A complete 2026-08-23; code-review
-findings R01–R05 closed 2026-08-23.**
+below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
+complete 2026-08-23 (gate spike — ADR-005 accepted); code-review findings
+R01–R05 closed 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -197,7 +198,7 @@ contract tests C5-style guards reference later) — not throwaway scripts.
 Reuse the fake-model/Runner harness patterns from
 `tests/test_workflow_invocations.py`; do not call real LLMs.
 
-- [ ] **B0 — Extend the ADK contract guard to the workflow surface.**
+- [x] **B0 — Extend the ADK contract guard to the workflow surface.**
   *Depends on*: nothing (do first — everything in Phase B leans on these
   APIs). *Files*: `scripts/check-adk-assumptions.py`,
   `docs/ADK-UPGRADE-CHECKLIST.md`.
@@ -214,7 +215,12 @@ Reuse the fake-model/Runner harness patterns from
   re-verified on every ADK upgrade.
   *Done when*: guard passes on 2.6.3 and would fail loudly if any listed
   symbol vanishes.
-- [ ] **B1 — Run a real Workflow as the served root on pinned 2.6.3.**
+  **Done (2026-08-23).** Guard now asserts all listed exports, the `node`
+  parameter on `Runner.__init__`, the six `BaseNode` fields (via
+  `model_fields`), the wrapper module import, and a non-empty
+  `FINISH_TASK_TOOL_NAME`; passes on 2.6.3. Checklist gained a workflow
+  surface re-verification bullet.
+- [x] **B1 — Run a real Workflow as the served root on pinned 2.6.3.**
   *Depends on*: B0. *Files*: new `tests/test_workflow_gates.py`; read
   `src/basic_agent/interfaces/rest.py` + `interfaces/service.py` to reuse
   the exact app/Runner construction production uses.
@@ -231,7 +237,12 @@ Reuse the fake-model/Runner harness patterns from
   warnings (`pyproject.toml` filters still active).
   *Done when*: all three graph tests pass locally and in CI; findings (incl.
   anything that does NOT work) appended to ADR-003's re-evaluation section.
-- [ ] **B2 — Verify resume/replay and HITL interrupt contracts.**
+  **Done (2026-08-23).** All three graph shapes pass (fake models, no LLMs);
+  `cli/api_server.py` confirmed to accept non-agent `BaseNode` roots.
+  Findings in ADR-003 §Phase B: single_turn LlmAgent outputs land in
+  `state_delta` via `output_key` (event carries the delegated output marker);
+  `BaseNode` names must be valid identifiers.
+- [x] **B2 — Verify resume/replay and HITL interrupt contracts.**
   *Depends on*: B1. *Files*: `tests/test_workflow_gates.py`; reference
   scenarios in `tests/test_workflow_invocations.py` (Runner confirmation)
   and `tests/test_authenticated_interfaces.py` (transport suspend/resume).
@@ -244,7 +255,12 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: an interrupt→resume test passes end-to-end through our
   transport layer; any contract difference vs legacy is written into
   ADR-003 (even if unfavorable — that's the point of the spike).
-- [ ] **B3 — Design the hook/policy attachment point for graphs.**
+  **Done (2026-08-23).** `RequestInput` interrupt/`adk_request_input`
+  event/`long_running_tool_ids`/same-`invocation_id` resume covered for
+  `rerun_on_resume` true and false; contracts match the legacy Runner pins.
+  Transport layering note recorded in ADR-003: middleware only wraps the
+  Runner — wiring the compiled root into the transports is Phase C3/E2.
+- [x] **B3 — Design the hook/policy attachment point for graphs.**
   *Depends on*: B1. *Files*: `tests/test_workflow_gates.py` prototypes;
   read `src/basic_agent/use_cases/base.py` (`build()` hook wiring —
   the behavior to reproduce) and `.venv/.../google/adk/plugins/`.
@@ -258,7 +274,13 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: one mechanism is chosen with a written pros/cons comparison
   recorded in ADR-005 (decision §7), and a test proves the
   `finish_task`-passthrough rule.
-- [ ] **B4 — Record spike outcomes and lock the backend decision.**
+  **Done (2026-08-23).** Both options proven: boundary `FunctionNode`s
+  (state-marker pre/post) and an ADK `BasePlugin` (root run hooks + per-node
+  agent hooks fire). Chosen: boundary nodes for policies, plugins for
+  observability — pros/cons in ADR-005 §7. Rule test: vetoing a normal tool
+  is harmless; vetoing `finish_task` deadlocks (bounded by
+  `RunConfig(max_llm_calls=6)` → `LlmCallsLimitExceededError`).
+- [x] **B4 — Record spike outcomes and lock the backend decision.**
   *Depends on*: B1–B3. *Files*: `docs/ADR-003-*.md`, `docs/ADR-005-*.md`,
   this file.
   *Steps*: update ADR-005 status (Proposed → Accepted if gates hold),
@@ -268,6 +290,10 @@ Reuse the fake-model/Runner harness patterns from
   fallback to exactly that gap and adjust Phases C–E here accordingly.
   *Done when*: ADR-005 has no unresolved open question and this file's
   Phase C–F tasks reflect the decision.
+  **Done (2026-08-23).** ADR-005 **Accepted**; open questions resolved
+  (`expert_dispatch` → routing-node form confirmed); backend decision
+  locked workflow-first with legacy compile target rollback-only; Phase B
+  results appended to ADR-003.
 
 #### Phase C — Externalized graph configuration (the generic core)
 

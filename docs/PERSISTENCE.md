@@ -13,7 +13,8 @@ The runtime separates session metadata/events from artifact storage:
 
 2. **Artifact Service (`ADK_ARTIFACT_SERVICE_URI` / `STORAGE_BUCKET`)**:
    - Stores generated files, blobs, tool outputs, and execution artifacts.
-   - **Supported Backends**: Google Cloud Storage (`gs://<bucket>/<prefix>`), Amazon S3 (`s3://...`), and local directory URIs (`file:///...`).
+   - **Supported Backends**: Google Cloud Storage (`gs://<bucket>/<prefix>`) and local directory URIs (`file:///...`).
+   - **S3 (`s3://...`) is not supported**: the pinned google-adk service registry has no `s3` scheme, and an unknown URI silently falls back to in-memory storage rather than failing closed. Use `gs://` or `file://` instead.
    - If `STORAGE_BUCKET` is specified, the runtime automatically configures `gs://<STORAGE_BUCKET>/adk-artifacts`.
 
 3. **Memory Service (`ADK_MEMORY_SERVICE_URI`)**:
@@ -39,7 +40,7 @@ env:
 ### Session Isolation & Ownership
 * Session IDs are strictly scoped to the authenticated token subject (`sub`).
 * An instance will reject requests attempting to read or mutate a session belonging to another user (`403 Forbidden`).
-* Under `AUTH_DISABLED=true` in development, sessions are isolated per client using an encrypted `adk_anonymous_id` cookie.
+* Under `AUTH_DISABLED=true` in development, sessions are isolated per client using a random, unauthenticated `adk_anonymous_id` cookie (a plain `secrets.token_urlsafe(24)` value — not encrypted). Any client can mint one; it only namespaces sessions and is not a credential.
 
 ## Operational Procedures
 

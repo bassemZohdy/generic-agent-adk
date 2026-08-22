@@ -232,7 +232,9 @@ class TestLiveWebSocketMatrix:
 
     @pytest.fixture
     def live_client(self, settings_patch):
-        # Configure live app settings for tests
+        # Configure live app settings for tests.  Patching the live module also
+        # syncs auth.core.settings (see conftest.settings_patch), so no
+        # separate auth.core patch is needed here.
         settings_patch(
             live_module,
             auth_disabled=False,
@@ -243,14 +245,6 @@ class TestLiveWebSocketMatrix:
             live_max_messages_per_minute=5,
             live_max_message_bytes=1024,
             live_max_audio_bytes=2048,
-        )
-        settings_patch(
-            auth.core,
-            auth_disabled=False,
-            keycloak_issuer="https://keycloak.example/realms/basic-agent",
-            keycloak_audience="basic-agent",
-            keycloak_required_roles=("agent-user",),
-            live_api_roles=("agent-user",),
         )
         return TestClient(live_module.app)
 
@@ -287,6 +281,35 @@ class TestLiveWebSocketMatrix:
             assert session_msg.get("type") == "session"
             assert "session_id" in session_msg
             ws.send_json({"close": True})
+
+    def test_websocket_handshake_echo_is_bearer_and_never_leaks_token(
+        self, live_client, rsa_keypair, mock_jwks, monkeypatch
+    ):
+        """R01: the accepted subprotocol is exactly ``"bearer"``.
+
+        Starlette's TestClient does not validate subprotocol negotiation, so
+        assert on the accept call's argument explicitly — that argument is the
+        only value echoed into the ``Sec-WebSocket-Protocol`` response header.
+        """
+        from starlette.websockets import WebSocket
+
+        token = make_token(rsa_keypair, sub="frank")
+        accept_calls: list[str | None] = []
+        original_accept = WebSocket.accept
+
+        async def spying_accept(websocket, subprotocol=None):
+            accept_calls.append(subprotocol)
+            await original_accept(websocket, subprotocol=subprotocol)
+
+        monkeypatch.setattr(WebSocket, "accept", spying_accept)
+        with live_client.websocket_connect(
+            "/live", subprotocols=[f"bearer,{token}"]
+        ) as ws:
+            ws.receive_json()
+            ws.send_json({"close": True})
+
+        assert accept_calls == ["bearer"]
+        assert token not in repr(accept_calls)
 
     def test_websocket_auth_via_first_frame_success(
         self, live_client, rsa_keypair, mock_jwks

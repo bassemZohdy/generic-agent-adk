@@ -1,7 +1,5 @@
 import os
-import shutil
 import tempfile
-import uuid
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -13,23 +11,18 @@ _LOCAL_TMP.mkdir(parents=True, exist_ok=True)
 tempfile.tempdir = str(_LOCAL_TMP)
 os.environ["TMP"] = str(_LOCAL_TMP)
 os.environ["TEMP"] = str(_LOCAL_TMP)
+os.environ["TMPDIR"] = str(_LOCAL_TMP)
 
+# R05: no tmp_path/tmpdir overrides.  pytest's own basetemp hierarchy (kept
+# under .pytest_working_dir once tempfile.tempdir is set) is managed with the
+# default `tmp_path_retention_count` policy; rmtree-ing per-test dirs here
+# leaked `t-<uuid>` folders on Windows when SQLite handles stayed open.
 
-@pytest.fixture
-def tmp_path():
-    """Workspace-contained temporary directory for tests without tempdir sandbox issues."""
-    sub = _LOCAL_TMP / f"t-{uuid.uuid4().hex}"
-    sub.mkdir(parents=True, exist_ok=True)
-    try:
-        yield sub
-    finally:
-        shutil.rmtree(sub, ignore_errors=True)
-
-
-@pytest.fixture
-def tmpdir(tmp_path):
-    """Compatibility fixture for pytest tmpdir."""
-    return tmp_path
+# R02: the only interface modules whose settings must also sync auth.core.
+# Matched by module __name__ so settings_patch never imports rest/live eagerly
+# (importing `rest` executes module-level create_app(), which creates .adk/
+# directories and raises in a production environment).
+_AUTH_SYNC_MODULES = ("basic_agent.interfaces.rest", "basic_agent.interfaces.live")
 
 
 @pytest.fixture
@@ -52,14 +45,11 @@ def settings_patch(monkeypatch):
         if hasattr(module, "settings"):
             monkeypatch.setattr(module, "settings", updated)
 
-        from basic_agent import auth
-        from basic_agent.interfaces import live, rest
+        if getattr(module, "__name__", "") in _AUTH_SYNC_MODULES:
+            # Lazy import: only reached when the patched module is one of the
+            # interface modules, and only auth.core is needed for the sync.
+            from basic_agent import auth
 
-        if module in (rest, live) or (
-            hasattr(module, "__name__")
-            and module.__name__
-            in ("basic_agent.interfaces.rest", "basic_agent.interfaces.live")
-        ):
             auth_updated = replace(auth.core.settings, **effective_changes)
             monkeypatch.setattr(auth.core, "settings", auth_updated)
 

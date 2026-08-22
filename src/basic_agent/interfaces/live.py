@@ -201,14 +201,19 @@ async def healthz() -> dict[str, object]:
 async def live(websocket: WebSocket) -> None:
     """Handle authenticated, bounded JSON text/audio messages."""
     claims: dict[str, Any] | None = None
-    auth_subprotocol = websocket_auth_subprotocol(websocket)
+    auth_subprotocol_info = websocket_auth_subprotocol(websocket)
     has_auth_header = bool(websocket.headers.get("authorization"))
     try:
-        if settings.auth_disabled or has_auth_header or auth_subprotocol:
+        if settings.auth_disabled or has_auth_header or auth_subprotocol_info:
             claims = authenticate_websocket(
                 websocket, required_roles=settings.live_api_roles
             )
-            await websocket.accept(subprotocol=auth_subprotocol)
+            # Never echo `bearer,<token>` or `bearer.<token>`: the token must
+            # not appear in the Sec-WebSocket-Protocol response header.  The
+            # safe constant "bearer" is the value the client actually offered
+            # for the comma form.
+            subprotocol = auth_subprotocol_info[1] if auth_subprotocol_info else None
+            await websocket.accept(subprotocol=subprotocol)
         else:
             # Browser clients can authenticate as their first frame.  Tokens are
             # deliberately never accepted in query parameters.

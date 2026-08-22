@@ -163,9 +163,28 @@ def test_websocket_auth_header_subprotocol_and_first_message(
             "sec-websocket-protocol": "chat, bearer.protocol-token",
         }
     )
-    assert auth.websocket_auth_subprotocol(subprotocol_ws) == "bearer.protocol-token"
+    assert auth.websocket_auth_subprotocol(subprotocol_ws) == (
+        "protocol-token",
+        "bearer",
+    )
     assert auth.core._websocket_header_token(subprotocol_ws) == "protocol-token"
     assert auth.core.authenticate_websocket(subprotocol_ws)["token"] == "protocol-token"
+
+    comma_ws = SimpleNamespace(
+        headers={"authorization": "", "sec-websocket-protocol": "bearer, comma-token"}
+    )
+    assert auth.websocket_auth_subprotocol(comma_ws) == ("comma-token", "bearer")
+    assert auth.core._websocket_header_token(comma_ws) == "comma-token"
+    assert auth.core.authenticate_websocket(comma_ws)["token"] == "comma-token"
+
+    dotted_ws = SimpleNamespace(
+        headers={
+            "authorization": "",
+            "sec-websocket-protocol": "authorization.bearer.dotted-token",
+        }
+    )
+    assert auth.websocket_auth_subprotocol(dotted_ws) == ("dotted-token", "bearer")
+    assert auth.core._websocket_header_token(dotted_ws) == "dotted-token"
     assert (
         auth.core.authenticate_websocket_token("first-message-token")["token"]
         == "first-message-token"

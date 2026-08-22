@@ -150,11 +150,17 @@ def authenticate_request(
     )
 
 
-def _websocket_auth_subprotocol(websocket: WebSocket) -> str | None:
+def _websocket_auth_subprotocol(websocket: WebSocket) -> tuple[str, str] | None:
     # Browser clients cannot set Authorization reliably.  Accept a token in a
     # negotiated subprotocol without ever reading it from a URL query string.
     # Supported forms are ``bearer.<token>``, ``authorization.bearer.<token>``,
     # and ``bearer, <token>``.
+    #
+    # The return value is ``(token, subprotocol_to_echo)`` and the echo name is
+    # always the constant ``"bearer"``: reflecting the token (``bearer.<token>``
+    # or ``bearer,<token>``) would leak the raw credential in the
+    # ``Sec-WebSocket-Protocol`` response header, and per RFC 6455 §4.1 a server
+    # may only echo a subprotocol the client actually offered.
     protocols = [
         p.strip()
         for p in websocket.headers.get("sec-websocket-protocol", "").split(",")
@@ -164,9 +170,9 @@ def _websocket_auth_subprotocol(websocket: WebSocket) -> str | None:
         lowered = value.lower()
         for prefix in ("bearer.", "authorization.bearer."):
             if lowered.startswith(prefix) and value[len(prefix) :].strip():
-                return value
+                return value[len(prefix) :].strip(), "bearer"
         if lowered == "bearer" and i + 1 < len(protocols) and protocols[i + 1]:
-            return f"bearer,{protocols[i + 1]}"
+            return protocols[i + 1], "bearer"
     return None
 
 
@@ -176,21 +182,17 @@ def _websocket_header_token(websocket: WebSocket) -> str | None:
     if scheme.lower() == "bearer" and token.strip():
         return token.strip()
 
-    if protocol := _websocket_auth_subprotocol(websocket):
-        lowered = protocol.lower()
-        if lowered.startswith("bearer,"):
-            return protocol[7:].strip()
-        prefix = (
-            "authorization.bearer."
-            if lowered.startswith("authorization.bearer.")
-            else "bearer."
-        )
-        return protocol[len(prefix) :].strip()
+    if extracted := _websocket_auth_subprotocol(websocket):
+        return extracted[0]
     return None
 
 
-def websocket_auth_subprotocol(websocket: WebSocket) -> str | None:
-    """Return the offered auth subprotocol to echo during handshake."""
+def websocket_auth_subprotocol(websocket: WebSocket) -> tuple[str, str] | None:
+    """Return ``(token, subprotocol_to_echo)`` for the offered auth subprotocol.
+
+    The echo name is the constant ``"bearer"`` and never contains the token, so
+    callers can pass it straight to ``websocket.accept(subprotocol=...)``.
+    """
     return _websocket_auth_subprotocol(websocket)
 
 

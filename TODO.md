@@ -2,13 +2,15 @@
 
 Last audited: **2026-08-21**; workflow re-architecture program and code-review
 findings added **2026-08-23**; task descriptions expanded for hand-off
-**2026-08-23**. This file contains unfinished work only; completed audit work
-is recorded in [CHANGELOG.md](CHANGELOG.md) and git history.
+**2026-08-23**; code-review findings R01–R05 closed **2026-08-23**. This file
+contains unfinished work only; completed audit work is recorded in
+[CHANGELOG.md](CHANGELOG.md) and git history.
 
 ## Verification baseline
 
-- Local suite: **421 passed, 1 skipped** (2026-08-23 run), **96%+ coverage**
-  with a 90% minimum.
+- Local suite: **418 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
+  and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
+  **96%+ coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
   ADK contract guards, SHA-pinned workflow validation, package build, YAML and
   JSON parsing, Markdown relative links, Python compilation, Compose profiles,
@@ -22,11 +24,15 @@ is recorded in [CHANGELOG.md](CHANGELOG.md) and git history.
   is no longer wholesale blocked. Only Workflow-as-an-LlmAgent-sub-agent
   remains unsupported upstream ([discussion #5581](https://github.com/google/adk-python/discussions/5581)),
   which affects delegation embedding only. Verification is Phase B below.
+- Not proven locally: cloud execution, Cloud Run, and external OIDC were
+  verified by mocked tests + documentation only — no real cloud backend,
+  Cloud Run, or IdP deployment has been executed (see R04).
 
 ## Status summary
 
 **25 complete · 0 partial · 1 architecture program in progress (Phases A–F
-below, absorbing former T25/T27). Phase A complete 2026-08-23.**
+below, absorbing former T25/T27). Phase A complete 2026-08-23; code-review
+findings R01–R05 closed 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -67,7 +73,7 @@ below, absorbing former T25/T27). Phase A complete 2026-08-23.**
 
 ### Open findings — 2026-08-23 code review of `0ed8aac`/`61eee08`
 
-- [ ] **R01 — Fix WebSocket `bearer, <token>` subprotocol negotiation.**
+- [x] **R01 — Fix WebSocket `bearer, <token>` subprotocol negotiation.**
   *Problem*: `_websocket_auth_subprotocol` in `src/basic_agent/auth/core.py`
   (~line 169) returns the synthetic string `bearer,<token>` when a client
   offers subprotocols `["bearer", "<token>"]`; `src/basic_agent/interfaces/live.py`
@@ -84,7 +90,16 @@ below, absorbing former T25/T27). Phase A complete 2026-08-23.**
   in any response header; existing auth tests stay green. Note: Starlette's
   TestClient does not validate negotiation, so assert on the accept call's
   argument/headers explicitly.
-- [ ] **R02 — Stop `settings_patch` importing `interfaces.rest`/`live`
+  **Done (2026-08-23).** `_websocket_auth_subprotocol` now returns
+  `(token, "bearer")` (the echo name is the constant `"bearer"` — never the
+  token); `_websocket_header_token` uses the extracted token; live.py accepts
+  with `subprotocol="bearer"`. Regression test
+  `test_websocket_handshake_echo_is_bearer_and_never_leaks_token` in
+  `tests/test_authenticated_interfaces.py` spies on `WebSocket.accept` and
+  asserts the argument is exactly `"bearer"`; the hardening tests cover all
+  three forms (`bearer.<token>`, `authorization.bearer.<token>`,
+  `bearer, <token>`).
+- [x] **R02 — Stop `settings_patch` importing `interfaces.rest`/`live`
   eagerly** (`tests/conftest.py` ~line 56). Importing `rest` executes
   module-level `create_app()` (creates `.adk/` dirs; raises in production
   env), so every settings-patching unit test pays those side effects.
@@ -94,7 +109,12 @@ below, absorbing former T25/T27). Phase A complete 2026-08-23.**
   *Done when*: `uv run pytest tests/test_security_hardening.py -q` passes
   with `DEPLOYMENT_ENV=production` set in the shell, and no `.adk/` directory
   is created by unit tests that don't build the app.
-- [ ] **R03 — Correct docs/PERSISTENCE.md**: (a) line ~16 lists S3
+  **Done (2026-08-23).** `settings_patch` matches
+  `basic_agent.interfaces.{rest,live}` by module `__name__` (no import) and
+  syncs `auth.core` lazily; `tests/test_security_hardening.py` passes with
+  `DEPLOYMENT_ENV=production KEYCLOAK_ISSUER=... ADK_SESSION_SERVICE_URI=...`
+  (41 passed) and the non-app unit tests create no `.adk/` directory.
+- [x] **R03 — Correct docs/PERSISTENCE.md**: (a) line ~16 lists S3
   (`s3://`) as a supported artifact backend, but the pinned google-adk
   service registry has no s3 scheme and an unknown URI silently falls back to
   in-memory storage — remove S3 or mark it unsupported with the fallback
@@ -102,7 +122,10 @@ below, absorbing former T25/T27). Phase A complete 2026-08-23.**
   `rest.py` issues a plain `secrets.token_urlsafe(24)` — say "random,
   unauthenticated identifier" and note any client can mint one.
   *Done when*: both statements match the code; markdown link check passes.
-- [ ] **R04 — Re-qualify T11/T16 closure evidence** (this file, "Closed in
+  **Done (2026-08-23).** PERSISTENCE.md now marks S3 unsupported (unknown
+  URI falls back to in-memory, not fail-closed) and describes the cookie as a
+  random, unauthenticated, mintable-by-anyone namespacing value; `scripts/check-doc-links.py` passes.
+- [x] **R04 — Re-qualify T11/T16 closure evidence** (this file, "Closed in
   the 2026-08-21 audit"). The closures cite MagicMock-based tests
   (`tests/test_cloud_execution_deployment.py` monkeypatches all three cloud
   executors) and a runbook doc — not a real deployment. Either run the real
@@ -110,7 +133,10 @@ below, absorbing former T25/T27). Phase A complete 2026-08-23.**
   "Not proven locally" baseline bullet to state that cloud execution, Cloud
   Run, and external OIDC were verified by mocked tests + documentation only.
   *Done when*: the file no longer overstates the evidence.
-- [ ] **R05 — Clean up tests/conftest.py fixtures**: (a) delete the unused
+  **Done (2026-08-23).** T11/T16 closure lines reworded to state mocked
+  tests + documentation only (no real cloud/Cloud Run/IdP deployment), and a
+  "Not proven locally" baseline bullet added.
+- [x] **R05 — Clean up tests/conftest.py fixtures**: (a) delete the unused
   `tmpdir` override (returns `pathlib.Path`, breaking the `py.path.local`
   contract; zero current users); (b) reconsider the `tmp_path` override —
   `shutil.rmtree(ignore_errors=True)` leaks `t-<uuid>` dirs on Windows when
@@ -124,6 +150,12 @@ below, absorbing former T25/T27). Phase A complete 2026-08-23.**
   auth.core when patching live). Coordinate (d) with R02 — same code region.
   *Done when*: full suite green on Windows and Linux CI; no `t-<uuid>`
   accumulation across two consecutive local runs.
+  **Done (2026-08-23).** (a) `tmpdir` override deleted (zero users); (b)
+  `tmp_path` override removed — pytest's own basetemp retention under
+  `.pytest_working_dir` (gitignored) replaces per-test `rmtree`; (c)
+  `TMPDIR` set alongside `TMP`/`TEMP`; (d)+(e) done with R02 — the
+  module-name check is the only discriminator and the duplicate
+  `settings_patch(auth.core, …)` in `live_client` is gone.
 
 ### Workflow re-architecture program (2026-08-23)
 
@@ -418,9 +450,9 @@ Reuse the fake-model/Runner harness patterns from
 ## Closed in the 2026-08-21 audit
 
 - **T02 — Complete external approval/resume coverage**: Verified through deterministic Runner confirmation in `tests/test_workflow_invocations.py` and transport-level suspend/resume in `tests/test_authenticated_interfaces.py`.
-- **T11 — Verify cloud code-executor usability in deployment**: Added comprehensive cloud code executor test matrix in `tests/test_cloud_execution_deployment.py` and staging operational runbook in `docs/STAGING-VERIFICATION.md`. *(Evidence re-qualification pending — see R04.)*
+- **T11 — Verify cloud code-executor usability in deployment**: Added comprehensive cloud code executor test matrix in `tests/test_cloud_execution_deployment.py` (all three executors mocked) and staging operational runbook in `docs/STAGING-VERIFICATION.md`. **Evidence re-qualified (R04): no real cloud backend deployment was executed — mocked tests + documentation only.**
 - **T12 — Verify managed persistence operations**: Added multi-instance session consistency tests and fail-closed persistence verification in `tests/test_managed_persistence.py` and operational documentation in `docs/PERSISTENCE.md`.
-- **T16 — Run a real Cloud Run/IdP smoke deployment**: Documented Cloud Run readiness, service account IAM, scaling, and OIDC authentication smoke tests in `docs/STAGING-VERIFICATION.md`. *(Evidence re-qualification pending — see R04.)*
+- **T16 — Run a real Cloud Run/IdP smoke deployment**: Documented Cloud Run readiness, service account IAM, scaling, and OIDC authentication smoke tests in `docs/STAGING-VERIFICATION.md`. **Evidence re-qualified (R04): no real Cloud Run/IdP deployment was executed — documentation only.**
 - **T18 — Exercise multi-instance and load limits**: Added atomic Live message rate-limiting, strict payload size bounding, and audio base64 validation in `tests/test_authenticated_interfaces.py`.
 - **T19 — Add authenticated interface integration tests**: Added complete REST and Live WebSocket authentication, IDOR protection, session ownership isolation, and reconnect/resume matrix in `tests/test_authenticated_interfaces.py`.
 - **T24 — Approve and add the repository license**: Added official Apache 2.0 `LICENSE` file and configured `license = { text = "Apache-2.0" }` in `pyproject.toml`.

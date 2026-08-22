@@ -531,3 +531,29 @@ building one vs using an existing public image:
 proxy ACL scope + isolation verified, timeout-recovery defect found and
 fixed, README production-checklist paragraph; all eight ADR-004
 Verification items now ✅ with live evidence).
+
+---
+
+## Addendum (2026-08-23) — workflow-backend compatibility audit
+
+Audited as part of the ADR refresh preceding
+[ADR-005](./ADR-005-graph-first-taxonomy-and-configuration.md) (graph-first
+re-architecture). Outcome: **this ADR's design carries over unchanged.**
+
+- The resolver is topology-agnostic: `resolve_code_executor()` runs once at
+  startup and the resulting `BaseCodeExecutor` is attached **per `LlmAgent`**
+  (via `RuntimeContext.code_executor` → the shared `llm()` builder). Under
+  the workflow backend, `LlmAgent`s run as graph nodes through ADK's
+  task-mode wrapper, which executes the same `LlmAgent` object — the
+  attached executor rides along. No resolver or Compose change is expected;
+  Phase B's spike should confirm executor invocation inside a wrapped node
+  as part of its matrix.
+- When ADR-005 replaces the strategy classes with a graph compiler, the
+  attachment point moves from `strategies/base.py::AgentStrategy.llm()` to
+  the compiler's llm-node builder; the resolution order, probe contract,
+  instruction line, and sandbox hardening in this ADR are unaffected.
+- Reference refresh: implementation now lives in
+  `src/basic_agent/execution/resolver.py` (with config transport in
+  `src/basic_agent/config/loader.py`); this document's older
+  `code_execution.py` / `config_loader.py` paths are pre-reorganization
+  names, as the implementation note at the top already states.

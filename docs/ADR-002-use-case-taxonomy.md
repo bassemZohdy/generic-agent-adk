@@ -1,6 +1,13 @@
 # ADR-002: Use-Case Taxonomy and Runtime Consolidation
 
-**Status**: Accepted · **Date**: 2026-08-14 · **Supersedes**: the selection model described in ADR-001 (its registry/strategy core survives; the user-facing taxonomy and the `patterns/` parallel system do not)
+**Status**: Accepted; **taxonomy and strategy layers superseded by
+[ADR-005](./ADR-005-graph-first-taxonomy-and-configuration.md)** (2026-08-23).
+What remains authoritative from this ADR: the intent-named public catalog and
+its metadata (§1–2 keys, titles, when-to-use, interfaces), configuration
+resolution (§6), custom-module registration (§7), and the runtime-hook concept
+(§4). What ADR-005 replaces: the eight-class use-case ontology, the ten
+strategy builders, and the 1-topology-per-use-case coupling.
+· **Date**: 2026-08-14 · **Supersedes**: the selection model described in ADR-001 (its registry/strategy core survives; the user-facing taxonomy and the `patterns/` parallel system do not)
 
 ## Context
 
@@ -78,6 +85,40 @@ Follow-up cleanup after a codebase review:
    other strategy — `DirectStrategy`, `RouterStrategy`, `SupervisorStrategy`,
    `PlannerExecutorStrategy`, `EvaluatorOptimizerStrategy`,
    `HumanInLoopStrategy` — already omitted it).
+
+## Addendum (2026-08-23, taxonomy review — corrections of record)
+
+A review of the shipped implementation found that two claims in the 2026-08-14
+addendum do not hold in code, and one axis conflation the taxonomy never
+resolved. Recorded here for accuracy; the redesign they motivate is ADR-005.
+
+1. **`pipeline` vs `plan_and_execute` — "fixed known steps vs dynamic
+   planning" is aspirational, not implemented.** `PlannerExecutorStrategy`
+   builds a fixed two-step `SequentialAgent` whose only difference from
+   `SequentialStrategy` is the two role instructions; the "plan" exists only
+   as conversation text, with no plan state, no step spawning, and no
+   re-planning. As shipped, `plan_and_execute` ≡ `pipeline` with `steps: 2`
+   and planner/executor prompts.
+2. **`expert_dispatch` vs `team_coordinator` — "different intent and config"
+   but identical structure.** Both build one root `LlmAgent` with
+   `sub_agents` (ADK LLM-driven delegation); the differences are entirely
+   configuration (root instruction, named specialists vs anonymous
+   `worker_{i}`).
+3. **Approval is a cross-cutting policy wearing a use-case costume.**
+   `require_approval` is already a `RuntimeContext` flag; `ApprovalGateAgent`
+   is that flag plus a `before_tool` veto containing nothing
+   topology-specific, and `HumanInLoopStrategy` is a third instance of the
+   fixed two-step `SequentialAgent` shape. Any use case should be able to
+   carry approval; today only one can.
+4. **Dead surface**: `LoopStrategy` is registered but reachable from zero use
+   cases; the config language cannot express nesting (e.g. a parallel stage
+   inside a pipeline), which forced `multi_perspective` to hand-override
+   `compose()`.
+
+The general lesson: the eight use cases conflate three orthogonal axes —
+topology, role prompts, and cross-cutting policies. ADR-005 re-founds the
+taxonomy on that separation, keeping this ADR's intent-named catalog as a
+preset layer.
 
 ## Consequences
 

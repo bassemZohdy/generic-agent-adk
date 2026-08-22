@@ -1,7 +1,11 @@
 # ADR-003 — ADK Workflow migration spike
 
-**Status:** Spike complete; migration deferred pending upstream parity  
-**Date:** 2026-08-15  
+**Status:** Re-evaluated 2026-08-23 — migration **unblocked in principle**;
+"deferred pending upstream parity" no longer describes the pinned ADK. The
+gates below are restated as local verification tasks (TODO Phase B) and the
+migration itself is folded into
+[ADR-005](./ADR-005-graph-first-taxonomy-and-configuration.md).  
+**Date:** 2026-08-15 (original spike) · 2026-08-23 (re-evaluation)  
 **Scope:** `src/basic_agent/strategies/`
 
 ## Context
@@ -58,3 +62,56 @@ As of 2026-08-20, the upstream discussion on allowing `Workflow` as an
 `LlmAgent` sub-agent still describes that inverse composition as unsupported
 and is pursuing a Node-as-Tool path instead:
 [google/adk-python discussion #5581](https://github.com/google/adk-python/discussions/5581).
+
+## Re-evaluation (2026-08-23) — findings against the pinned google-adk 2.6.3
+
+Direct inspection of the installed `google/adk/workflow/` package shows the
+original findings understated what already ships. Verified in source:
+
+1. **`Workflow` is a `BaseNode`** (`_workflow.py`), so graphs nest inside
+   graphs natively. The graph model (`_graph.py`) supports chains, fan-out
+   tuples, `JoinNode` fan-in, and **conditional routing** (`Edge.route` +
+   `RoutingMap` keyed by emitted route values) — a capability the legacy
+   composition classes never had.
+2. **The Runner accepts a `BaseNode` root**: `runners.py` types the root as
+   `agent: Optional[BaseAgent | 'BaseNode']` and runs non-agent nodes through
+   `NodeRunner`. Gate 1 ("Workflow can be the root of the API server") is
+   therefore likely met and needs local verification, not upstream waiting.
+3. **`LlmAgent`s run as nodes via a task-mode wrapper**
+   (`_llm_agent_wrapper.py`): completion is signaled with a `finish_task`
+   tool, and task delegation exists via `_TaskAgentTool` with
+   unresolved-task recovery from session events. ⚠️ This wrapper changes an
+   `LlmAgent`'s termination contract (a synthetic tool appears in its tool
+   stream) — the interaction with our per-agent tool callbacks and approval
+   veto must be verified.
+4. **Engine-level HITL and resume**: interrupt ids, `request_input` events,
+   auth-request events (`utils/_workflow_hitl_utils.py`), and replay with a
+   chronological sequence barrier (`utils/_replay_*`). Gates 2's contracts
+   have first-class engine counterparts.
+5. **Dynamic node scheduling**: `DynamicNodeScheduler` and `ctx.run_node()`
+   let a running node spawn nodes at runtime with dedup/resume/replay
+   handling — true dynamic plan-and-execute is an engine feature, not
+   something to hand-build.
+6. **Cross-cutting per-node config**: `retry_config`, `timeout`,
+   `input_schema`/`output_schema`/`state_schema` on every `BaseNode`.
+7. **New gap not in the original findings**: `BaseNode` has **no
+   before/after-callback fields**. Per-`LlmAgent` tool callbacks survive
+   inside wrapped nodes, but root-level `before_run`/`after_run` and
+   tree-wide policy wiring (ADR-002 §4) need a new attachment point on the
+   workflow backend — boundary `FunctionNode`s or an ADK plugin.
+8. **Upstream declarative config is a dead end**: `agents/agent_config.py`
+   (`AgentConfig`, `BaseAgent.from_config`, `config_agent_utils.from_config`)
+   is marked `@deprecated` and experimental ("config is now loaded via
+   reflection"). There is no stable upstream YAML format to adopt; our
+   externalized configuration remains our own schema (ADR-005), kept
+   field-aligned with the Workflow/BaseNode pydantic models.
+
+**Restated gates** (now local verification tasks, tracked as TODO Phase B):
+B1 — serve a real Workflow root (chain, fan-out+join, routed loop) through our
+api_server path; B2 — verify resume/replay + HITL interrupts against our
+session-event, state-key, and approval contracts; B3 — prototype and choose
+the hook/policy attachment point (boundary nodes vs plugin), including the
+task-mode wrapper's interaction with tool callbacks. The only remaining
+upstream blocker is Workflow-as-an-`LlmAgent`-sub-agent (#5581), which
+affects LLM-driven delegation embedding only; ADR-005 scopes that to a
+delegation escape hatch rather than a program blocker.

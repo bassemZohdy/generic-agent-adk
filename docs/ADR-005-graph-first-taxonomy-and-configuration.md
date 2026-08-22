@@ -1,0 +1,161 @@
+# ADR-005: Graph-first taxonomy and externalized configuration
+
+**Status:** Proposed — direction accepted 2026-08-23; final acceptance gated
+on the Phase B verification spike (TODO.md, "Workflow re-architecture
+program"). **Supersedes** the taxonomy and strategy layers of
+[ADR-002](./ADR-002-use-case-taxonomy.md) (its catalog, config-resolution,
+custom-module, and hook concepts survive) and absorbs the migration plan of
+[ADR-003](./ADR-003-adk-workflow-migration.md).  
+**Date:** 2026-08-23
+
+## Context
+
+Two independent pressures converged on the same conclusion.
+
+**1. The eight-use-case taxonomy conflates three orthogonal axes.** A
+2026-08-23 review (recorded in ADR-002's correction addendum) decomposed
+every built-in use case into topology, role prompts, and cross-cutting
+policy:
+
+| Use case | Topology | Role prompts | Cross-cutting policy |
+|---|---|---|---|
+| assistant | single llm | — | — |
+| pipeline | sequential(N) | generic step N | — |
+| plan_and_execute | sequential(2) | planner, executor | — |
+| multi_perspective | parallel(N) → llm | synthesizer | state aggregation |
+| refine_until_good | loop(1) | generate-critique-improve | — |
+| expert_dispatch | delegation | named specialists, route-one | — |
+| team_coordinator | delegation | worker N, decompose | — |
+| approval_gate | sequential(2) | proposer, completer | require_approval + tool veto |
+
+Only the topology column is structural, and it collapses to a handful of
+shapes; everything else is data. Symptoms in the shipped code: two use cases
+that are the same tree with different prompts (`expert_dispatch` /
+`team_coordinator`), a "dynamic" use case that is a fixed two-step sequence
+(`plan_and_execute`), a policy locked inside one use case (`approval_gate`),
+a registered strategy reachable from nowhere (`LoopStrategy`), and a config
+language that cannot express nesting, forcing `multi_perspective` to
+hand-override `compose()`.
+
+**2. Upstream deprecated the primitives the taxonomy is built on.** The
+pinned google-adk 2.6.3 marks `SequentialAgent`, `ParallelAgent`, and
+`LoopAgent` deprecated in favor of the graph-based
+`google.adk.workflow.Workflow`. Per ADR-003's 2026-08-23 re-evaluation
+(verified in installed source): `Workflow` is a nestable `BaseNode`; edges
+support chains, fan-out, `JoinNode` fan-in, and conditional routing
+(`RoutingMap`); the Runner accepts a `BaseNode` root; HITL interrupts,
+resume/replay, dynamic node spawning (`ctx.run_node()`), and per-node
+`retry_config`/`timeout`/schemas are engine features. Sequence, parallelism,
+and loops are no longer classes — they are *edge patterns in one graph
+model*. A redesign that hard-codes "sequential/parallel/loop" node kinds
+would rebuild the deprecated taxonomy on top of the new engine.
+
+**Also verified:** upstream's own declarative surface (`AgentConfig`,
+`BaseAgent.from_config`) is `@deprecated` and experimental — there is no
+stable upstream YAML format to adopt. Externalized configuration remains this
+project's own schema. The one upstream gap: a `Workflow` cannot be an
+`LlmAgent` sub-agent ([discussion #5581](https://github.com/google/adk-python/discussions/5581));
+LLM-driven delegation therefore stays outside the graph model for now.
+
+## Decision
+
+**External configuration compiles to a Workflow graph, with intent-named
+presets above it, cross-cutting policies beside it, and one delegation escape
+hatch.**
+
+1. **Graph spec is the generic core.** The externalized config gains a
+   recursive graph section: `nodes` (kinds: `llm`, `function`, `graph`
+   sub-workflow, `join`) each carrying an optional role
+   (instruction/model/tools) and per-node `retry`/`timeout`/
+   `input_schema`/`output_schema`/`state_schema`; `edges` with optional
+   `route` values and fan-out lists. Field names stay aligned with the
+   Workflow/BaseNode pydantic models so the compile step is thin. The
+   externalization contract is unchanged from ADR-002 §6: YAML base,
+   documented env overrides, `${VAR:default}` substitution, fail-fast
+   validation naming valid keys, one provenance log line.
+
+2. **Sugar forms keep simple configs simple.** `sequence:`, `parallel:`
+   (with implicit join), and `loop:` (bounded via routing) are shorthand that
+   expands to the graph spec *before* compilation, testable in isolation.
+   Simple deployments never write edges by hand.
+
+3. **One compiler owns ADK composition.** A workflow-backend compiler builds
+   the full spec; it is the single place in the codebase that touches ADK
+   composition classes. The ten strategy classes and the strategy registry
+   are retired. During migration only, a legacy compiler covers the sugar
+   subset (which is sufficient for all eight presets) as a rollback target —
+   **no new capability is built on the deprecated classes** (workflow-first;
+   legacy is rollback-only, removed after one release).
+
+4. **Policies are declarative and topology-independent.**
+   `policies.approval` (engine interrupts / `request_input` on the workflow
+   backend; the extracted tool-veto + `request_confirmation` flow on legacy)
+   and `policies.synthesis` (join/synthesizer node) apply to any preset or
+   raw graph. Retries, timeouts, schemas, output keys, and code execution
+   (ADR-004, audited compatible) each get exactly one documented home in the
+   node/graph config.
+
+5. **The eight public keys become presets — data, not classes.** A preset is
+   a named partial config: graph-spec template + default roles + default
+   policies, carrying the ADR-002 catalog metadata (key, title, when_to_use,
+   aliases, interfaces). Registry behavior, alias resolution,
+   `list_use_cases()`, and `AGENT_USE_CASE_MODULE` custom loading keep their
+   public contracts; custom modules can also contribute presets as data.
+   Re-classification: `assistant` → single llm node; `pipeline` → sequence
+   sugar; `multi_perspective` → parallel + synthesis policy;
+   `refine_until_good` → loop sugar with critic role; `plan_and_execute` →
+   dynamic-planning preset (planner node spawning executors via
+   `ctx.run_node()`), with a two-role sequence fallback on legacy;
+   `expert_dispatch` → routing-node graph (route emission + `RoutingMap`);
+   `approval_gate` → propose/complete sequence + approval policy;
+   `team_coordinator` → delegation escape hatch.
+
+6. **Delegation escape hatch.** LLM-driven open-ended delegation
+   (`LlmAgent` + `sub_agents`, and/or ADK task delegation via
+   `_TaskAgentTool`) remains a supported non-graph shape until #5581 /
+   Node-as-Tool settles upstream. Re-evaluated on every ADK upgrade via the
+   existing upgrade checklist.
+
+7. **Hooks get a graph-native attachment point.** Per-`LlmAgent` tool
+   callbacks survive inside wrapped nodes; root-level before/after-run and
+   tree-wide policy wiring move to boundary `FunctionNode`s or an ADK
+   plugin — Phase B3 prototypes both and this ADR records the choice at
+   acceptance.
+
+## Open questions (resolved by the Phase B spike before acceptance)
+
+- **B1**: Workflow root served through our api_server/live interfaces —
+  event stream, session, and auth contracts intact?
+- **B2**: resume/replay + HITL interrupts vs our session-event, state-key,
+  and approval semantics (the contracts pinned by
+  `tests/test_workflow_invocations.py` and
+  `tests/test_authenticated_interfaces.py`)?
+- **B3**: hook/policy attachment (boundary nodes vs plugin), including the
+  task-mode wrapper's `finish_task` tool interaction with tool callbacks and
+  the approval veto.
+- Should `expert_dispatch` move to routing-node form immediately (structured
+  route emission — more testable) or stay on delegation until
+  `team_coordinator` moves too? Working default: move it.
+
+## Consequences
+
+- The public surface (eight keys, catalog, YAML/env contract) is preserved;
+  every class behind it is replaced. Breaking-change surface is limited to
+  users who imported strategy/use-case classes directly (undocumented).
+- Nesting, conditional routing, per-step retries/timeouts, and true dynamic
+  planning become YAML-expressible — none were possible before.
+- Two compile targets exist during migration only; the deprecation
+  `filterwarnings` in `pyproject.toml` (per ADR-003) are removed with the
+  legacy path.
+- The ADK contract-guard script and upgrade checklist must extend to the
+  workflow package's surface (`Workflow`, `Edge`, `JoinNode`, `NodeRunner`,
+  task-mode wrapper), which is younger and likelier to shift than the legacy
+  classes — the price of building on the current engine.
+
+## Verification
+
+Tracked as the phased "Workflow re-architecture program" in TODO.md:
+Phase B (gate spike) gates acceptance of this ADR; Phase C golden parity
+tests (preset-expanded specs structurally equal to current strategy trees)
+gate any legacy deletion; the preset matrix plus interface/auth suites gate
+Phase E–F cleanup.

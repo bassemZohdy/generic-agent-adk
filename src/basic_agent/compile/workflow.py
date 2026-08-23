@@ -120,9 +120,7 @@ def _make_loop_counter(counter_name: str, max_iterations: int) -> Callable[..., 
     return loop_counter
 
 
-def _make_plan_execute(
-    executor_node: BaseNode, steps: list[str]
-) -> Callable[..., Any]:
+def _make_plan_execute(executor_node: BaseNode, steps: list[str]) -> Callable[..., Any]:
     """Build the dynamic plan-and-execute function (E2a).
 
     Spawns the executor node once per plan step via ``ctx.run_node`` (the
@@ -173,7 +171,11 @@ def _resolve_function(
         # plan steps (the executor is edge-disconnected and spawned via
         # ctx.run_node at runtime).
         executor_name = options.get("executor")
-        if not isinstance(executor_name, str) or not compiled or executor_name not in compiled:
+        if (
+            not isinstance(executor_name, str)
+            or not compiled
+            or executor_name not in compiled
+        ):
             raise ValueError(
                 f"plan_execute node {node.name!r} requires options.executor "
                 "naming a compiled node in the same graph"
@@ -234,7 +236,9 @@ def compile_graph(
     functions = {**DEFAULT_FUNCTION_REGISTRY, **(function_registry or {})}
     schemas = schema_registry or {}
 
-    def compile_node(node_spec: GraphNodeSpec, compiled: dict[str, BaseNode]) -> BaseNode:
+    def compile_node(
+        node_spec: GraphNodeSpec, compiled: dict[str, BaseNode]
+    ) -> BaseNode:
         retry = _retry_config(node_spec.retry)
         timeout = node_spec.timeout
         if node_spec.kind == "llm":

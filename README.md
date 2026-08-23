@@ -264,6 +264,9 @@ agent:
 model:
   name: "openai/gpt-5.6"
 
+execution:
+  specialists: [billing, technical]   # the routing roster; defaults to research/solution/risk
+
 roles:
   billing:
     instruction: "You handle billing and payment questions."
@@ -281,6 +284,18 @@ docker run \
   -e AUTH_DISABLED=true \
   ghcr.io/bassemzohdy/generic-agent-adk:latest
 ```
+
+### Beyond the eight presets: raw graph config
+
+Need a shape none of the eight presets covers — extra branches, per-step
+retries/timeouts, nesting a parallel stage inside a pipeline? Replace
+`agent.use_case` with a `graph:` block: an explicit `nodes`/`edges` spec (or
+the same `sequence:`/`parallel:`/`loop:` shorthand the presets expand to
+internally), compiled by the same engine. When `graph:` is present it **is**
+the served root — `agent.use_case` is ignored. See
+[docs/CONFIGURATION.md § Graph configuration](./docs/CONFIGURATION.md#graph-configuration-graph-first-adr-005)
+and [`examples/graph-nested.yaml`](./examples/graph-nested.yaml) /
+[`examples/graph-routed.yaml`](./examples/graph-routed.yaml).
 
 ## Authentication
 

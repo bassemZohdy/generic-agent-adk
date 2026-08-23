@@ -1,65 +1,76 @@
 # TODO — Current backlog
 
-Last audited: **2026-08-21**; workflow re-architecture program and code-review
-findings added **2026-08-23**; task descriptions expanded for hand-off
-**2026-08-23**; code-review findings R01–R05 closed **2026-08-23**; R06
-closed **2026-08-23**; R07/R10–R12/R14/R15 closed **2026-08-23**;
-R08/R09/R13 closed **2026-08-23** — all ten review findings closed; stale
-post-F2 CI image-smoke assertions fixed **2026-08-23** (C01) and the main
-pipeline is green again. This file contains unfinished work only; completed
-audit work is recorded in [CHANGELOG.md](CHANGELOG.md) and git history.
+This file contains **unfinished work only**. Completed work is recorded in
+[CHANGELOG.md](CHANGELOG.md) and git history; the sections below carry the
+standing context a future contributor (human or agent) needs before taking
+any task.
+
+Last audited: **2026-08-23** — 2 open items below (G01, G02), found during a
+documentation/architecture-accuracy audit the same date. All prior work
+streams are closed as of that date: the workflow re-architecture program
+(Phases A–F, ADR-005 Implemented), the deep code review (R01–R15), and the
+CI smoke-assertion fix (C01).
 
 ## Verification baseline
 
-- Local suite: **459 passed** (2026-08-23 post-R08/R09/R13 run — all ten
-  review findings closed), **94.14% coverage** with a 90% minimum.
+- Local suite: **459 passed**, **94.14% coverage** (90% minimum) —
+  2026-08-23 close-of-work run.
 - Local checks passed: locked dependency validation, Ruff (check + format),
   targeted Pyright (config + agent.py), ADK contract guards, SHA-pinned
   workflow validation, package build, YAML and JSON parsing, Markdown
   relative links, Python compilation, Compose profiles, and the pinned
   sandbox Trivy/Syft check.
-- The latest published main pipeline passed all jobs — restored
-  **2026-08-23** after C01 (run
-  [32637911226](https://github.com/bassemZohdy/generic-agent-adk/actions/runs/32637911226):
-  full pipeline green including image verification, sandbox-runtime
-  hardening, and image promotion/signing). Before C01 every main push since
-  F1 failed the stale "Test image startup" smoke step; see the
+- The published main pipeline is green end-to-end (restored 2026-08-23 by
+  the C01 smoke-assertion fix; confirmed on two consecutive runs —
+  [32637911226](https://github.com/bassemZohdy/generic-agent-adk/actions/runs/32637911226),
+  [32638230997](https://github.com/bassemZohdy/generic-agent-adk/actions/runs/32638230997)),
+  including image verification, sandbox-runtime hardening, and image
+  promotion/signing. See the
   [CI/CD workflow history](https://github.com/bassemZohdy/generic-agent-adk/actions/workflows/ci.yml).
-- Workflow migration is proven locally through Phase B: graph roots (chain,
-  fan-out+join, routed loop), `RequestInput` interrupts/resume, and the
-  hook/policy attachment (boundary nodes + plugin, `finish_task` passthrough
-  rule) are pinned by `tests/test_workflow_gates.py` (2026-08-23). Workflow
-  as an `LlmAgent` sub-agent remains unsupported upstream
+- Workflow migration is proven locally: graph roots (chain, fan-out+join,
+  routed loop), `RequestInput` interrupts/resume, and hook/policy
+  attachment are pinned by `tests/test_workflow_gates.py`. Workflow as an
+  `LlmAgent` sub-agent remains unsupported upstream
   ([discussion #5581](https://github.com/google/adk-python/discussions/5581)),
   which affects delegation embedding only (ADRs 003/005).
-- Not proven locally: cloud execution, Cloud Run, and external OIDC were
-  verified by mocked tests + documentation only — no real cloud backend,
-  Cloud Run, or IdP deployment has been executed (see R04).
+- **Not proven locally** (standing caveat, not backlog): cloud execution,
+  Cloud Run, and external OIDC were verified by mocked tests +
+  documentation only — no real cloud backend, Cloud Run, or IdP deployment
+  has been executed.
 
 ## Status summary
 
-**Program closed 2026-08-23 — 25 complete · 1 architecture program complete
-(Phases A–F, ADR-005 Implemented, workflow backend only after F2).
-Unchecked tasks: none — all ten deep-review findings (R06–R15) closed
-2026-08-23, and the stale post-F2 CI smoke assertions fixed (C01) with the
-main pipeline green again.** R06: `agent._build_root_agent` is graph-first
-and applies
-`config.policies` (proven via `tests/test_served_graph_config.py` through
-the served entrypoint). R07/R10–R12/R14/R15 (wave 1): request-dependent
-expert routing with route normalization, visible aggregation failure +
-state marker, `(none)` error-message fixes, fail-fast empty specialist
-roster, concurrent plan steps, sugar-item mutual exclusivity. R08/R09/R13
-(wave 2): fail-closed `_TaskAgentTool` detection (warning + upgrade-
-checklist bullet), `require_approval` drives a real gate-all approval
-policy (additive `policies.approval.gate_all` key; `Preset.build` wires it
-when the flag resolves true), and the catalog's duplicated tree-walk/chain
-helpers are imported from `policies/approval`. Suite 459 passed, 94.14%
-coverage at close.
+**2 open items (2026-08-23 doc/architecture audit): G01, G02 — see
+"Remaining work" below.** Everything from prior waves is closed:
 
-**Review log**: streak=3 (final), last_reviewed=2026-08-23, status=stopped —
-three consecutive clean passes, recurring audit self-terminated (no new
-commits since V01's fix at `8e0ef4f`; suite 425 passed/1 skipped, ruff
-check + format check clean, ADK contract guard clean, no encoding issues)
+- **Workflow re-architecture program** — Phases A–F complete; ADR-005
+  **Implemented**; the workflow compiler is the only backend (legacy
+  retired with F2). The declarative `graph:`/`policies:` config surface is
+  load-bearing through the served entrypoint (R06).
+- **Deep code review findings R01–R15** — all closed, in three waves:
+  R01–R05 (auth/docs/test-hygiene), R06 + R07/R10–R12/R14/R15 (served-root
+  wiring, request-dependent expert routing, fail-fast config, error
+  surfaces, concurrent plan steps), and R08/R09/R13 (fail-closed
+  `_TaskAgentTool` detection, `require_approval` driving a real gate-all
+  approval policy, tree-helper dedupe).
+- **C01** — the post-F2 CI image-smoke assertions fixed; the main pipeline
+  is green again (it had been red on every push between F1 and C01 while
+  the unit-test/lint/build jobs stayed green).
+
+Per-wave evidence lives in [CHANGELOG.md](CHANGELOG.md); per-task evidence
+lives in git history (each closure was committed with its findings text).
+
+**Standing watch items** (revisit on trigger, not scheduled work):
+
+1. Upstream [adk-python #5581](https://github.com/google/adk-python/discussions/5581)
+   (Workflow-as-sub-agent / Node-as-Tool) — the `team_coordinator`
+   delegation escape hatch retires when it resolves.
+2. Every ADK upgrade: re-run `scripts/check-adk-assumptions.py` and the
+   manual steps in `docs/ADK-UPGRADE-CHECKLIST.md` (includes the
+   `_TaskAgentTool` fail-closed detection check added with R08).
+3. Cloud execution / Cloud Run / external OIDC remain mock-verified only
+   (see the baseline caveat above); a real deployment would upgrade that
+   evidence.
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -80,11 +91,12 @@ check + format check clean, ADK contract guard clean, no encoding issues)
    sugar forms), `config/loader.py` (YAML → `AgentConfig`),
    `policies/approval.py` + `policies/synthesis.py` (cross-cutting
    policies), `runtime.py` (`RuntimeContext`/`RoleConfig`), `agent.py`
-   (runtime assembly), `interfaces/` (rest/live/mcp/service). Installed ADK
-   (read-only reference): `.venv/Lib/site-packages/google/adk/workflow/`
-   (engine), `.venv/Lib/site-packages/google/adk/runners.py` (BaseNode root),
-   `.venv/Lib/site-packages/google/adk/agents/` (LlmAgent plus the retired
-   Sequential/Parallel/Loop classes — nothing in `src/` imports them).
+   (runtime assembly; graph-first `_build_root_agent`), `interfaces/`
+   (rest/live/mcp/service). Installed ADK (read-only reference):
+   `.venv/lib/python3.13/site-packages/google/adk/workflow/` (engine),
+   `.../google/adk/runners.py` (BaseNode root), `.../google/adk/agents/`
+   (LlmAgent plus the retired Sequential/Parallel/Loop classes — nothing in
+   `src/` imports them).
 3. **Verification per task**: `uv run pytest tests/ -q` (must stay green,
    coverage ≥ 90%), `uvx --from ruff ruff check .`,
    `uvx --from ruff ruff format --check .` (ruff is not a declared project
@@ -101,975 +113,86 @@ check + format check clean, ADK contract guard clean, no encoding issues)
    round-trips (encoding corruption — use proper editor tooling); public
    surface (the eight use-case keys, YAML/env contract, catalog metadata)
    must not break.
-5. Phases are historical (the program is closed); new tasks are
-   self-contained with their own dependencies stated. R-tasks from the code
-   review are independent and can be done anytime. Do not start a task
-   whose "Depends on" is not complete.
-6. When a spike or decision task changes scope, update ADR-005 **and** this
-   file in the same commit.
+5. New tasks are self-contained with their own dependencies stated. Do not
+   start a task whose "Depends on" is not complete. When a spike or
+   decision task changes scope, update the relevant ADR **and** this file
+   in the same commit.
+6. **Branching**: work happens on `main` in the upstream repo; use
+   worktrees (or short-lived branches) for isolated/parallel tasks and
+   merge back to `main` before pushing to GitHub.
 
 ## Remaining work
 
-### CI fix — 2026-08-23
+Found 2026-08-23 during a documentation/architecture-accuracy audit
+prompted by a recurring critique: that the use-case/strategy classification
+was wrong and configuration needed to be more generic. That critique was
+already addressed in code by ADR-005 (presets are data, not classes; the
+`graph:` config is genuinely topology-generic) — the two gaps below are
+what's left, ranked most severe first.
 
-- [x] **C01 — Update the image smoke assertions to the post-F2 Workflow
-  roots.** *Problem*: `.github/workflows/ci.yml`'s "Test image startup"
-  step (both the PR-path build job and the push-path `verify-image` job)
-  still asserted the retired pre-F2 shapes — `root_agent.name ==
-  'direct_agent'` (post-E3/F2 the root is a `Workflow` named after the
-  preset key, so `'assistant'`) and `type(root_agent).__name__ ==
-  'SequentialAgent'` for approval_gate (`SequentialAgent` was retired with
-  F2; every preset compiles to a Workflow graph). Every main push since F1
-  failed CI at this step (12+ consecutive red runs), masking the green
-  test/lint/build jobs and skipping "Verify sandbox runtime hardening" and
-  image promotion.
-  *Fix*: assertions now check the real contract — the root is a
-  `google.adk.workflow.Workflow` and the expected LlmAgent nodes exist in
-  `graph.nodes` (`direct_agent` for the `AGENT_USE_CASE=assistant` env
-  path; `human_in_loop_proposer` for approval_gate through the mounted
-  `examples/approval-gate.yaml` config path). Both one-liners verified
-  locally against the same two entrypoints before commit.
-  *Done when*: the main pipeline is green end-to-end.
-  **Done (2026-08-23).** Commit `f460e88` (merge `6196f36`); run
-  [32637911226](https://github.com/bassemZohdy/generic-agent-adk/actions/runs/32637911226)
-  passed all jobs (5m12s) — including "Verify Staged Image" (first pass
-  since F1), the previously-skipped sandbox-runtime hardening step, and
-  image promotion/signing. Workflow pins and YAML parsing re-validated.
+### G01 — `graph:` function nodes have no config-level extension point
 
-### Open findings — 2026-08-23 code review of `0ed8aac`/`61eee08`
+**Problem**: `compile_graph()` (`compile/workflow.py`) accepts a
+`function_registry` parameter merged over `DEFAULT_FUNCTION_REGISTRY`, but
+neither call site (`agent.py` `_build_graph_root`, `presets/catalog.py`
+`Preset.build`) ever passes one. A `graph:` node with `kind: function` can
+therefore only ever resolve to the fixed built-in set (`route_dispatch`,
+the loop counter, `aggregate_perspectives`, …). Unlike presets — pluggable
+via `AGENT_USE_CASE_MODULE` — there is no equivalent mechanism to register a
+custom function-node callable from YAML/env. This is the one concrete place
+where "generic, flexible configuration" (ADR-005's stated goal) stops short:
+graph *topology* is fully generic, but custom step *logic* beyond LLM nodes
+is not configurable, only forkable.
 
-- [x] **R01 — Fix WebSocket `bearer, <token>` subprotocol negotiation.**
-  *Problem*: `_websocket_auth_subprotocol` in `src/basic_agent/auth/core.py`
-  (~line 169) returns the synthetic string `bearer,<token>` when a client
-  offers subprotocols `["bearer", "<token>"]`; `src/basic_agent/interfaces/live.py`
-  (~line 211) passes that value to `websocket.accept(subprotocol=...)`.
-  Real browsers must fail the handshake per RFC 6455 §4.1 (server selected a
-  value the client never offered), and the raw credential is reflected in the
-  `Sec-WebSocket-Protocol` response header.
-  *Fix*: return the token and the protocol name separately (e.g. change the
-  helper's return type to `(token, subprotocol_to_echo)`), and have live.py
-  accept with `subprotocol="bearer"` only. Never place the token in the
-  response.
-  *Done when*: a test in `tests/test_authenticated_interfaces.py` asserts the
-  accepted subprotocol is exactly `"bearer"` and that the token never appears
-  in any response header; existing auth tests stay green. Note: Starlette's
-  TestClient does not validate negotiation, so assert on the accept call's
-  argument/headers explicitly.
-  **Done (2026-08-23).** `_websocket_auth_subprotocol` now returns
-  `(token, "bearer")` (the echo name is the constant `"bearer"` — never the
-  token); `_websocket_header_token` uses the extracted token; live.py accepts
-  with `subprotocol="bearer"`. Regression test
-  `test_websocket_handshake_echo_is_bearer_and_never_leaks_token` in
-  `tests/test_authenticated_interfaces.py` spies on `WebSocket.accept` and
-  asserts the argument is exactly `"bearer"`; the hardening tests cover all
-  three forms (`bearer.<token>`, `authorization.bearer.<token>`,
-  `bearer, <token>`).
-- [x] **R02 — Stop `settings_patch` importing `interfaces.rest`/`live`
-  eagerly** (`tests/conftest.py` ~line 56). Importing `rest` executes
-  module-level `create_app()` (creates `.adk/` dirs; raises in production
-  env), so every settings-patching unit test pays those side effects.
-  *Fix*: compare `module.__name__` against the two known names without
-  importing, and import rest/live lazily only when the passed module IS one
-  of them and needs the settings sync.
-  *Done when*: `uv run pytest tests/test_security_hardening.py -q` passes
-  with `DEPLOYMENT_ENV=production` set in the shell, and no `.adk/` directory
-  is created by unit tests that don't build the app.
-  **Done (2026-08-23).** `settings_patch` matches
-  `basic_agent.interfaces.{rest,live}` by module `__name__` (no import) and
-  syncs `auth.core` lazily; `tests/test_security_hardening.py` passes with
-  `DEPLOYMENT_ENV=production KEYCLOAK_ISSUER=... ADK_SESSION_SERVICE_URI=...`
-  (41 passed) and the non-app unit tests create no `.adk/` directory.
-- [x] **R03 — Correct docs/PERSISTENCE.md**: (a) line ~16 lists S3
-  (`s3://`) as a supported artifact backend, but the pinned google-adk
-  service registry has no s3 scheme and an unknown URI silently falls back to
-  in-memory storage — remove S3 or mark it unsupported with the fallback
-  warning; (b) line ~42 calls the `adk_anonymous_id` cookie "encrypted", but
-  `rest.py` issues a plain `secrets.token_urlsafe(24)` — say "random,
-  unauthenticated identifier" and note any client can mint one.
-  *Done when*: both statements match the code; markdown link check passes.
-  **Done (2026-08-23).** PERSISTENCE.md now marks S3 unsupported (unknown
-  URI falls back to in-memory, not fail-closed) and describes the cookie as a
-  random, unauthenticated, mintable-by-anyone namespacing value; `scripts/check-doc-links.py` passes.
-- [x] **R04 — Re-qualify T11/T16 closure evidence** (this file, "Closed in
-  the 2026-08-21 audit"). The closures cite MagicMock-based tests
-  (`tests/test_cloud_execution_deployment.py` monkeypatches all three cloud
-  executors) and a runbook doc — not a real deployment. Either run the real
-  Cloud Run/IdP smoke deployment, or reword the T11/T16 closure lines and the
-  "Not proven locally" baseline bullet to state that cloud execution, Cloud
-  Run, and external OIDC were verified by mocked tests + documentation only.
-  *Done when*: the file no longer overstates the evidence.
-  **Done (2026-08-23).** T11/T16 closure lines reworded to state mocked
-  tests + documentation only (no real cloud/Cloud Run/IdP deployment), and a
-  "Not proven locally" baseline bullet added.
-- [x] **R05 — Clean up tests/conftest.py fixtures**: (a) delete the unused
-  `tmpdir` override (returns `pathlib.Path`, breaking the `py.path.local`
-  contract; zero current users); (b) reconsider the `tmp_path` override —
-  `shutil.rmtree(ignore_errors=True)` leaks `t-<uuid>` dirs on Windows when
-  SQLite handles are open; prefer pytest's own basetemp (`--basetemp`)
-  retention; (c) set `os.environ["TMPDIR"]` alongside `TMP`/`TEMP` so POSIX
-  subprocesses are also contained; (d) simplify the redundant
-  `module.__name__` membership check (dead second condition alongside
-  `module in (rest, live)`); (e) drop the duplicate
-  `settings_patch(auth.core, …)` call in
-  `tests/test_authenticated_interfaces.py` ~line 233 (conftest already syncs
-  auth.core when patching live). Coordinate (d) with R02 — same code region.
-  *Done when*: full suite green on Windows and Linux CI; no `t-<uuid>`
-  accumulation across two consecutive local runs.
-  **Done (2026-08-23).** (a) `tmpdir` override deleted (zero users); (b)
-  `tmp_path` override removed — pytest's own basetemp retention under
-  `.pytest_working_dir` (gitignored) replaces per-test `rmtree`; (c)
-  `TMPDIR` set alongside `TMP`/`TEMP`; (d)+(e) done with R02 — the
-  module-name check is the only discriminator and the duplicate
-  `settings_patch(auth.core, …)` in `live_client` is gone.
+**Fix**: either (a) design and implement a documented, allowlisted
+extension point (e.g. `AGENT_FUNCTION_MODULE`, mirroring
+`AGENT_USE_CASE_MODULE`'s allowlist pattern) so an operator can register
+`options.function` implementations without editing `compile/workflow.py`;
+or (b) if the team deliberately wants this closed (arbitrary callables from
+config is a real execution-safety boundary, not an oversight), record that
+decision in ADR-005 or a short new ADR, and delete the now-explicitly-dead
+`function_registry` parameter from the two call sites so the code doesn't
+imply an extension point that isn't reachable.
 
-### Workflow re-architecture program (2026-08-23)
+**Done when**: either custom function nodes are reachable from a documented
+config surface with a passing test exercising a non-built-in function name,
+or the closed-by-design decision is recorded in an ADR and the dead
+parameter is removed.
 
-> Supersedes **T25** (workflow-node migration) and **T27** (taxonomy
-> re-evaluation): both are absorbed into the phases below. Direction:
-> external configuration compiles to an ADK Workflow **graph** (nodes +
-> edges + routes), with intent-named **presets** above it, cross-cutting
-> **policies** beside it, and one **delegation escape hatch**
-> (`LlmAgent` + `sub_agents`) until upstream #5581/Node-as-Tool settles.
-> Legacy `SequentialAgent`/`ParallelAgent`/`LoopAgent` shapes are
-> rollback-only. Decision record:
-> [ADR-005](docs/ADR-005-graph-first-taxonomy-and-configuration.md).
+### G02 — extend `tests/test_documentation_consistency.py` for architecture-doc/module-map drift
 
-#### Phase A — ADR refresh: make the decision records match reality
+**Problem**: `docs/ARCHITECTURE.md`'s "one-minute version" diagram and
+module-map table described the deleted `strategies/`/per-use-case-class
+layer as current, well after E3/F2/F3 deleted that code (fixed in this
+audit — see the current diff/commit). `test_documentation_consistency.py`
+already guards README/CONFIGURATION.md against several classes of drift
+(use-case keys, ports, model examples, sandbox terms) but has no check
+tying `ARCHITECTURE.md`'s module map to the actual `src/basic_agent/`
+package list, so this class of staleness has no regression guard and can
+silently recur.
 
-> **Completed 2026-08-23.** ADR-001 rewritten as a historical record; ADR-002
-> re-statused with a corrections addendum; ADR-003 re-evaluated against the
-> shipped 2.6.3 workflow package; ADR-004 audited compatible (addendum);
-> ADR-005 written (Proposed — acceptance gated on Phase B). The refresh
-> surfaced three plan adjustments, folded into B0, B3, C1, and E2 below:
-> upstream `AgentConfig`/`from_config` is deprecated (no upstream YAML format
-> to adopt); the task-mode `LlmAgent` wrapper injects a synthetic
-> `finish_task` tool that hooks/approval must account for; the ADK contract
-> guard must extend to the workflow package surface (now task B0).
+**Fix**: add a test that reads the top-level package/module names under
+`src/basic_agent/` (e.g. via `git ls-files` or `pathlib`) and asserts each
+has a corresponding row in `ARCHITECTURE.md`'s module-map table (or an
+explicit skip-list for intentionally-undocumented internals), and that no
+documented row names a module that no longer exists on disk.
 
-- [x] **A1 — Rewrite ADR-001 as a closed historical record.** Done.
-- [x] **A2 — Correct ADR-002** (status re-scope + corrections addendum). Done.
-- [x] **A3 — Update ADR-003 against the shipped 2.6.3 workflow package.** Done.
-- [x] **A4 — Audit ADR-004 for workflow-backend compatibility** (addendum). Done.
-- [x] **A5 — Write ADR-005** (`docs/ADR-005-graph-first-taxonomy-and-configuration.md`,
-  Proposed). Done.
+**Done when**: the new test fails against the pre-audit version of
+`ARCHITECTURE.md` (i.e., it would actually have caught this) and passes on
+the current tree; added to the existing `test_documentation_consistency.py`
+file, no new script needed.
 
-#### Phase B — Gate-verification spike (evidence before code)
+## History
 
-Goal: prove or refute, on the pinned google-adk 2.6.3 and **our** serving
-stack, the three gates ADR-003 restated. Write spike code as **permanent
-pytest tests** in a new `tests/test_workflow_gates.py` (they become the
-contract tests C5-style guards reference later) — not throwaway scripts.
-Reuse the fake-model/Runner harness patterns from
-`tests/test_workflow_invocations.py`; do not call real LLMs.
-
-- [x] **B0 — Extend the ADK contract guard to the workflow surface.**
-  *Depends on*: nothing (do first — everything in Phase B leans on these
-  APIs). *Files*: `scripts/check-adk-assumptions.py`,
-  `docs/ADK-UPGRADE-CHECKLIST.md`.
-  *Steps*: add existence/signature assertions for the public workflow
-  surface the program uses: `google.adk.workflow` exports (`Workflow`,
-  `Edge`, `JoinNode`, `FunctionNode`, `Node`, `node`, `RetryConfig`,
-  `START`, `DEFAULT_ROUTE`), `BaseNode` fields (`retry_config`, `timeout`,
-  `input_schema`, `output_schema`, `state_schema`, `rerun_on_resume`),
-  `Runner` accepting a `BaseNode` root (`runners.py` annotation), and the
-  task-mode wrapper module path
-  (`google.adk.workflow._llm_agent_wrapper`) + `FINISH_TASK_TOOL_NAME`
-  (`google.adk.agents.llm.task._finish_task_tool`). Note in the checklist
-  that these surfaces are younger than the legacy classes and must be
-  re-verified on every ADK upgrade.
-  *Done when*: guard passes on 2.6.3 and would fail loudly if any listed
-  symbol vanishes.
-  **Done (2026-08-23).** Guard now asserts all listed exports, the `node`
-  parameter on `Runner.__init__`, the six `BaseNode` fields (via
-  `model_fields`), the wrapper module import, and a non-empty
-  `FINISH_TASK_TOOL_NAME`; passes on 2.6.3. Checklist gained a workflow
-  surface re-verification bullet.
-- [x] **B1 — Run a real Workflow as the served root on pinned 2.6.3.**
-  *Depends on*: B0. *Files*: new `tests/test_workflow_gates.py`; read
-  `src/basic_agent/interfaces/rest.py` + `interfaces/service.py` to reuse
-  the exact app/Runner construction production uses.
-  *Steps*: build three graphs from public exports only: (1) chain of two
-  `LlmAgent`s; (2) fan-out to two `LlmAgent`s + `JoinNode`; (3) routed
-  bounded loop (a node emitting a route value that loops back, terminating
-  within N iterations). Serve each through the same api_server/Runner path
-  `rest.py` uses (not a bare Runner if the interfaces add wrapping), with
-  fake models. Assert: run completes, session events are recorded, output
-  keys land in state, event `author`/ordering is sane.
-  *Watch out*: `LlmAgent` nodes complete via the synthetic `finish_task`
-  tool — expect it in the event stream; node names must be valid Python
-  identifiers (`BaseNode` validates); do not assert absence of deprecation
-  warnings (`pyproject.toml` filters still active).
-  *Done when*: all three graph tests pass locally and in CI; findings (incl.
-  anything that does NOT work) appended to ADR-003's re-evaluation section.
-  **Done (2026-08-23).** All three graph shapes pass (fake models, no LLMs);
-  `cli/api_server.py` confirmed to accept non-agent `BaseNode` roots.
-  Findings in ADR-003 §Phase B: single_turn LlmAgent outputs land in
-  `state_delta` via `output_key` (event carries the delegated output marker);
-  `BaseNode` names must be valid identifiers.
-- [x] **B2 — Verify resume/replay and HITL interrupt contracts.**
-  *Depends on*: B1. *Files*: `tests/test_workflow_gates.py`; reference
-  scenarios in `tests/test_workflow_invocations.py` (Runner confirmation)
-  and `tests/test_authenticated_interfaces.py` (transport suspend/resume).
-  *Steps*: on a workflow root, trigger an interrupt (request-input/approval
-  path), capture the emitted event (interrupt id, `long_running_tool_ids`),
-  resume with a response, and assert the run completes; verify session
-  event ordering and state keys after resume match the contracts the two
-  existing test files pin for the legacy path. Exercise
-  `rerun_on_resume=True/False` on at least one node.
-  *Done when*: an interrupt→resume test passes end-to-end through our
-  transport layer; any contract difference vs legacy is written into
-  ADR-003 (even if unfavorable — that's the point of the spike).
-  **Done (2026-08-23).** `RequestInput` interrupt/`adk_request_input`
-  event/`long_running_tool_ids`/same-`invocation_id` resume covered for
-  `rerun_on_resume` true and false; contracts match the legacy Runner pins.
-  Transport layering note recorded in ADR-003: middleware only wraps the
-  Runner — wiring the compiled root into the transports is Phase C3/E2.
-- [x] **B3 — Design the hook/policy attachment point for graphs.**
-  *Depends on*: B1. *Files*: `tests/test_workflow_gates.py` prototypes;
-  read `src/basic_agent/use_cases/base.py` (`build()` hook wiring —
-  the behavior to reproduce) and `.venv/.../google/adk/plugins/`.
-  *Steps*: prototype BOTH options for root-level before/after-run and
-  tree-wide policy wiring: (a) boundary `FunctionNode`s at graph start/end;
-  (b) an ADK plugin. Then verify tool-callback survival inside wrapped
-  `LlmAgent` nodes: attach a `before_tool_callback` veto and confirm it
-  fires for normal tools but NEVER intercepts `finish_task` (vetoing or
-  transforming `finish_task` deadlocks node completion — assert this
-  explicitly) nor `_TaskAgentTool` delegations.
-  *Done when*: one mechanism is chosen with a written pros/cons comparison
-  recorded in ADR-005 (decision §7), and a test proves the
-  `finish_task`-passthrough rule.
-  **Done (2026-08-23).** Both options proven: boundary `FunctionNode`s
-  (state-marker pre/post) and an ADK `BasePlugin` (root run hooks + per-node
-  agent hooks fire). Chosen: boundary nodes for policies, plugins for
-  observability — pros/cons in ADR-005 §7. Rule test: vetoing a normal tool
-  is harmless; vetoing `finish_task` deadlocks (bounded by
-  `RunConfig(max_llm_calls=6)` → `LlmCallsLimitExceededError`).
-- [x] **B4 — Record spike outcomes and lock the backend decision.**
-  *Depends on*: B1–B3. *Files*: `docs/ADR-003-*.md`, `docs/ADR-005-*.md`,
-  this file.
-  *Steps*: update ADR-005 status (Proposed → Accepted if gates hold),
-  resolve its "Open questions" section with the B1–B3 evidence, and lock
-  the backend decision (default: workflow-first; legacy compile target
-  rollback-only for one release). If any gate failed, scope the legacy
-  fallback to exactly that gap and adjust Phases C–E here accordingly.
-  *Done when*: ADR-005 has no unresolved open question and this file's
-  Phase C–F tasks reflect the decision.
-  **Done (2026-08-23).** ADR-005 **Accepted**; open questions resolved
-  (`expert_dispatch` → routing-node form confirmed); backend decision
-  locked workflow-first with legacy compile target rollback-only; Phase B
-  results appended to ADR-003.
-
-#### Phase C — Externalized graph configuration (the generic core)
-
-- [x] **C1 — Define the graph-spec config model.**
-  *Depends on*: B4. *Files*: new `src/basic_agent/config/graph.py`
-  (dataclasses, no ADK imports — keep the schema framework-independent);
-  parsing branch in `src/basic_agent/config/loader.py`.
-  *Shape*: recursive spec — `nodes`: list of `{name, kind:
-  llm|function|graph|join, role: {instruction, model, tools}, retry,
-  timeout, input_schema, output_schema, state_schema, options}` where
-  `graph` nodes carry a nested spec; `edges`: list of `{from, to, route}`
-  with `to` accepting a list for fan-out. Field names must stay aligned
-  with the `Workflow`/`BaseNode` pydantic models (see
-  `.venv/.../google/adk/workflow/_graph.py` and `_base_node.py`) so the C3
-  compile step stays thin. **Do not** adopt upstream
-  `AgentConfig`/`from_config` — deprecated + experimental (verified
-  2026-08-23).
-  *Contract (unchanged from ADR-002 §6)*: YAML base at `AGENT_CONFIG_FILE`,
-  documented env overrides only, `${VAR:default}` substitution, one
-  provenance log line, fail-fast validation whose messages name the valid
-  keys/kinds.
-  *Validation rules*: node names unique + valid identifiers; every edge
-  endpoint exists; at least one START-reachable node; `join` nodes have ≥2
-  inbound edges; route values are scalars.
-  *Done when*: parse + validation unit tests pass (valid specs, and one
-  failing test per validation rule asserting the error message), pyright
-  clean, `config/graph.py` imports no `google.adk` module.
-  **Done (2026-08-23).** `config/graph.py` (pure dataclasses:
-  `GraphSpec`/`GraphNodeSpec`/`GraphEdgeSpec`/`RetrySpec`, `START` and
-  `DEFAULT_ROUTE` sentinels — AST-verified framework-free), loader branch
-  (recursive parse incl. nesting), and the exact C1 validation rules with
-  one failing test each (`tests/test_graph_config.py`, 17 tests). Node
-  shape gained `output_key` per ADR-005 decision §1 (B1 proved LlmAgent
-  outputs land in state via `output_key`).
-- [x] **C2 — Define the sugar forms.**
-  *Depends on*: C1. *Files*: `src/basic_agent/config/graph.py` (or sibling
-  `sugar.py`).
-  *Steps*: pure functions expanding `sequence: [n1, n2, …]`,
-  `parallel: [n1, n2] (+ implicit join)`, and
-  `loop: {body: n, max_iterations: N}` (bounded via routing) into the C1
-  graph spec before compilation. Expansion must be deterministic and
-  produce names compatible with C4's parity mapping (see C4 for the
-  expected node names per preset).
-  *Done when*: unit tests assert exact expanded structures for each sugar
-  form, including nesting (a `parallel` inside a `sequence`).
-  **Done (2026-08-23).** `config/sugar.py` (pure, no ADK imports):
-  deterministic naming (`<first>_join`, `<body>_loop_counter`,
-  `sub_<index>`), `AGAIN_ROUTE`/`DEFAULT_ROUTE` routing for bounded loops,
-  nested sugars become `graph`-kind subgraph nodes;
-  `tests/test_sugar_forms.py` pins exact structures incl. nesting (15
-  tests). Loader sugar branch: exactly one of `sequence`/`parallel`/`loop`
-  per graph (mutually exclusive with explicit `edges`), name references
-  resolved against declared nodes.
-- [x] **C3 — Implement the graph compilers.**
-  *Depends on*: C1, C2, B3, B4. *Files*: new
-  `src/basic_agent/compile/workflow.py` (full spec → `Workflow`) and
-  `src/basic_agent/compile/legacy.py` (sugar subset → current
-  `SequentialAgent`/`ParallelAgent`/`LoopAgent`/`LlmAgent` trees,
-  rollback-only), shared llm-node builder replicating
-  `strategies/base.py::AgentStrategy.llm()` semantics exactly: the
-  instruction-merge contract ("Role-specific instructions (follow only if
-  consistent with the runtime policy above)"), `code_executor`, tools,
-  schemas, `output_key`, callback passthrough. Backend selection flag per
-  B4 (e.g. `AGENT_COMPOSE_BACKEND=workflow|legacy`, default per B4).
-  *Rule*: after C3 these two modules are the ONLY project code importing
-  ADK composition classes — add a test that greps `src/` and fails on any
-  other importer.
-  *Done when*: both compilers build all C2 sugar shapes; workflow compiler
-  additionally builds routed/nested specs; the import-isolation test
-  passes.
-  **Done (2026-08-23).** `compile/` ships: `workflow.py` (explicit-edge
-  compile of the full spec incl. routed/fan-out/join and nested subgraphs;
-  built-in bounded-loop counter via options.kind='loop_counter'; function
-  registry for function nodes), `legacy.py` (sugar-subset only — raises on
-  explicit-edge specs; rollback-only), `llm_node.py` (exact
-  `AgentStrategy.llm()` semantics + per-node output_key/schemas/retry/
-  timeout), `compose_backend()` (`AGENT_COMPOSE_BACKEND`, default
-  `workflow`). Import-isolation test greps `src/` for composition imports
-  and fails on anything outside `compile/` and the E3-retirement modules
-  (agent.py, strategies/, use_cases/). `tests/test_compile.py` (13 tests)
-  includes end-to-end runs of compiled chains and bounded loops with fake
-  models.
-- [x] **C4 — Golden parity tests.**
-  *Depends on*: C3. *Files*: new `tests/test_compile_parity.py`.
-  *Steps*: for each of the eight built-in use cases, take today's strategy
-  output (`use_cases.registry.get(key).build(runtime)`) as the golden
-  structure, and assert the preset-expanded spec compiled via
-  `compile/legacy.py` is structurally equivalent: same agent classes, same
-  `name`s, same instructions (including per-role generated defaults like
-  "step N of count"), same `sub_agents` ordering, same `output_key`s, same
-  callback wiring effects. Use a tree-walk comparator, not string dumps.
-  *Done when*: parity holds for all eight; this test is the explicit
-  precondition named by E3 — nothing legacy is deleted before it is green.
-  **Done (2026-08-23) with one scoping note.** Tree-walk parity
-  (`tests/test_compile_parity.py`, 7 tests) holds for the six
-  legacy-expressible presets: `assistant` (single llm node → bare LlmAgent),
-  `pipeline` (sequence + generated "step N of count" defaults),
-  `multi_perspective` (nested parallel sugar named `parallel_agent` +
-  synthesizer → `SequentialAgent[ParallelAgent, LlmAgent]`),
-  `refine_until_good` (loop, max_iterations 5), `approval_gate` (sequence),
-  `plan_and_execute` (sequence). Comparator asserts class, name,
-  instruction (post-merge), sub_agents ordering, output_key, and loop
-  bounds; callback wiring is excluded deliberately (use-case hooks re-home
-  into D1/D2 policies). **`expert_dispatch`/`team_coordinator` parity is
-  tracked with E2**: they are delegation/escape-hatch shapes
-  (LlmAgent + sub_agents), not graph-expressible until the E2 preset data
-  exists — no legacy sugar mapping, so E3's "C4 green" precondition applies
-  to this matrix plus the E2 preset-matrix test. Supporting changes: legacy
-  compiler now compiles nested sugar (parallel inside a sequence) and a
-  one-node sequence as a bare LlmAgent; sugar dataclasses carry an optional
-  nested `name` (YAML `name:` supported inside nested sugar mappings);
-  `expand_sugar` scopes the outer spec to fragment-touched nodes only.
-
-#### Phase D — Cross-cutting policies
-
-- [x] **D1 — Approval as a policy, not a use case.**
-  *Depends on*: C3, B3. *Files*: new `src/basic_agent/policies/approval.py`;
-  config surface `policies.approval: {enabled, gated_tools, gated_prefixes}`
-  in `config/loader.py`; source logic extracted from
-  `src/basic_agent/use_cases/approval_gate.py::before_tool`.
-  *Behavior*: workflow backend → engine interrupts / `request_input`;
-  legacy backend → the existing tool-veto + `request_confirmation` flow.
-  Invariants: never gate `request_approval` (deadlocks the confirmation
-  flow — comment in approval_gate.py explains) and never gate `finish_task`
-  or `_TaskAgentTool` calls (B3 rule).
-  *Done when*: tests prove approval works on at least two different preset
-  topologies (e.g. assistant and pipeline) on the chosen backend, and the
-  invariant tools pass through un-gated.
-  **Done (2026-08-23).** `policies/approval.py` ships the extracted
-  veto + `request_confirmation` flow with the B3 invariants
-  (`UNCONDITIONAL_TOOLS = {request_approval, finish_task}` plus
-  `_TaskAgentTool` detection) and an `apply_approval_policy()` walker that
-  chains the callback after existing per-agent callbacks on both
-  `sub_agents` trees AND `Workflow.graph.nodes`. Config surface
-  `policies.approval` parses in the loader. `tests/test_policies.py`
-  proves: invariant passthrough (unit), gating on the compiled assistant
-  topology, and full interrupt→resume gating on the compiled pipeline
-  topology (gated tool never runs, confirmation interrupt raised, pipeline
-  completes after resume). Workflow-backend interrupt notes: the same
-  `request_confirmation` callback is the engine interrupt on LlmAgent
-  nodes; `request_input`-based (FunctionNode) policy interrupts were proven
-  in B2.
-- [x] **D2 — Synthesis/aggregation as a policy.**
-  *Depends on*: C3. *Files*: new `src/basic_agent/policies/synthesis.py`;
-  replaces `use_cases/multi_perspective.py`'s hand-rolled `compose()`
-  override and `after_run` state scraping.
-  *Behavior*: declarative config appends a synthesizer llm-node (workflow:
-  after a `JoinNode`; legacy: trailing sequential step) and aggregates
-  `perspective_*` output keys into `aggregated_perspectives` state.
-  *Done when*: `multi_perspective` behavior is reproduced via the policy
-  (same state keys, same synthesizer instruction) and the policy also works
-  applied to a raw fan-out graph.
-  **Done (2026-08-23).** `policies/synthesis.py`: `synthesizer_node()`
-  (canonical instruction/output_key — byte-equal to the use case's),
-  `with_synthesis()` (pure spec transform: appends the synthesizer after a
-  single terminal — the parallel sugar's join — or inserts a `synthesis_join`
-  for raw fan-outs), `legacy_multi_perspective_spec()` (nested parallel +
-  trailing step), `make_synthesis_after_run()` (same `perspective_*` →
-  `aggregated_perspectives` aggregation). Config surface
-  `policies.synthesis` parses. Tests: raw fan-out + join compile and run
-  with fake models (state keys match), after-run aggregation reproduces the
-  multi_perspective state contract, and the legacy spec reproduces the
-  golden parity (the C4 multi_perspective case now consumes this policy
-  helper).
-- [x] **D3 — Map remaining orthogonals onto per-node config.**
-  *Depends on*: C1. *Files*: `config/graph.py`, `compile/*`, docs.
-  *Steps*: one documented home each for retries, timeouts, schemas, output
-  keys, and code execution (per ADR-004 addendum: executor attaches in the
-  compiler's llm-node builder). Remove any strategy-specific special case.
-  *Done when*: CONFIGURATION.md (F1 may finalize wording) has a single
-  table mapping each concern → config key → backend behavior.
-  **Done (2026-08-23).** CONFIGURATION.md gained a "Graph configuration
-  (graph-first, ADR-005)" section with the graph/policies YAML shapes and
-  the concern → config key → backend behavior table (retries/timeouts/
-  schemas/output keys/code execution). Executor attachment verified: the
-  compiler's shared llm-node builder passes `RuntimeContext.code_executor`
-  to every LlmAgent (ADR-004 attachment point moved with C3 — evidenced by
-  `tests/test_compile.py` asserting the executor, retry_config, timeout,
-  schema, and output_key on compiled nodes; legacy compile applies
-  schemas/output keys/executor and documents retry/timeout as
-  workflow-backend-only). Strategy special cases: the multi_perspective
-  `output_key` override and approval `before_tool` were the per-concern
-  special cases and are re-homed by D2/D1; nothing remains in the
-  strategies that D3 must remove (strategies themselves retire in E3).
-  No example config changed — F1 finalizes docs wording.
-
-#### Phase E — Presets: the eight keys become data
-
-- [x] **E1 — Preset = named partial config.**
-  *Depends on*: C1–C4, D1–D2. *Files*: new `src/basic_agent/presets/`
-  (one data module or YAML per preset); rework
-  `src/basic_agent/use_cases/registry.py` to serve presets.
-  *Contract to preserve (snapshot-test it BEFORE refactoring)*:
-  `list_use_cases()` output (key, title, when_to_use, aliases, interfaces)
-  byte-identical for the eight built-ins; alias resolution;
-  case-insensitive `get`; `AGENT_USE_CASE_MODULE` custom loading (existing
-  `BaseUseCaseAgent`-style modules keep working until E3 explicitly
-  migrates that surface); production allowlist behavior
-  (`AGENT_USE_CASE_MODULE_ALLOWLIST`).
-  *Done when*: snapshot tests prove the catalog surface unchanged; presets
-  expand to graph specs consumed by the C3 compilers.
-  **Done (2026-08-23).** `presets/catalog.py` ships the eight preset
-  records (metadata byte-identical to the snapshot — hardcoded
-  `CATALOG_SNAPSHOT` in `tests/test_presets.py` taken before the refactor —
-  plus `defaults` and spec builders per the ADR-005 §5 classification:
-  assistant single node, pipeline sequence with "step N of count" defaults
-  and `roles.step_{i}` overrides, multi_perspective = with_synthesis
-  (workflow) / `legacy_multi_perspective_spec` (legacy), refine loop,
-  approval_gate sequence, plan_and_execute sequence, expert_dispatch
-  routing graph (`options.function: route_dispatch` + per-specialist
-  routes), team_coordinator escape hatch (builder raises with the documented
-  reason). Registry serves presets (`get_preset`/`has_preset`/
-  `list_presets` with the same alias/case resolution; facades remain the
-  build path until E3; custom-module loading untouched). Finding recorded:
-  ADK graph validation rejects duplicate (from,to) edge pairs even with
-  different routes, so the routing preset has no DEFAULT_ROUTE fallback —
-  the router function must always emit a valid route (validated at runtime).
-  `tests/test_presets.py` (10 tests): snapshot, metadata parity, preset
-  resolution, spec expansion + compile on both backends, escape-hatch
-  behavior.
-- [x] **E2 — Re-classify the built-ins.**
-  *Depends on*: E1. Mapping (from ADR-005 §5): `assistant` → single llm
-  node; `pipeline` → `sequence` sugar (keep per-step "step N of count"
-  default instructions + `roles.step_{i}` overrides); `multi_perspective` →
-  `parallel` + synthesis policy (D2); `refine_until_good` → `loop` sugar
-  with the generate-critique-improve role, default max_iterations 5;
-  `plan_and_execute` → dynamic-planning preset on the workflow backend
-  (planner node spawning executors via `ctx.run_node()`; two-role sequence
-  fallback on legacy); `expert_dispatch` → routing-node graph (router
-  llm-node emits a route value; `RoutingMap` edges to specialists; default
-  specialists research/solution/risk with `roles.<name>` overrides);
-  `approval_gate` → propose/complete sequence preset + approval policy
-  (D1), `require_approval` default true; `team_coordinator` → delegation
-  escape hatch (evaluate `_TaskAgentTool` task delegation as the
-  sanctioned supervisor mechanism; otherwise keep `LlmAgent`+`sub_agents`
-  until #5581/Node-as-Tool resolves — revisit on every ADK upgrade).
-  *Done when*: a preset matrix test parametrized over all eight keys builds
-  and runs each preset on the default backend (plus legacy fallback where
-  defined) with fake models, green.
-  **Done (2026-08-23).** `tests/test_preset_matrix.py` (17 tests): all
-  eight keys build and RUN with fake models — workflow backend via
-  `Runner(node=...)` for every preset (team_coordinator through its
-  documented delegation escape hatch: LlmAgent + `supervisor_worker_{i}`
-  sub_agents), legacy sugar fallback for the six sugar-expressible presets
-  (expert_dispatch/team_coordinator have no legacy mapping — catalog
-  raises). Per-preset assertions: bounded loop counter == 5 for
-  refine_until_good, research specialist runs for expert_dispatch,
-  perspective_0/1 state for multi_perspective, output in state everywhere.
-  `expert_dispatch` router contract settled: a built-in
-  `default_route_dispatch` (compile-time `DEFAULT_FUNCTION_REGISTRY`,
-  overrideable) routes deterministically from `ctx.state['routed_to']`
-  (default `"research"`) — `options.function: route_dispatch` now resolves
-  without a custom registry.
-- [x] **E2a — Dynamic-planning preset for plan_and_execute.** ADR-005 §5
-  targets a planner node spawning executors via `ctx.run_node()` on the
-  workflow backend. Preset shape: planner `function` node →
-  `options.function: plan_execute` (built-in; `options.executor` names the
-  compiled executor node, `options.steps` the deterministic step list) →
-  per step, `ctx.run_node(executor, node_input=step, run_id=f"plan_step_{i}")`
-  prints outputs to `plan_outputs` state; the executor is edge-disconnected
-  (dynamic-only). Engine requirements captured: dynamically scheduled nodes
-  (and the planner FunctionNode) need `rerun_on_resume=True` — `build_llm_agent`
-  defaults it True (matching ADK's own graph-node semantics) and the
-  compiler sets it on FunctionNodes. The two-role sequence remains the
-  legacy/rollback path (`_plan_execute_legacy`).
-  *Done when*: the preset runs the dynamic shape with fake models on the
-  workflow backend and the sequence remains the legacy/rollback path.
-  **Done (2026-08-23).** The matrix test runs `plan_and_execute` dynamically
-  (executor 3×, `plan_outputs` == the three responses, executor author in
-  the stream); legacy compile still emits the frozen pre-E3 sequence tree
-  (C4 parity green); `plan-and-execute.yaml` example runs through the
-  dynamic shape.
-- [x] **E3 — Delete the per-use-case classes and nine strategies.**
-  *Depends on*: E1, E2, C4 green, full suite green. *Files*: remove
-  `src/basic_agent/strategies/*` (except what `compile/legacy.py` still
-  needs until F2) and the eight `use_cases/*.py` facade classes; keep a
-  hooks extension point equivalent to `BaseUseCaseAgent`'s
-  before/after-run/tool overrides for custom code, and keep
-  `use_cases/registry.py`'s public functions.
-  *Steps*: grep `src/` and `tests/` for imports of the deleted modules and
-  migrate them; update `AGENT_USE_CASE_MODULE` docs for the new custom
-  surface; CHANGELOG entry describing the internal breaking change
-  (public YAML/env/catalog surface unchanged).
-  *Done when*: suite green, coverage ≥ 90%, no orphan imports,
-  CHANGELOG updated.
-  **Done (2026-08-23).** Strategies (9 builders + base/registry) and the
-  eight facade classes removed; `RoleConfig`/`RuntimeContext` moved to
-  `basic_agent.runtime` (no ADK imports; consumed by compile/presets/
-  policies/agent). Registry serves presets only (get/resolve/has/
-  list_use_cases identical contracts; `AGENT_USE_CASE_MODULE` custom
-  surface migrated: modules expose `PRESETS`/`PRESET` of `Preset` —
-  legacy `BaseUseCaseAgent`-style modules are rejected with migration
-  guidance; production allowlist unchanged). `Preset` gained
-  `apply_defaults` (old resolve_runtime rules), `build()` (backend flag,
-  root naming via legacy_name), `escape_hatch_builder`
-  (team_coordinator = LlmAgent + `supervisor_worker_{i}`), and the hook
-  surface (before/after run/tool with old chaining semantics — run hooks
-  attach on legacy roots; workflow roots use boundary nodes/plugins per
-  the B3 decision: the D2 aggregation now runs natively as a graph node,
-  `aggregate_perspectives`, and multi_perspective workflow runs keep the
-  state contract without an after-run hook). Built-ins: 43 lines removed
-  from the old facade path; no orphan imports; docs (CONFIGURATION.md,
-  ARCHITECTURE.md) updated for the preset/custom surface; CHANGELOG entry
-  files the internal breaking change. C4 frozen: the legacy compiler's
-  post-E3 trees are pinned against explicit pre-E3 golden structures
-  (test_compile_parity.py). Notes: state-schema semantics for intermediate
-  keys (`options.no_state_schema` on multi_perspective workers — the
-  workflow engine validates state_delta against the schema, the legacy
-  path never did); default router binds the preset's first specialist via
-  `options.default_route` (the ADK graph rejects duplicate (from,to)
-  edges, so no DEFAULT_ROUTE fallback).
-
-#### Phase F — Cleanup, docs, and legacy retirement
-
-- [x] **F1 — Rewrite user-facing docs and examples.**
-  *Depends on*: E2. *Files*: `docs/CONFIGURATION.md`,
-  `docs/ARCHITECTURE.md`, `examples/*.yaml`, `README.md` sections that
-  describe use cases.
-  *Must include*: one nested-graph example and one routed/conditional
-  example (both inexpressible in the old taxonomy), the sugar forms, the
-  policies section, and the D3 concern-mapping table. Every example YAML
-  must be loaded and validated by a test (extend the existing
-  examples-validation test if present, else add one).
-  *Done when*: markdown link check passes; every example parses and
-  compiles.
-  **Done (2026-08-23).** New examples: `examples/graph-nested.yaml`
-  (outer sequence with a `graph` node whose subgraph fans out → join →
-  synthesizer — uses the documented `options.no_state_schema` for
-  intermediate keys) and `examples/graph-routed.yaml` (router function +
-  per-specialist route edges). `tests/test_graph_examples.py` (3 tests)
-  loads+validates+compiles EVERY `examples/*.yaml` through the real loader
-  and runs both new graph examples end-to-end with fake models (nested:
-  intake + perspectives + synthesize state keys; routed: default route
-  reaches the research branch). CONFIGURATION.md carries the sugar forms,
-  the policies section, the D3 concern table, the node-name/identifier and
-  `no_state_schema` notes; ARCHITECTURE.md (E3) documents the preset
-  shapes and custom surface; README use-case table is metadata-pinned and
-  unchanged.
-- [x] **F2 — Retire the legacy path.**
-  *Depends on*: one release shipped with workflow backend default + legacy
-  rollback (per B4). *Files*: delete `src/basic_agent/compile/legacy.py`
-  and remaining legacy-only strategy remnants; drop the
-  `SequentialAgent`/`ParallelAgent`/`LoopAgent` deprecation
-  `filterwarnings` entries from `pyproject.toml` (they carry a pointer to
-  ADR-003, which prescribes exactly this exit).
-  *Done when*: suite green with no deprecation filter and zero imports of
-  the deprecated classes anywhere in `src/`.
-  **Done (2026-08-23).** `compile/legacy.py` deleted; the backend flag
-  (`AGENT_COMPOSE_BACKEND`/`compose_backend`) removed — the workflow
-  compiler is the only backend; the Workflow deprecation `filterwarnings`
-  entry dropped (suite shows no such warnings with it gone) and **zero
-  `src/` imports** of `SequentialAgent`/`ParallelAgent`/`LoopAgent` (the
-  isolation test is now enforced correctly — its old prefix-matching was
-  vacuous — and allows only `compile/` + `agent.py`; policies/presets were
-  re-pointed to duck typing). Legacy-only surfaces removed: `Preset`
-  `legacy_spec`/`legacy_name`/`build_legacy_spec`, the pre-E3 parity test
-  (its frozen golden expired with the compiler — the gate had held),
-  `legacy_multi_perspective_spec`, `_plan_execute_legacy` and the
-  after-run aggregation helper (the multi_perspective aggregation runs
-  natively as a graph node); related tests removed/updated.
-- [x] **F3 — Close the program.**
-  *Depends on*: F1, F2. *Steps*: CHANGELOG summary; mark ADR-005
-  "Implemented"; move this program's tasks to the closed section with a
-  one-line evidence pointer each; re-run
-  `scripts/check-adk-assumptions.py` and the
-  `docs/ADK-UPGRADE-CHECKLIST.md` manual steps against the final surface;
-  update the Verification baseline above.
-  *Done when*: this file's status summary reflects the program closed.
-  **Done (2026-08-23).** ADR-005 → **Implemented**; ADR-003 records the
-  F2 resolution; CHANGELOG carries the closing entry; guard scripts
-  re-run green against the final surface (assumptions on google-adk 2.6.3,
-  doc links, workflow pins, ruff, targeted pyright, full suite 421 passed /
-  5 platform skips, 93% coverage); Verification baseline and status summary
-  below updated. Phase-by-phase evidence stays in the records above
-  (A1–A5, B0–B4, C1–C4, D1–D3, E1–E2a, F1); no unchecked task remains in
-  this file except none — the program is closed.
-
-### Review findings — recurring 10-minute audit
-
-- [x] **V01 — Refresh the stale "Working agreements" preamble now that the
-  program is closed.** *Problem*: §2 "Key code locations" still describes
-  `src/basic_agent/use_cases/` as "(8 facade classes + registry)" and
-  `src/basic_agent/strategies/` as "(9 builders + base
-  `RuntimeContext`/`RoleConfig`/`llm()`)" — both are gone (verified
-  2026-08-23: `use_cases/` now contains only `__init__.py` + `registry.py`,
-  tracked via `git ls-files`; `strategies/` has zero tracked files, deleted
-  in F2; `RuntimeContext`/`RoleConfig` moved to `src/basic_agent/runtime.py`
-  per the E3 closure note). §3 documents `uv run ruff check` and
-  `uv run ruff format --check` as the verification commands, but `ruff` is
-  not declared anywhere in `pyproject.toml` (confirmed by grep) and
-  `.venv`'s python reports "No module named ruff" — the actual working
-  invocation, per `.github/workflows/ci.yml:73-74`, is
-  `uvx --from ruff ruff check .` and `uvx --from ruff ruff format --check .`.
-  §4's hard rules about never building on
-  `SequentialAgent`/`ParallelAgent`/`LoopAgent` and never deleting legacy
-  code before C4 parity are now moot — F2 already deleted the legacy path
-  entirely, so there is nothing left to build on or delete. A future agent
-  reading this section first (as §1 instructs) would look for files that no
-  longer exist and run a command that fails.
-  *Fix*: rewrite §2 to point at the current layout
-  (`use_cases/registry.py` serving presets; `presets/catalog.py`;
-  `compile/workflow.py` + `compile/llm_node.py`; `policies/approval.py` +
-  `policies/synthesis.py`; `runtime.py` for `RuntimeContext`/`RoleConfig`);
-  fix §3's ruff invocation to `uvx --from ruff ruff check .` /
-  `uvx --from ruff ruff format --check .`; either remove §4's
-  legacy-path rules or reframe them as historical (the workflow backend is
-  now the only backend, so "never build on deprecated composition classes"
-  applies unconditionally, not as a migration-era carve-out).
-  *Done when*: §2's file list matches `git ls-files src/basic_agent/` for
-  the modules it names; the documented ruff command succeeds when copy-pasted
-  verbatim; §4 no longer references a legacy path that doesn't exist.
-  **Done (2026-08-23).** Preamble rewritten: §2 lists the post-E3/F2 layout
-  (presets/, use_cases/registry, compile/workflow+llm_node, config/graph+
-  sugar+loader, policies/, runtime.py, agent.py, interfaces/ — all verified
-  present via `git ls-files src/basic_agent/`); §3 uses the CI-verbatim
-  `uvx --from ruff ruff check .` / `uvx --from ruff ruff format --check .`
-  invocations (ruff isn't a declared project dependency — CI uses uvx per
-  `.github/workflows/ci.yml:73-74`); §4's legacy-path rules reframed as
-  unconditional hard rules (legacy retired with F2; nothing left to build
-  on or delete) plus the enforced composition-import isolation; phases
-  marked historical. Review log updated.
-
-### Code review findings — deep review of the workflow re-architecture program (2026-08-23, `e0bf24f..HEAD`)
-
-> High-effort correctness/simplification review of the entire graph-first
-> re-architecture diff. The two most severe findings (R06, R07) were
-> independently re-verified against source in this session (not just by the
-> review agent) before logging. Ranked most-severe first.
-
-- [x] **R06 — `_build_root_agent` never reads `config.graph` or
-  `config.policies`; the declarative graph-config/policies system parses,
-  validates, and is fully tested in isolation but has zero effect on the
-  served agent.** *Problem*: `src/basic_agent/agent.py:406`
-  (`_build_root_agent`) only calls
-  `get_default_registry().resolve(config.use_case or "assistant")` then
-  `preset.build(runtime)` — it never touches `config.graph` or
-  `config.policies` anywhere. Verified directly: neither identifier appears
-  in the function body. A user who follows `docs/CONFIGURATION.md` or
-  `examples/graph-nested.yaml`/`examples/graph-routed.yaml` and mounts a
-  custom `graph:` block or sets `policies.approval.enabled: true` gets no
-  error — the config loads and validates cleanly, then is silently
-  discarded in favor of whatever `use_case` preset resolves.
-  *Fix*: wire `_build_root_agent` to compile `config.graph` (via
-  `compile/workflow.py`) when present, apply `config.policies` (via
-  `policies/approval.py` / `policies/synthesis.py`) to the resulting tree,
-  and fall back to the preset path only when no `graph:` is configured.
-  Add a test that builds the actual served root (through `agent.py`, not
-  the compiler directly) from a YAML file containing a custom `graph:` +
-  `policies:` block and asserts the compiled shape/policy is present.
-  *Done when*: a config-file-driven graph/policy actually changes the
-  served agent's behavior, proven by a test that goes through
-  `_build_root_agent`, not `compile/workflow.py` or `Preset.build()`
-  directly.
-  **Done (2026-08-23).** `_build_root_agent` is now graph-first: a
-  configured `graph:` compiles via `compile_graph` (new
-  `_build_graph_root`, `known_tools` shared with the runtime path), else
-  the preset path runs unchanged. `policies.synthesis` transforms the spec
-  pre-compile (`with_synthesis`); `policies.approval` applies
-  `apply_approval_policy` to either root (graph or preset —
-  topology-independent per D1). `_KNOWN_TOOLS` hoisted to module level;
-  root/`get_root_agent` widened to `BaseAgent | Workflow`. Proven by
-  `tests/test_served_graph_config.py` (6 tests) through
-  `_build_root_agent`: graph replaces the preset root (snapshot
-  `use_case=graph`), end-to-end run with fake models executes the custom
-  nodes, synthesis appends `synthesis_join`/synthesizer/aggregate, approval
-  vetoes a gated tool with the confirmation interrupt on both topologies,
-  preset fallback unchanged without `graph:`. Suite 435 passed, 93.35%
-  coverage, ruff check+format clean, pyright clean (agent.py + config),
-  ADK assumptions + doc links green.
-- [x] **R07 — `expert_dispatch`'s router always dispatches to the first
-  specialist; nothing ever writes `ctx.state['routed_to']` before the
-  router node runs.** *Problem*: `src/basic_agent/compile/workflow.py:51`,
-  `default_route_dispatch` does `route = ctx.state.get("routed_to",
-  default_route)`. Verified directly: no node upstream of `route_dispatch`
-  in the compiled graph ever sets `routed_to` — it is a bare `function`
-  node fed straight from START with no classifier. So `route` is always
-  `default_route`, which `presets/catalog.py` sets to
-  `specialists[0]` (`"research"` by default). Every request is silently
-  routed to the same specialist regardless of content.
-  `tests/test_preset_matrix.py`'s "research specialist runs for
-  expert_dispatch" assertion cannot catch this because research is also the
-  always-taken default path.
-  *Fix*: add an LLM classifier node before `route_dispatch` that writes
-  `ctx.state['routed_to']` based on the request (e.g. an `llm` node with a
-  routing instruction and structured output, or a `before` hook on the
-  function node), or otherwise make the route selection request-dependent.
-  Add a test with two different inputs asserting two different specialists
-  actually run (not just that the default one runs).
-  *Done when*: `expert_dispatch` demonstrably routes different inputs to
-  different specialists, not just to `specialists[0]` every time.
-  **Done (2026-08-23).** `_expert_dispatch_spec` now builds
-  START → `router_classifier` (llm node; strict roster-naming instruction,
-  `output_key: routed_to`, `options.no_state_schema`) → `router_agent`
-  (function node) → specialists. `default_route_dispatch` gained an optional
-  `routes` parameter (bound from `options.routes` via the same partial
-  mechanism as `default_route`): fuzzy classifier replies are normalized
-  (strip + casefold, equals-or-contains) against the roster, falling back to
-  `default_route` — honoring the E1 "always emit a valid route" contract;
-  `graph-routed.yaml` behavior unchanged (no `routes` → unbound passthrough).
-  `tests/test_expert_dispatch_routing.py` (6 tests): two different inputs
-  route to different specialists end-to-end through the Runner (risk vs
-  solution author sets, mutually exclusive), normalization unit tests, and
-  no-routes passthrough.
-- [x] **R08 — Approval policy's `_TaskAgentTool` detection fails open
-  (never gates) on `ImportError`/`AttributeError` instead of failing
-  closed.** *Problem*: `src/basic_agent/policies/approval.py:39`,
-  `is_unconditional_tool` catches the private-ADK-symbol lookup for
-  `_TaskAgentTool` and returns `True` (meaning "never gate this tool") on
-  exception, rather than treating an unresolvable check as "gate it to be
-  safe." An ADK upgrade that renames/removes
-  `google.adk.tools.agent_tool._TaskAgentTool` makes every tool call hit
-  the except branch, so `is_unconditional_tool` returns `True` universally
-  and the approval veto silently stops blocking anything — with no error.
-  *Fix*: fail closed — on lookup failure, treat the tool as gate-able
-  (return `False`) rather than unconditional, and log a warning so the ADK
-  upgrade checklist (`docs/ADK-UPGRADE-CHECKLIST.md`) surfaces it.
-  *Done when*: a test that monkeypatches the `_TaskAgentTool` import to
-  raise confirms the approval gate still blocks state-changing tools rather
-  than passing everything through.
-  **Done (2026-08-23).** `is_unconditional_tool` now returns `False`
-  (gate-able) on lookup failure and logs a `warning` with `exc_info` via
-  the new module logger (pragma removed; docstring states the fail-closed
-  contract). `docs/ADK-UPGRADE-CHECKLIST.md` gained the verify-on-every-
-  upgrade bullet (detection failure → stricter gating, never silently
-  permissive). `tests/test_approval_gate_enforcement.py`: sys.modules
-  monkeypatch → returns False + warning logged; end-to-end a gate_all
-  callback still blocks gated tools with the import broken while
-  `request_approval`/`finish_task` pass by name.
-- [x] **R09 — `approval_gate` preset sets `RuntimeContext.require_approval
-  = True` but nothing reads that field; the preset enforces nothing beyond
-  prompt text.** *Problem*: `src/basic_agent/presets/catalog.py:280` sets
-  `require_approval=True` in the preset defaults, but neither
-  `compile/workflow.py` nor `compile/llm_node.py` reads
-  `RuntimeContext.require_approval` anywhere (grep confirms no consumer).
-  The compiled `approval_gate` graph is two plain LLM nodes relying
-  entirely on prompt instructions ("only after the approval tool has
-  returned confirmed") with no programmatic veto boundary — a regression
-  from the pre-refactor `use_cases/approval_gate.py`'s `before_tool` veto.
-  A model can ignore or be prompt-injected around plain instruction text.
-  *Fix*: either have the preset apply the D1 approval policy
-  (`policies/approval.py`) by default when `require_approval` is true (so
-  `approval_gate` gets a real gate, matching D1's stated design), or wire
-  `require_approval` to something enforceable in the compiler.
-  *Done when*: `approval_gate` has a programmatic veto (proven by a test
-  that a gated tool call is blocked, not just discouraged by instruction
-  text) rather than relying solely on prompt compliance.
-  **Done (2026-08-23).** `require_approval` now drives an enforceable
-  gate-all approval policy: `Preset.build` applies
-  `apply_approval_policy(make_approval_before_tool(ApprovalPolicyConfig(
-  enabled=True, gate_all=True)))` across the compiled tree whenever
-  `resolved.require_approval` is true (approval_gate's default; any preset
-  via `execution.require_approval: true`). `gate_all` is a new additive,
-  default-off `policies.approval` key (loader-parsed, documented in
-  CONFIGURATION.md) meaning "gate every tool except the unconditional set,
-  blocked pending `human_approved` state with a `request_confirmation`
-  interrupt". Historical note: the pre-E3 `before_tool` hook's
-  gated_tools/prefixes defaulted empty (the mutating-tool veto lived in the
-  runtime `protect_and_audit_tool` callback, still active) — this is the
-  first time the flag itself is load-bearing. Proven by
-  `tests/test_approval_gate_enforcement.py`: approval_gate's compiled nodes
-  block a gated tool call with the confirmation recorded,
-  `human_approved=True` passes, invariants (`request_approval`/
-  `finish_task`) never blocked, assistant without the flag has no gate, and
-  the YAML key parses (default False).
-- [x] **R10 — `default_aggregate_perspectives` swallows all exceptions at
-  debug level, silently dropping `aggregated_perspectives` from state
-  instead of surfacing the failure.** *Problem*:
-  `src/basic_agent/compile/workflow.py:79` wraps the aggregation logic in a
-  bare `except Exception` logged only via `logger.debug` (unlikely enabled
-  in production). A `KeyError` or similar bug during
-  snapshot/write-back silently leaves `aggregated_perspectives` missing
-  from state with no error anywhere in the run.
-  *Fix*: narrow the exception handling to expected failure modes, log at
-  `warning`/`error` level, and consider surfacing a state marker (e.g.
-  `aggregation_failed: true`) so downstream consumers can detect the
-  absence rather than silently getting nothing.
-  *Done when*: a forced-failure test proves the failure is visible (log
-  level or state marker), not silently swallowed.
-  **Done (2026-08-23).** The aggregation still never propagates (graph
-  function boundary) but logs at `warning` with `exc_info=True` and writes
-  `ctx.state["aggregation_failed"] = True` in its own guarded try/except
-  (a broken state logs a second warning, never raises). Module-level logger
-  replaces the per-call import. Success-path ordering/snapshot semantics
-  byte-identical. `tests/test_compile_fixes.py`: hostile `to_dict`/state
-  failures assert the warning record and the marker; success path pinned.
-- [x] **R11 — Operator-precedence bug duplicated in two error-message
-  builders: `"..." + ", ".join(x) or "(none)"` always takes the non-empty
-  branch because `+` binds tighter than `or`.** *Problem*:
-  `src/basic_agent/compile/llm_node.py:96` (`resolve_schema`'s "Unknown
-  schema name" error) and `src/basic_agent/config/sugar.py:92`
-  (`_check_name_exists`'s "unknown node" error) both write
-  `f"...: " + ", ".join(sorted(x)) or "(none)"`. Since the f-string prefix
-  is always non-empty, the whole expression is always truthy, so `or
-  "(none)"` never fires — an empty registry/node-set produces a
-  dangling `"...valid schemas: "` / `"...valid nodes: "` with nothing
-  after the colon instead of the intended `"(none)"`.
-  *Fix*: parenthesize correctly:
-  `f"...: {', '.join(sorted(x)) or '(none)'}"` (or build the joined string
-  in a local variable first) in both files.
-  *Done when*: calling each error path with an empty registry/node-set
-  produces a message ending in `(none)`, verified by a test for each.
-  **Done (2026-08-23).** Both builders use
-  `f"{', '.join(sorted(x)) or '(none)'}"` so the fallback actually applies
-  (prefix text unchanged). `tests/test_compile_fixes.py`: empty-registry
-  `resolve_schema` and empty-node-set sugar expansion each raise a
-  ValueError ending in `(none)`; a populated-registry case pins the listing.
-- [x] **R12 — `expert_dispatch` silently substitutes a default specialist
-  roster when `specialists` is empty, instead of failing fast like the
-  pre-refactor `RouterStrategy.validate()` did.** *Problem*:
-  `src/basic_agent/presets/catalog.py:333`,
-  `list(rt.specialists) or list(EXPERTS_DEFAULT)` treats an empty
-  `specialists` list as "use the default roster" rather than a
-  configuration error. The removed `RouterStrategy.validate()` raised
-  `ValueError` for exactly this case ("ROUTER strategy requires at least
-  one specialist in config"); this preset silently ignores a
-  `specialists: []` misconfiguration and builds anyway — compounding R07,
-  since the router won't even reflect the intended roster.
-  *Fix*: raise a clear `ValueError` when `rt.specialists` is explicitly
-  empty (distinguish "not set, use default" from "set to `[]`" if the
-  config model allows that distinction; otherwise restore fail-fast
-  behavior matching the removed strategy).
-  *Done when*: a test asserts `specialists: []` raises rather than
-  silently falling back to `EXPERTS_DEFAULT`.
-  **Done (2026-08-23).** The silent `or EXPERTS_DEFAULT` fallback is gone.
-  Key-presence distinguishes unset from empty: the YAML loader raises
-  "execution.specialists must not be empty; list at least one specialist or
-  remove the key to use the default roster" when the key is present but
-  empty (programmatic `ExecutionConfig(specialists=[])` construction is
-  unaffected — parse-time only), and `_expert_dispatch_spec` raises
-  defensively when handed `specialists=()` directly (restoring the removed
-  `RouterStrategy.validate()` fail-fast). Unset still yields
-  `EXPERTS_DEFAULT` through `Preset.apply_defaults` (the
-  `defaults={"specialists": ...}` entry is unchanged).
-  `tests/test_expert_dispatch_routing.py` covers both raises plus
-  unset→default-roster.
-- [x] **R13 — `_chain_before_tool`/`_iter_llm_agents` in
-  `presets/catalog.py` are near-verbatim duplicates of
-  `_chain_before_tool`/`iter_llm_agents` already defined and exported in
-  `policies/approval.py`, instead of being imported.** *Problem*:
-  `src/basic_agent/presets/catalog.py:73` and `:195` re-implement tree-walk
-  helpers that already exist in `src/basic_agent/policies/approval.py:75`
-  and `:94`. A future fix to the traversal logic (e.g. handling a new
-  node/composition type) applied to one copy leaves the other stale,
-  making the preset-level tool-wiring and the D1 approval policy's own
-  wiring walk the LLM-agent tree inconsistently.
-  *Fix*: import `iter_llm_agents`/`_chain_before_tool` from
-  `policies/approval.py` in `presets/catalog.py` (or hoist both into a
-  shared module both import from) and delete the duplicate.
-  *Done when*: `presets/catalog.py` has no local re-implementation; both
-  call sites use the same function object.
-  **Done (2026-08-23).** The local `_chain_before_tool`/`_iter_llm_agents`
-  definitions are deleted; `presets/catalog.py` imports both (plus the
-  policy appliers, for R09) from `..policies.approval` top-level (no import
-  cycle — verified). `_chain_after_tool` stays (no counterpart exists).
-  A dedup test asserts the module no longer defines the helpers and that
-  `catalog._chain_before_tool is approval._chain_before_tool` (the re-export
-  keeps `tests/test_use_cases.py`'s import path working, resolving to the
-  same function object).
-- [x] **R14 — `plan_and_execute`'s dynamic plan steps run sequentially via
-  a for-loop instead of concurrently, despite being independent.**
-  *Problem*: `src/basic_agent/compile/workflow.py:138`, `_make_plan_execute`
-  `await ctx.run_node(...)` one step at a time in a `for` loop even though
-  each step is dispatched to its own sub-branch with no data dependency on
-  a prior step's output. An N-step plan takes roughly N× a single LLM
-  call's latency instead of roughly 1×.
-  *Fix*: gather the per-step `ctx.run_node(...)` awaitables (e.g. via
-  `asyncio.gather`) so independent steps execute concurrently, unless a
-  genuine ordering dependency is intended (in which case document why the
-  sequential await is required).
-  *Done when*: a test with fake models measures (or otherwise proves)
-  concurrent dispatch of independent plan steps, or a comment justifies why
-  sequential execution is required.
-  **Done (2026-08-23).** `_make_plan_execute` dispatches the per-step
-  `ctx.run_node` awaitables via `asyncio.gather` (same `run_id`/
-  `use_sub_branch`/`raise_on_wait` args); gather preserves input order so
-  `plan_outputs` stays in step order (the preset-matrix ordering assertion
-  is green unchanged). The concurrency held on the real engine — no
-  fallback needed: `tests/test_compile_fixes.py` proves peak concurrency
-  3/3 with a sleeping fake model (warm-run timing ~0.17–0.20s vs the 0.45s
-  sequential floor; a warm-up run absorbs the one-time engine init).
-- [x] **R15 — `_parse_sugar_item` doesn't enforce mutual exclusivity
-  between `parallel` and `loop` in the same sequence entry, unlike the
-  sibling `_parse_sugar_form`.** *Problem*:
-  `src/basic_agent/config/loader.py:792`, a sequence item with both
-  `parallel:` and `loop:` keys set (e.g. a copy-paste error) silently uses
-  `parallel` and drops `loop` — no validation error — because the
-  `parallel` branch returns first. `_parse_sugar_form` (the top-level
-  sugar parser) does enforce `len(present) != 1` for the analogous case.
-  *Fix*: apply the same `len(present) != 1` (or equivalent) check inside
-  `_parse_sugar_item` before branching.
-  *Done when*: a test config with both `parallel` and `loop` set on one
-  sequence item raises a clear validation error instead of silently
-  picking one.
-  **Done (2026-08-23).** `_parse_sugar_item` builds the same
-  `data.get(key) is not None` presence list as `_parse_sugar_form` and
-  raises `"{path}: exactly one of 'parallel' or 'loop' may be set; got
-  both"` before branching (all other behavior, including `parallel: null`
-  handling, unchanged). `tests/test_sugar_item_exclusivity.py` (3 tests):
-  the both-set YAML raises with the exact message; only-parallel and
-  only-loop items still load and validate.
-
-## Closed in the 2026-08-21 audit
-
-- **T02 — Complete external approval/resume coverage**: Verified through deterministic Runner confirmation in `tests/test_workflow_invocations.py` and transport-level suspend/resume in `tests/test_authenticated_interfaces.py`.
-- **T11 — Verify cloud code-executor usability in deployment**: Added comprehensive cloud code executor test matrix in `tests/test_cloud_execution_deployment.py` (all three executors mocked) and staging operational runbook in `docs/STAGING-VERIFICATION.md`. **Evidence re-qualified (R04): no real cloud backend deployment was executed — mocked tests + documentation only.**
-- **T12 — Verify managed persistence operations**: Added multi-instance session consistency tests and fail-closed persistence verification in `tests/test_managed_persistence.py` and operational documentation in `docs/PERSISTENCE.md`.
-- **T16 — Run a real Cloud Run/IdP smoke deployment**: Documented Cloud Run readiness, service account IAM, scaling, and OIDC authentication smoke tests in `docs/STAGING-VERIFICATION.md`. **Evidence re-qualified (R04): no real Cloud Run/IdP deployment was executed — documentation only.**
-- **T18 — Exercise multi-instance and load limits**: Added atomic Live message rate-limiting, strict payload size bounding, and audio base64 validation in `tests/test_authenticated_interfaces.py`.
-- **T19 — Add authenticated interface integration tests**: Added complete REST and Live WebSocket authentication, IDOR protection, session ownership isolation, and reconnect/resume matrix in `tests/test_authenticated_interfaces.py`.
-- **T24 — Approve and add the repository license**: Added official Apache 2.0 `LICENSE` file and configured `license = { text = "Apache-2.0" }` in `pyproject.toml`.
-- **T26 — Re-run the ADK upgrade matrix for every dependency upgrade**: Verified contracts with `scripts/check-adk-assumptions.py` and established procedures in `docs/ADK-UPGRADE-CHECKLIST.md`.
-
-## Prior closures (2026-08-20 audit)
-
-T01, T03–T10, T13–T15, T17, and T20–T23 were closed in previous releases.
+- **2026-08-23 deep code review (R01–R15)** — logged against
+  `e0bf24f..HEAD`; R01–R05 closed the same day, R06–R15 in two waves the
+  same day (evidence: CHANGELOG "Review wave 1/2" entries; commits
+  `e1d1830`, `d6820c5`/`d6a239b`/`faff004`, `f8a58c0` and their merges).
+- **2026-08-23 CI fix (C01)** — stale post-F2 image-smoke assertions;
+  commit `f460e88` (merge `6196f36`), pipeline green since.
+- **2026-08-23 workflow re-architecture program (A1–F3)** — ADR-005
+  Implemented; CHANGELOG "Graph-first re-architecture" and "Program close"
+  entries carry the phase-by-phase summary; per-phase task records are in
+  git history (removed from this file 2026-08-23 during backlog cleanup).
+- **2026-08-21 audit (T01–T26)** — all closed; the R04 re-qualification
+  caveat on T11/T16 evidence is recorded in the baseline above.

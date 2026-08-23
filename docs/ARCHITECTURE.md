@@ -15,28 +15,37 @@ Design decisions are recorded as dated, immutable ADRs:
 
 ## The one-minute version
 
-Configuration (YAML + env vars) in, a Google ADK agent tree out, served
+Configuration (YAML + env vars) in, a Google ADK `Workflow` graph out, served
 behind three interfaces (REST, Live WebSocket, MCP) with Keycloak
-authentication and OpenTelemetry telemetry. Two internal layers with a
-strict one-way dependency — `use_cases` → `strategies`, never reverse —
-keep "what the user picks" separate from "how the ADK tree is shaped".
+authentication and OpenTelemetry telemetry. Since the graph-first
+re-architecture ([ADR-005](./ADR-005-graph-first-taxonomy-and-configuration.md)),
+the eight use cases are **data, not classes**: a preset is catalog metadata
+plus a graph-spec template, and one compiler (`compile/`) is the only place
+that touches ADK composition classes. An explicit `graph:` config block
+bypasses presets entirely and becomes the root directly — that is the
+generic, topology-agnostic surface; presets are convenience defaults built
+on top of it, not a separate architectural layer.
 
 ```
 YAML / env vars
       │
       ▼
-use_cases (public)          what the user picks + runtime behavior
-  • one class per use case    (metadata, defaults, before/after hooks)
-  • registry + alias catalog
+graph: present? ──yes──► GraphSpec (explicit nodes/edges, or the
+      │                   sequence:/parallel:/loop: sugar expanded to it)
+      │ no
+      ▼
+use_cases registry (public) — resolves agent.use_case (+ aliases) to a
+  presets/catalog.py entry:    Preset: graph-spec template + default
+  data, not classes              roles/policies (custom modules add more)
       │
       ▼
-strategies (internal)       how the ADK agent tree is shaped
-  • pluggable builders        (LlmAgent / SequentialAgent /
-  • shared llm() builder       ParallelAgent / LoopAgent)
-  • per-role config
+policies (approval / synthesis) — apply to either root, topology-independent
       │
       ▼
-Google ADK agent tree
+compile/ — the only ADK composition home (compile_graph, build_llm_agent)
+      │
+      ▼
+Google ADK Workflow (BaseNode tree)
 ```
 
 ## Module map (`src/basic_agent/`)
@@ -44,7 +53,7 @@ Google ADK agent tree
 | Module / Package | Responsibility |
 |---|---|
 | `agent.py` | Entrypoint (~250 lines). Resolves config, builds the `RuntimeContext` (tool construction, model, code executor, instruction assembly), asks the use-case registry for the agent tree, exposes `root_agent`, the observability plugin, and `inspect_runtime`. Tool construction and knowledge retrieval live in focused companion modules. |
-| `config/` | Configuration package. `settings.py`: `Settings` frozen dataclass snapshotted from the environment once at import. `loader.py`: YAML ↔ env merge, `AgentConfig` dataclass tree, provenance logging. |
+| `config/` | Configuration package. `settings.py`: `Settings` frozen dataclass snapshotted from the environment once at import. `loader.py`: YAML ↔ env merge, `AgentConfig` dataclass tree, provenance logging. `graph.py`: the framework-independent `GraphSpec` (recursive nodes/edges) that presets and a raw `graph:` config both compile to. `sugar.py`: `sequence:`/`parallel:`/`loop:` shorthand, expanded to a `GraphSpec` before compilation. `defaults.py`: single-source defaults shared by runtime config and tests. |
 | `auth/` | Authentication package. `core.py`: JWT validation primitives shared by all adapters. `gateway.py`: Traefik forward-auth endpoint (internal listener `AUTH_GATEWAY_CONTAINER_PORT`). |
 | `interfaces/` | Interface adapters. `rest.py`: REST/A2A (container listener `ADK_API_CONTAINER_PORT`; host default `ADK_API_PORT`). `live.py`: Live WebSocket (container listener `LIVE_API_CONTAINER_PORT`; host default `LIVE_API_PORT`). `service.py`: demo OpenAPI backend. `mcp.py`: Model Context Protocol. |
 | `execution/` | Code-execution sandbox resolution (ADR-004). `resolver.py`: provider specs, `resolve_code_executor()`, `CE_FIELD_ENV_MAP`, hardened Docker executor factory. |
@@ -53,8 +62,11 @@ Google ADK agent tree
 | `util.py` | Import-cycle-free shared utilities: `is_production()`, `split_csv()`. Zero imports from the rest of the package. |
 | `models.py` | `resolve_model()`: bare string → native Gemini; `provider: litellm` with a `provider/model` name (or a provider-prefixed name) → ADK's `LiteLlm` instance. |
 | `autoconfig.py` | Ambient capability discovery (`discover_capabilities()`). Source of `ProviderConfigurationError`. |
-| `strategies/` | Internal composition layer. `base.py` defines `RuntimeContext`; one builder file per composition pattern; `registry.py` maps strategy keys to builders. |
-| `use_cases/` | Public catalog. One class per use case binding metadata + a strategy; `base.py` provides `BaseUseCaseAgent` with runtime hooks wired as ADK callbacks. |
+| `runtime.py` | Framework-neutral `RoleConfig`/`RuntimeContext` data contracts shared by the compile and preset layers (formerly `strategies/base.py`; imports no ADK composition classes). |
+| `presets/` | `catalog.py`: the eight built-in presets — catalog metadata (key, title, when-to-use, aliases, interfaces), runtime-defaults merge, and the graph-spec builders the compiler consumes. Presets are data, not classes. |
+| `policies/` | Cross-cutting, topology-independent behavior applied to any preset or raw graph: `approval.py` (tool-veto + confirmation-interrupt gate; never gates `request_approval`/`finish_task`/delegation tools) and `synthesis.py` (appends a synthesizer node plus native aggregation after a fan-out). |
+| `compile/` | The single sanctioned home for ADK composition-class construction. `workflow.py`: turns a `GraphSpec` into an ADK `google.adk.workflow.Workflow`. `llm_node.py`: the shared `LlmAgent` builder (instruction merge, role overrides, code executor, schemas, callbacks). |
+| `use_cases/` | Public registry only (`registry.py`): resolves `agent.use_case` (+ aliases) to a `presets/` entry and loads custom presets via `AGENT_USE_CASE_MODULE`. The per-use-case facade classes and the strategy layer were deleted in E3 (ADR-005); nothing else lives here. |
 | `telemetry.py` | OpenTelemetry tracer, invocation span attributes. |
 
 ## Configuration pipeline
@@ -98,10 +110,14 @@ reading `Settings`, because YAML values arrive via overlay, not env.
    and the `adk.capabilities` span attribute.
 4. Instruction assembly: fixed untrusted-content prefix, the code-execution
    line, then the operator's instruction.
-5. The use-case registry resolves the use-case key (aliases included) and
-   its `build(runtime)` composes the final ADK agent tree.
+5. Root assembly is **graph-first**: a configured `graph:` section compiles
+   directly via `compile_graph` (`agent.use_case` is ignored); otherwise the
+   use-case registry resolves the use-case key (aliases included) and its
+   `Preset.build(runtime)` composes the root. `policies.approval` applies to
+   either root, and `policies.synthesis` transforms a configured graph spec
+   before compilation.
 
-## Use cases → strategies
+## Use cases → presets → graph
 
 | Use case | Preset shape (ADR-005) | Default backend output |
 |---|---|---|

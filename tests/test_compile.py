@@ -34,6 +34,7 @@ from basic_agent.config.graph import (
     GraphEdgeSpec,
     GraphNodeSpec,
     GraphSpec,
+    RetrySpec,
 )
 from basic_agent.config.sugar import (
     AGAIN_ROUTE,
@@ -338,6 +339,120 @@ def test_compile_legacy_rejects_explicit_edge_specs():
     )
     with pytest.raises(ValueError, match="sugar subset only"):
         compile_legacy(spec, make_rt())
+
+
+def test_per_node_concerns_attach_to_compiled_workflow_nodes():
+    """D3: retry/timeout/schemas/output_key/code_executor per-node homes."""
+    import pydantic
+    from google.adk.code_executors.base_code_executor import BaseCodeExecutor
+
+    class OutputModel(pydantic.BaseModel):
+        answer: str
+
+    class StateModel(pydantic.BaseModel):
+        last_response: object | None = None
+
+    class FakeExecutor(BaseCodeExecutor):
+        def __init__(self) -> None:
+            super().__init__(stateful=False)
+
+        def execute_code(self, invocation_context, code_execution_input):
+            return None
+
+    executor = FakeExecutor()
+    rt = make_rt()
+    rt.code_executor = executor
+    spec = GraphSpec(
+        nodes=[
+            GraphNodeSpec(
+                name="step_0",
+                kind="llm",
+                retry=RetrySpec(max_attempts=4, initial_delay=0.5, max_delay=30.0),
+                timeout=45.0,
+                output_schema="OutputModel",
+                state_schema="StateModel",
+                output_key="answer_key",
+            )
+        ],
+        edges=[GraphEdgeSpec(source=START, target="step_0")],
+    )
+    workflow = compile_graph(
+        spec,
+        rt,
+        name="concern_wf",
+        schema_registry={"OutputModel": OutputModel, "StateModel": StateModel},
+    )
+    node = next(n for n in workflow.graph.nodes if n is not ADK_START)
+    assert node.name == "step_0"
+    assert node.retry_config is not None
+    assert node.retry_config.max_attempts == 4
+    assert node.retry_config.initial_delay == 0.5
+    assert node.retry_config.max_delay == 30.0
+    assert node.timeout == 45.0
+    assert node.output_schema is OutputModel
+    assert node.state_schema is StateModel
+    assert node.output_key == "answer_key"
+    # ADR-004: the resolved executor attaches through the shared builder.
+    assert node.code_executor is executor
+
+
+def test_legacy_compiled_llm_applies_output_keys_schemas_executor_only():
+    """D3: legacy (rollback) applies schemas/keys/executor; retry/timeout are
+    workflow-backend-only per the concern table."""
+    import pydantic
+    from google.adk.code_executors.base_code_executor import BaseCodeExecutor
+
+    class OutputModel(pydantic.BaseModel):
+        answer: str
+
+    class FakeExecutor(BaseCodeExecutor):
+        def __init__(self) -> None:
+            super().__init__(stateful=False)
+
+        def execute_code(self, invocation_context, code_execution_input):
+            return None
+
+    executor = FakeExecutor()
+    rt = make_rt()
+    rt.code_executor = executor
+    spec = GraphSpec(
+        nodes=[
+            GraphNodeSpec(
+                name="direct_agent",
+                kind="llm",
+                retry=RetrySpec(max_attempts=9),
+                timeout=15.0,
+                output_schema="OutputModel",
+                output_key="answer_key",
+            )
+        ],
+        edges=[GraphEdgeSpec(source=START, target="direct_agent")],
+        shape="sequence",
+    )
+    node = compile_legacy(
+        spec, rt, name="direct_agent", schema_registry={"OutputModel": OutputModel}
+    )
+    assert isinstance(node, LlmAgent)
+    assert node.output_key == "answer_key"
+    assert node.output_schema is OutputModel
+    assert node.code_executor is executor
+    # Documented rollback limitation: per-node retry/timeout are not applied
+    # by the legacy sugar trees.
+    assert node.retry_config is None
+    assert node.timeout is None
+
+
+def test_unknown_schema_name_fails_fast():
+    with pytest.raises(ValueError, match="Unknown schema name"):
+        compile_graph(
+            GraphSpec(
+                nodes=[
+                    GraphNodeSpec(name="step_0", kind="llm", output_schema="Missing")
+                ],
+                edges=[GraphEdgeSpec(source=START, target="step_0")],
+            ),
+            make_rt(),
+        )
 
 
 # ─── backend selection + import isolation ────────────────────────────────────

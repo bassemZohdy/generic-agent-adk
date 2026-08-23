@@ -8,7 +8,7 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **489 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
+- Local suite: **492 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
   and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
   **96% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
@@ -33,9 +33,9 @@ contains unfinished work only; completed audit work is recorded in
 **25 complete · 0 partial · 1 architecture program in progress (Phases A–F
 below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
 complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C complete
-2026-08-23 (C1–C4); Phase D in progress (D1 approval policy and D2
-synthesis policy complete 2026-08-23; D3 concern mapping next); code-review
-findings R01–R05 closed 2026-08-23.**
+2026-08-23 (C1–C4); Phase D complete 2026-08-23 (D1–D3 policies + concern
+mapping); Phase E next (presets); code-review findings R01–R05 closed
+2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -460,13 +460,27 @@ Reuse the fake-model/Runner harness patterns from
   multi_perspective state contract, and the legacy spec reproduces the
   golden parity (the C4 multi_perspective case now consumes this policy
   helper).
-- [ ] **D3 — Map remaining orthogonals onto per-node config.**
+- [x] **D3 — Map remaining orthogonals onto per-node config.**
   *Depends on*: C1. *Files*: `config/graph.py`, `compile/*`, docs.
   *Steps*: one documented home each for retries, timeouts, schemas, output
   keys, and code execution (per ADR-004 addendum: executor attaches in the
   compiler's llm-node builder). Remove any strategy-specific special case.
   *Done when*: CONFIGURATION.md (F1 may finalize wording) has a single
   table mapping each concern → config key → backend behavior.
+  **Done (2026-08-23).** CONFIGURATION.md gained a "Graph configuration
+  (graph-first, ADR-005)" section with the graph/policies YAML shapes and
+  the concern → config key → backend behavior table (retries/timeouts/
+  schemas/output keys/code execution). Executor attachment verified: the
+  compiler's shared llm-node builder passes `RuntimeContext.code_executor`
+  to every LlmAgent (ADR-004 attachment point moved with C3 — evidenced by
+  `tests/test_compile.py` asserting the executor, retry_config, timeout,
+  schema, and output_key on compiled nodes; legacy compile applies
+  schemas/output keys/executor and documents retry/timeout as
+  workflow-backend-only). Strategy special cases: the multi_perspective
+  `output_key` override and approval `before_tool` were the per-concern
+  special cases and are re-homed by D2/D1; nothing remains in the
+  strategies that D3 must remove (strategies themselves retire in E3).
+  No example config changed — F1 finalizes docs wording.
 
 #### Phase E — Presets: the eight keys become data
 

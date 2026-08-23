@@ -48,6 +48,83 @@ means no tools. OpenAPI, skills, MCP, and Application Integration are opt-in.
 Role tool names are resolved through the same factory and safety policy as root
 tools. Unknown names and unsupported output schemas fail before an agent starts.
 
+## Graph configuration (graph-first, ADR-005)
+
+The optional `graph:` section replaces use-case-specific composition with a
+declarative graph; presets and the sugar forms below expand into exactly this
+spec before compilation. Backend selection: `AGENT_COMPOSE_BACKEND=workflow`
+(default — ADR-005 §3) or `legacy` (sugar-subset rollback target only).
+
+```yaml
+graph:
+  nodes:
+    - name: step_1
+      kind: llm                 # llm | function | graph | join
+      role:
+        instruction: Do step one.
+        model: gemini-3.6-flash
+        tools: [web_search]
+      retry: {max_attempts: 3, initial_delay: 0.5, max_delay: 30.0, backoff_factor: 2.0, jitter: 1.0}
+      timeout: 30               # seconds (positive number)
+      input_schema: UserData
+      output_schema: GenericAgentResponse
+      state_schema: AgentState
+      output_key: step1
+      options: {}               # function-keyed registry entries for kind=function
+    - name: refine
+      kind: llm
+  sequence: [step_1, refine]    # OR parallel: [n1, n2]  OR loop: {body: refine, max_iterations: 5}
+  edges: []                     # explicit edges when no sugar form is used
+```
+
+Exactly one of `sequence`/`parallel`/`loop` may appear, and it is mutually
+exclusive with explicit `edges`; node names must be valid Python identifiers;
+every edge endpoint must exist; `join` nodes need ≥2 inbound edges; route
+values are scalars. `function` nodes resolve their implementation from
+`options.function` (compile-time registry) unless
+`options.kind: loop_counter` selects the built-in bounded-loop counter.
+Nested sugar items (`{parallel: [a, b], name: parallel_agent}`) compile to
+subgraph nodes. Schema names resolve against the registered schema registry
+(fail-fast on unknown names).
+
+### Concern → config key → backend behavior (D3)
+
+One documented home per cross-cutting concern:
+
+| Concern | Config key | Workflow backend | Legacy backend (rollback) |
+|---|---|---|---|
+| Retries | `graph.nodes[].retry` (`max_attempts`, `initial_delay`, `max_delay`, `backoff_factor`, `jitter`) | 1:1 → per-node ADK `RetryConfig` | not applied (sugar trees) |
+| Timeouts | `graph.nodes[].timeout` | 1:1 → per-node `BaseNode.timeout` | not applied (sugar trees) |
+| Schemas | `graph.nodes[].input_schema` / `output_schema` / `state_schema` | 1:1 → `BaseNode` fields | `output_schema`/`state_schema` applied; `input_schema` workflow-only |
+| Output keys | `graph.nodes[].output_key` | 1:1 → `state_delta` key (LlmAgent-node contract, Phase B1) | 1:1 |
+| Code execution | `execution.code_execution` + the `code_execution` tool (runtime-level) | resolved once by `resolve_code_executor()`; the resulting executor is attached to every `LlmAgent` node by the compiler's llm-node builder ([ADR-004 addendum](ADR-004-pluggable-code-execution.md)) | same builder (shared `llm_node.py`) |
+
+Per-node `retry`/`timeout` on the legacy path are a documented rollback
+limitation; presets targeting legacy must not rely on them.
+
+### Policies (D1/D2)
+
+```yaml
+policies:
+  approval:
+    enabled: true
+    gated_tools: [publish]
+    gated_prefixes: [legacy_]
+  synthesis:
+    enabled: true
+    instruction: Aggregate the takes.
+    output_key: last_response
+```
+
+- **approval**: gated tool calls are vetoed and routed through the engine's
+  confirmation interrupt (`request_confirmation`; `request_input`-style
+  FunctionNode policies are the engine-interrupt path proven in Phase B2).
+  Invariants — `request_approval`, `finish_task`, and `_TaskAgentTool`
+  delegations are never gated (vetoing them deadlocks the flow; B3).
+- **synthesis**: appends the canonical synthesizer node after the join
+  (workflow) or as a trailing step (legacy nested shape) and aggregates
+  `perspective_*` state keys into `aggregated_perspectives` after the run.
+
 To use the Docker-backed sandbox with Compose, include `code_execution` in
 `AGENT_TOOLS` and start the `code-exec` profile. The profile supplies the
 scoped Docker socket proxy and defaults `AGENT_CODE_EXECUTION_DOCKER_HOST` to

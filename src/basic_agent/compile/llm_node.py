@@ -94,8 +94,7 @@ def resolve_schema(
     if name not in registry:
         raise ValueError(
             f"Unknown schema name {name!r}; valid schemas: "
-            + ", ".join(sorted(registry))
-            or "(none)"
+            f"{', '.join(sorted(registry)) or '(none)'}"
         )
     return registry[name]
 

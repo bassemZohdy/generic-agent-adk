@@ -90,8 +90,7 @@ def _check_name_exists(name: str, by_name: dict[str, GraphNodeSpec]) -> None:
     if name not in by_name:
         raise ValueError(
             f"sugar references unknown node {name!r}; valid nodes: "
-            + ", ".join(sorted(by_name))
-            or "(none)"
+            f"{', '.join(sorted(by_name)) or '(none)'}"
         )
 
 

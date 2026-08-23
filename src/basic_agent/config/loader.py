@@ -780,6 +780,11 @@ def _parse_sugar_item(data: Any, path: str) -> str | ParallelSugar | LoopSugar:
         return data.strip()
     if isinstance(data, dict):
         _keys(data, {"parallel", "loop", "name"}, path)
+        present = [key for key in ("parallel", "loop") if data.get(key) is not None]
+        if len(present) > 1:
+            raise ValueError(
+                f"{path}: exactly one of 'parallel' or 'loop' may be set; got both"
+            )
         name = None
         if data.get("name") is not None:
             name = _string(data["name"], f"{path}.name")

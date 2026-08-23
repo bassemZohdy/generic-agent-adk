@@ -53,7 +53,10 @@ tools. Unknown names and unsupported output schemas fail before an agent starts.
 The optional `graph:` section replaces use-case-specific composition with a
 declarative graph; presets and the sugar forms below expand into exactly this
 spec before compilation by the workflow compiler (the only backend — the
-legacy sugar compiler was retired with F2).
+legacy sugar compiler was retired with F2). Precedence: when a `graph:`
+section is present it **is** the served root — `agent.use_case` is ignored;
+without a `graph:` the named use-case preset builds the root. The
+`policies:` sections below apply to either root.
 
 ```yaml
 graph:

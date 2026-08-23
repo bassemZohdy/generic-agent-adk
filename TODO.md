@@ -34,37 +34,54 @@ contains unfinished work only; completed audit work is recorded in
 (Phases A–F, ADR-005 Implemented, workflow backend only after F2).
 Unchecked tasks: none.**
 
+**Review log**: streak=1, last_reviewed=2026-08-23 (recurring 10-minute
+audit; clean pass — no new commits since V01, suite/ruff/contract-guard
+still green, V01 closed 2026-08-23 and its preamble refresh is in the
+working copy below)
+
 ## Working agreements for executing agents (read before taking any task)
 
 1. **Read first, in this order**:
    [ADR-005](docs/ADR-005-graph-first-taxonomy-and-configuration.md) (the
-   program's decision record), the "Re-evaluation (2026-08-23)" section of
+   decision record — Implemented), the "Resolution (F2/F3)" and
+   "Phase B spike results" sections of
    [ADR-003](docs/ADR-003-adk-workflow-migration.md) (verified engine facts),
    and the "Addendum (2026-08-23)" of
-   [ADR-002](docs/ADR-002-use-case-taxonomy.md) (why the taxonomy changes).
-2. **Key code locations** — project: `src/basic_agent/use_cases/` (8 facade
-   classes + registry), `src/basic_agent/strategies/` (9 builders + base
-   `RuntimeContext`/`RoleConfig`/`llm()`), `src/basic_agent/config/loader.py`
-   (YAML → `AgentConfig`), `src/basic_agent/agent.py` (runtime assembly),
-   `src/basic_agent/interfaces/` (rest/live/mcp/service). Installed ADK
+   [ADR-002](docs/ADR-002-use-case-taxonomy.md) (why the taxonomy changed —
+   historical).
+2. **Key code locations** (post-E3/F2 layout; verify with
+   `git ls-files src/basic_agent/`): `presets/catalog.py` (the eight presets
+   — metadata, defaults, spec builders, `Preset.build`),
+   `use_cases/registry.py` (registry serving presets + custom-module
+   loading), `compile/workflow.py` + `compile/llm_node.py` (the only ADK
+   composition home), `config/graph.py` + `config/sugar.py` (graph spec and
+   sugar forms), `config/loader.py` (YAML → `AgentConfig`),
+   `policies/approval.py` + `policies/synthesis.py` (cross-cutting
+   policies), `runtime.py` (`RuntimeContext`/`RoleConfig`), `agent.py`
+   (runtime assembly), `interfaces/` (rest/live/mcp/service). Installed ADK
    (read-only reference): `.venv/Lib/site-packages/google/adk/workflow/`
    (engine), `.venv/Lib/site-packages/google/adk/runners.py` (BaseNode root),
-   `.venv/Lib/site-packages/google/adk/agents/` (LlmAgent + deprecated
-   Sequential/Parallel/Loop agents).
-3. **Verification per task**: run `uv run pytest tests/ -q` (must stay green,
-   coverage ≥ 90%), `uv run ruff check` and `uv run ruff format --check`, and
+   `.venv/Lib/site-packages/google/adk/agents/` (LlmAgent plus the retired
+   Sequential/Parallel/Loop classes — nothing in `src/` imports them).
+3. **Verification per task**: `uv run pytest tests/ -q` (must stay green,
+   coverage ≥ 90%), `uvx --from ruff ruff check .`,
+   `uvx --from ruff ruff format --check .` (ruff is not a declared project
+   dependency — CI uses the same `uvx --from ruff` invocations), and
    `uv run python scripts/check-adk-assumptions.py`. CI mirrors these; see
    `.github/workflows/ci.yml`.
-4. **Hard rules**: never build new functionality on the deprecated
-   `SequentialAgent`/`ParallelAgent`/`LoopAgent` (rollback path only); never
-   import or adopt upstream `AgentConfig`/`BaseAgent.from_config` (deprecated
-   + experimental); never delete legacy code before C4 parity tests pass; do
-   not edit UTF-8 files via PowerShell `Get-Content`/`Set-Content` round-trips
-   (encoding corruption — use proper editor tooling); public surface (the
-   eight use-case keys, YAML/env contract, catalog metadata) must not break.
-5. **Phases are ordered B → C → D → E → F**; tasks inside a phase list their
-   own dependencies. R-tasks are independent of the program and can be done
-   anytime (R01 first — it is a real production bug). Do not start a task
+4. **Hard rules**: never build new functionality on the deprecated legacy
+   composition classes (they were retired from the project with F2 — the
+   workflow compiler is the only backend, and the import-isolation test in
+   `tests/test_compile.py` forbids ADK composition imports outside
+   `compile/`); never import or adopt upstream
+   `AgentConfig`/`BaseAgent.from_config` (deprecated + experimental); do
+   not edit UTF-8 files via PowerShell `Get-Content`/`Set-Content`
+   round-trips (encoding corruption — use proper editor tooling); public
+   surface (the eight use-case keys, YAML/env contract, catalog metadata)
+   must not break.
+5. Phases are historical (the program is closed); new tasks are
+   self-contained with their own dependencies stated. R-tasks from the code
+   review are independent and can be done anytime. Do not start a task
    whose "Depends on" is not complete.
 6. When a spike or decision task changes scope, update ADR-005 **and** this
    file in the same commit.
@@ -669,6 +686,51 @@ Reuse the fake-model/Runner harness patterns from
   below updated. Phase-by-phase evidence stays in the records above
   (A1–A5, B0–B4, C1–C4, D1–D3, E1–E2a, F1); no unchecked task remains in
   this file except none — the program is closed.
+
+### Review findings — recurring 10-minute audit
+
+- [x] **V01 — Refresh the stale "Working agreements" preamble now that the
+  program is closed.** *Problem*: §2 "Key code locations" still describes
+  `src/basic_agent/use_cases/` as "(8 facade classes + registry)" and
+  `src/basic_agent/strategies/` as "(9 builders + base
+  `RuntimeContext`/`RoleConfig`/`llm()`)" — both are gone (verified
+  2026-08-23: `use_cases/` now contains only `__init__.py` + `registry.py`,
+  tracked via `git ls-files`; `strategies/` has zero tracked files, deleted
+  in F2; `RuntimeContext`/`RoleConfig` moved to `src/basic_agent/runtime.py`
+  per the E3 closure note). §3 documents `uv run ruff check` and
+  `uv run ruff format --check` as the verification commands, but `ruff` is
+  not declared anywhere in `pyproject.toml` (confirmed by grep) and
+  `.venv`'s python reports "No module named ruff" — the actual working
+  invocation, per `.github/workflows/ci.yml:73-74`, is
+  `uvx --from ruff ruff check .` and `uvx --from ruff ruff format --check .`.
+  §4's hard rules about never building on
+  `SequentialAgent`/`ParallelAgent`/`LoopAgent` and never deleting legacy
+  code before C4 parity are now moot — F2 already deleted the legacy path
+  entirely, so there is nothing left to build on or delete. A future agent
+  reading this section first (as §1 instructs) would look for files that no
+  longer exist and run a command that fails.
+  *Fix*: rewrite §2 to point at the current layout
+  (`use_cases/registry.py` serving presets; `presets/catalog.py`;
+  `compile/workflow.py` + `compile/llm_node.py`; `policies/approval.py` +
+  `policies/synthesis.py`; `runtime.py` for `RuntimeContext`/`RoleConfig`);
+  fix §3's ruff invocation to `uvx --from ruff ruff check .` /
+  `uvx --from ruff ruff format --check .`; either remove §4's
+  legacy-path rules or reframe them as historical (the workflow backend is
+  now the only backend, so "never build on deprecated composition classes"
+  applies unconditionally, not as a migration-era carve-out).
+  *Done when*: §2's file list matches `git ls-files src/basic_agent/` for
+  the modules it names; the documented ruff command succeeds when copy-pasted
+  verbatim; §4 no longer references a legacy path that doesn't exist.
+  **Done (2026-08-23).** Preamble rewritten: §2 lists the post-E3/F2 layout
+  (presets/, use_cases/registry, compile/workflow+llm_node, config/graph+
+  sugar+loader, policies/, runtime.py, agent.py, interfaces/ — all verified
+  present via `git ls-files src/basic_agent/`); §3 uses the CI-verbatim
+  `uvx --from ruff ruff check .` / `uvx --from ruff ruff format --check .`
+  invocations (ruff isn't a declared project dependency — CI uses uvx per
+  `.github/workflows/ci.yml:73-74`); §4's legacy-path rules reframed as
+  unconditional hard rules (legacy retired with F2; nothing left to build
+  on or delete) plus the enforced composition-import isolation; phases
+  marked historical. Review log updated.
 
 ## Closed in the 2026-08-21 audit
 

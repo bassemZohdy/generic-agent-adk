@@ -2,6 +2,24 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-23 — CI restored: post-F2 image smoke assertions (C01)
+
+- **Fixed the "Test image startup" smoke step in `.github/workflows/ci.yml`**
+  (both the PR-path build job and the push-path `verify-image` job): the
+  assertions still expected the retired pre-F2 root shapes
+  (`root_agent.name == 'direct_agent'`; approval_gate as
+  `SequentialAgent`), so every main push since F1 failed CI at this step
+  (12+ consecutive red runs) while tests/lint/build stayed green and the
+  later jobs (sandbox-runtime hardening, image promotion) were skipped.
+- The assertions now verify the post-F2 contract: the served root is a
+  `google.adk.workflow.Workflow` containing the expected LlmAgent nodes
+  (`direct_agent` for the assistant env path; `human_in_loop_proposer` for
+  approval_gate via `examples/approval-gate.yaml`). Both verified locally
+  against the same entrypoints before commit.
+- **Pipeline green end-to-end** on `main` (run 32637911226): image
+  verification, sandbox hardening, signing, and promotion all pass. No
+  runtime-code change — CI workflow only.
+
 ## 2026-08-23 — Review wave 2: approval-gate enforcement, fail-closed detection, dedupe (R08, R09, R13)
 
 - **R09 — `require_approval` is load-bearing**: `Preset.build` applies a

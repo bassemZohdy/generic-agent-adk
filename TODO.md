@@ -4,9 +4,10 @@ Last audited: **2026-08-21**; workflow re-architecture program and code-review
 findings added **2026-08-23**; task descriptions expanded for hand-off
 **2026-08-23**; code-review findings R01–R05 closed **2026-08-23**; R06
 closed **2026-08-23**; R07/R10–R12/R14/R15 closed **2026-08-23**;
-R08/R09/R13 closed **2026-08-23** — all ten review findings closed. This
-file contains unfinished work only; completed audit work is recorded in
-[CHANGELOG.md](CHANGELOG.md) and git history.
+R08/R09/R13 closed **2026-08-23** — all ten review findings closed; stale
+post-F2 CI image-smoke assertions fixed **2026-08-23** (C01) and the main
+pipeline is green again. This file contains unfinished work only; completed
+audit work is recorded in [CHANGELOG.md](CHANGELOG.md) and git history.
 
 ## Verification baseline
 
@@ -17,7 +18,12 @@ file contains unfinished work only; completed audit work is recorded in
   workflow validation, package build, YAML and JSON parsing, Markdown
   relative links, Python compilation, Compose profiles, and the pinned
   sandbox Trivy/Syft check.
-- The latest published main pipeline passed all jobs; see the
+- The latest published main pipeline passed all jobs — restored
+  **2026-08-23** after C01 (run
+  [32637911226](https://github.com/bassemZohdy/generic-agent-adk/actions/runs/32637911226):
+  full pipeline green including image verification, sandbox-runtime
+  hardening, and image promotion/signing). Before C01 every main push since
+  F1 failed the stale "Test image startup" smoke step; see the
   [CI/CD workflow history](https://github.com/bassemZohdy/generic-agent-adk/actions/workflows/ci.yml).
 - Workflow migration is proven locally through Phase B: graph roots (chain,
   fan-out+join, routed loop), `RequestInput` interrupts/resume, and the
@@ -35,7 +41,9 @@ file contains unfinished work only; completed audit work is recorded in
 **Program closed 2026-08-23 — 25 complete · 1 architecture program complete
 (Phases A–F, ADR-005 Implemented, workflow backend only after F2).
 Unchecked tasks: none — all ten deep-review findings (R06–R15) closed
-2026-08-23.** R06: `agent._build_root_agent` is graph-first and applies
+2026-08-23, and the stale post-F2 CI smoke assertions fixed (C01) with the
+main pipeline green again.** R06: `agent._build_root_agent` is graph-first
+and applies
 `config.policies` (proven via `tests/test_served_graph_config.py` through
 the served entrypoint). R07/R10–R12/R14/R15 (wave 1): request-dependent
 expert routing with route normalization, visible aggregation failure +
@@ -101,6 +109,32 @@ check + format check clean, ADK contract guard clean, no encoding issues)
    file in the same commit.
 
 ## Remaining work
+
+### CI fix — 2026-08-23
+
+- [x] **C01 — Update the image smoke assertions to the post-F2 Workflow
+  roots.** *Problem*: `.github/workflows/ci.yml`'s "Test image startup"
+  step (both the PR-path build job and the push-path `verify-image` job)
+  still asserted the retired pre-F2 shapes — `root_agent.name ==
+  'direct_agent'` (post-E3/F2 the root is a `Workflow` named after the
+  preset key, so `'assistant'`) and `type(root_agent).__name__ ==
+  'SequentialAgent'` for approval_gate (`SequentialAgent` was retired with
+  F2; every preset compiles to a Workflow graph). Every main push since F1
+  failed CI at this step (12+ consecutive red runs), masking the green
+  test/lint/build jobs and skipping "Verify sandbox runtime hardening" and
+  image promotion.
+  *Fix*: assertions now check the real contract — the root is a
+  `google.adk.workflow.Workflow` and the expected LlmAgent nodes exist in
+  `graph.nodes` (`direct_agent` for the `AGENT_USE_CASE=assistant` env
+  path; `human_in_loop_proposer` for approval_gate through the mounted
+  `examples/approval-gate.yaml` config path). Both one-liners verified
+  locally against the same two entrypoints before commit.
+  *Done when*: the main pipeline is green end-to-end.
+  **Done (2026-08-23).** Commit `f460e88` (merge `6196f36`); run
+  [32637911226](https://github.com/bassemZohdy/generic-agent-adk/actions/runs/32637911226)
+  passed all jobs (5m12s) — including "Verify Staged Image" (first pass
+  since F1), the previously-skipped sandbox-runtime hardening step, and
+  image promotion/signing. Workflow pins and YAML parsing re-validated.
 
 ### Open findings — 2026-08-23 code review of `0ed8aac`/`61eee08`
 

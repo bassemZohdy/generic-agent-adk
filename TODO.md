@@ -3,14 +3,15 @@
 Last audited: **2026-08-21**; workflow re-architecture program and code-review
 findings added **2026-08-23**; task descriptions expanded for hand-off
 **2026-08-23**; code-review findings R01–R05 closed **2026-08-23**; R06
-closed **2026-08-23**; R07/R10–R12/R14/R15 closed **2026-08-23**. This file
-contains unfinished work only; completed audit work is recorded in
+closed **2026-08-23**; R07/R10–R12/R14/R15 closed **2026-08-23**;
+R08/R09/R13 closed **2026-08-23** — all ten review findings closed. This
+file contains unfinished work only; completed audit work is recorded in
 [CHANGELOG.md](CHANGELOG.md) and git history.
 
 ## Verification baseline
 
-- Local suite: **452 passed** (2026-08-23 post-R07/R10–R12/R14/R15 run),
-  **93.64% coverage** with a 90% minimum.
+- Local suite: **459 passed** (2026-08-23 post-R08/R09/R13 run — all ten
+  review findings closed), **94.14% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff (check + format),
   targeted Pyright (config + agent.py), ADK contract guards, SHA-pinned
   workflow validation, package build, YAML and JSON parsing, Markdown
@@ -33,18 +34,19 @@ contains unfinished work only; completed audit work is recorded in
 
 **Program closed 2026-08-23 — 25 complete · 1 architecture program complete
 (Phases A–F, ADR-005 Implemented, workflow backend only after F2).
-Unchecked tasks: R08, R09, R13 (2026-08-23 deep code review).** R06 closed
-2026-08-23: `agent._build_root_agent` now compiles `config.graph` first
-(ADR-005 graph-first) with the preset path as fallback, and applies
-`config.policies` (synthesis pre-compile, approval on the compiled root,
-either topology) — proven by `tests/test_served_graph_config.py` through the
-served entrypoint, not the compiler. The declarative graph/policies config
-surface is now load-bearing; "ADR-005 Implemented" stands without the R06
-qualifier. R07/R10/R11/R12/R14/R15 closed 2026-08-23 (request-dependent
+Unchecked tasks: none — all ten deep-review findings (R06–R15) closed
+2026-08-23.** R06: `agent._build_root_agent` is graph-first and applies
+`config.policies` (proven via `tests/test_served_graph_config.py` through
+the served entrypoint). R07/R10–R12/R14/R15 (wave 1): request-dependent
 expert routing with route normalization, visible aggregation failure +
 state marker, `(none)` error-message fixes, fail-fast empty specialist
-roster, concurrent plan steps, sugar-item mutual exclusivity); suite 452
-passed at that point, coverage 93.64%.
+roster, concurrent plan steps, sugar-item mutual exclusivity. R08/R09/R13
+(wave 2): fail-closed `_TaskAgentTool` detection (warning + upgrade-
+checklist bullet), `require_approval` drives a real gate-all approval
+policy (additive `policies.approval.gate_all` key; `Preset.build` wires it
+when the flag resolves true), and the catalog's duplicated tree-walk/chain
+helpers are imported from `policies/approval`. Suite 459 passed, 94.14%
+coverage at close.
 
 **Review log**: streak=3 (final), last_reviewed=2026-08-23, status=stopped —
 three consecutive clean passes, recurring audit self-terminated (no new
@@ -825,7 +827,7 @@ Reuse the fake-model/Runner harness patterns from
   route to different specialists end-to-end through the Runner (risk vs
   solution author sets, mutually exclusive), normalization unit tests, and
   no-routes passthrough.
-- [ ] **R08 — Approval policy's `_TaskAgentTool` detection fails open
+- [x] **R08 — Approval policy's `_TaskAgentTool` detection fails open
   (never gates) on `ImportError`/`AttributeError` instead of failing
   closed.** *Problem*: `src/basic_agent/policies/approval.py:39`,
   `is_unconditional_tool` catches the private-ADK-symbol lookup for
@@ -841,7 +843,16 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: a test that monkeypatches the `_TaskAgentTool` import to
   raise confirms the approval gate still blocks state-changing tools rather
   than passing everything through.
-- [ ] **R09 — `approval_gate` preset sets `RuntimeContext.require_approval
+  **Done (2026-08-23).** `is_unconditional_tool` now returns `False`
+  (gate-able) on lookup failure and logs a `warning` with `exc_info` via
+  the new module logger (pragma removed; docstring states the fail-closed
+  contract). `docs/ADK-UPGRADE-CHECKLIST.md` gained the verify-on-every-
+  upgrade bullet (detection failure → stricter gating, never silently
+  permissive). `tests/test_approval_gate_enforcement.py`: sys.modules
+  monkeypatch → returns False + warning logged; end-to-end a gate_all
+  callback still blocks gated tools with the import broken while
+  `request_approval`/`finish_task` pass by name.
+- [x] **R09 — `approval_gate` preset sets `RuntimeContext.require_approval
   = True` but nothing reads that field; the preset enforces nothing beyond
   prompt text.** *Problem*: `src/basic_agent/presets/catalog.py:280` sets
   `require_approval=True` in the preset defaults, but neither
@@ -859,6 +870,24 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: `approval_gate` has a programmatic veto (proven by a test
   that a gated tool call is blocked, not just discouraged by instruction
   text) rather than relying solely on prompt compliance.
+  **Done (2026-08-23).** `require_approval` now drives an enforceable
+  gate-all approval policy: `Preset.build` applies
+  `apply_approval_policy(make_approval_before_tool(ApprovalPolicyConfig(
+  enabled=True, gate_all=True)))` across the compiled tree whenever
+  `resolved.require_approval` is true (approval_gate's default; any preset
+  via `execution.require_approval: true`). `gate_all` is a new additive,
+  default-off `policies.approval` key (loader-parsed, documented in
+  CONFIGURATION.md) meaning "gate every tool except the unconditional set,
+  blocked pending `human_approved` state with a `request_confirmation`
+  interrupt". Historical note: the pre-E3 `before_tool` hook's
+  gated_tools/prefixes defaulted empty (the mutating-tool veto lived in the
+  runtime `protect_and_audit_tool` callback, still active) — this is the
+  first time the flag itself is load-bearing. Proven by
+  `tests/test_approval_gate_enforcement.py`: approval_gate's compiled nodes
+  block a gated tool call with the confirmation recorded,
+  `human_approved=True` passes, invariants (`request_approval`/
+  `finish_task`) never blocked, assistant without the flag has no gate, and
+  the YAML key parses (default False).
 - [x] **R10 — `default_aggregate_perspectives` swallows all exceptions at
   debug level, silently dropping `aggregated_perspectives` from state
   instead of surfacing the failure.** *Problem*:
@@ -930,7 +959,7 @@ Reuse the fake-model/Runner harness patterns from
   `defaults={"specialists": ...}` entry is unchanged).
   `tests/test_expert_dispatch_routing.py` covers both raises plus
   unset→default-roster.
-- [ ] **R13 — `_chain_before_tool`/`_iter_llm_agents` in
+- [x] **R13 — `_chain_before_tool`/`_iter_llm_agents` in
   `presets/catalog.py` are near-verbatim duplicates of
   `_chain_before_tool`/`iter_llm_agents` already defined and exported in
   `policies/approval.py`, instead of being imported.** *Problem*:
@@ -945,6 +974,14 @@ Reuse the fake-model/Runner harness patterns from
   shared module both import from) and delete the duplicate.
   *Done when*: `presets/catalog.py` has no local re-implementation; both
   call sites use the same function object.
+  **Done (2026-08-23).** The local `_chain_before_tool`/`_iter_llm_agents`
+  definitions are deleted; `presets/catalog.py` imports both (plus the
+  policy appliers, for R09) from `..policies.approval` top-level (no import
+  cycle — verified). `_chain_after_tool` stays (no counterpart exists).
+  A dedup test asserts the module no longer defines the helpers and that
+  `catalog._chain_before_tool is approval._chain_before_tool` (the re-export
+  keeps `tests/test_use_cases.py`'s import path working, resolving to the
+  same function object).
 - [x] **R14 — `plan_and_execute`'s dynamic plan steps run sequentially via
   a for-loop instead of concurrently, despite being independent.**
   *Problem*: `src/basic_agent/compile/workflow.py:138`, `_make_plan_execute`

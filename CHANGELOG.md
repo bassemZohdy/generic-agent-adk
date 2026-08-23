@@ -2,6 +2,33 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-23 — Review wave 2: approval-gate enforcement, fail-closed detection, dedupe (R08, R09, R13)
+
+- **R09 — `require_approval` is load-bearing**: `Preset.build` applies a
+  gate-all approval policy across the compiled tree whenever
+  `require_approval` resolves true (approval_gate's default; any preset via
+  `execution.require_approval: true`). Every tool except the unconditional
+  set (`request_approval`/`finish_task`/`_TaskAgentTool` delegations) is
+  blocked pending `human_approved` state with a `request_confirmation`
+  interrupt — a programmatic veto, not prompt compliance.
+- **Additive config key**: `policies.approval.gate_all` (default `false`)
+  exposes the same gate declaratively; loader-parsed and documented in
+  CONFIGURATION.md. No existing config changes behavior.
+- **R08 — fail-closed delegation detection**: `is_unconditional_tool`
+  returns gate-able (`False`) with a logged warning when the private
+  `google.adk.tools.agent_tool._TaskAgentTool` symbol cannot be resolved —
+  an ADK upgrade that moves it makes gating stricter, never silently
+  permissive. ADK-UPGRADE-CHECKLIST gained the verify-on-every-upgrade
+  bullet.
+- **R13 — dedupe**: `presets/catalog.py` no longer re-defines
+  `_chain_before_tool`/`_iter_llm_agents`; both are imported from
+  `policies/approval.py` (single traversal implementation shared by the
+  preset hook wiring and the approval policy walker).
+- **Behavior note**: `execution.require_approval: true` previously had no
+  effect; it now enables the gate-all approval policy. The public YAML/env
+  contract is otherwise unchanged (the only addition is the optional,
+  default-off `gate_all` key).
+
 ## 2026-08-23 — Review wave 1: routing, fail-fast config, error surfaces, concurrency (R07, R10–R12, R14, R15)
 
 - **R07 — request-dependent expert routing**: `expert_dispatch` now runs an

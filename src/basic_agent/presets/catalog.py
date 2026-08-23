@@ -322,22 +322,46 @@ def _plan_execute_spec(rt: RuntimeContext) -> GraphSpec:
 
 
 def _expert_dispatch_spec(rt: RuntimeContext) -> GraphSpec:
-    """Routing-node graph: a router function emits a specialist route.
+    """Routing-node graph: a classifier LLM feeds a router function node.
 
-    The router's implementation is supplied at compile time via
-    ``options.function = 'route_dispatch'`` (in the default function
-    registry).  Edge routes carry a per-specialist route; there is no
-    DEFAULT_ROUTE fallback (ADK rejects duplicate (from,to) edge pairs — E1
-    finding), so the router function must always emit a valid route.
+    The ``llm`` classifier runs first and writes exactly one specialist
+    name into ``routed_to`` (schema-cleared: the key is not in the root
+    state schema).  The router function (``options.function =
+    'route_dispatch'``) then normalizes that value against the roster
+    (bound as ``options.routes``) and emits the matching route edge; a
+    non-matching classifier reply falls back to ``default_route``.  There
+    is no DEFAULT_ROUTE fallback edge (ADK rejects duplicate (from,to)
+    edge pairs — E1 finding), so the router must always emit a valid route.
     """
-    specialists = list(rt.specialists) or list(EXPERTS_DEFAULT)
+    specialists = list(rt.specialists)
+    if not specialists:
+        raise ValueError(
+            "expert_dispatch requires at least one specialist; configure "
+            "execution.specialists or AGENT_SPECIALISTS"
+        )
     roles = rt.roles or {}
+    classifier = GraphNodeSpec(
+        name="router_classifier",
+        kind="llm",
+        role=RoleConfig(
+            instruction=(
+                "You are a request router. Classify the user's request "
+                "into exactly one specialist category. Respond with EXACTLY "
+                "one of these names and nothing else: " + ", ".join(specialists)
+            ),
+        ),
+        output_key="routed_to",
+        # `routed_to` is not in the root state schema (e.g. AgentState);
+        # clear the schema so the engine does not reject the write.
+        options={"no_state_schema": True},
+    )
     router = GraphNodeSpec(
         name="router_agent",
         kind="function",
         options={
             "function": "route_dispatch",
             "default_route": specialists[0],
+            "routes": specialists,
         },
     )
     specialist_nodes = []
@@ -355,8 +379,11 @@ def _expert_dispatch_spec(rt: RuntimeContext) -> GraphSpec:
                 ),
             )
         )
-    nodes = [router] + specialist_nodes
-    edges = [GraphEdgeSpec(source=START, target=router.name)]
+    nodes = [classifier, router] + specialist_nodes
+    edges = [
+        GraphEdgeSpec(source=START, target=classifier.name),
+        GraphEdgeSpec(source=classifier.name, target=router.name),
+    ]
     for index, node in enumerate(specialist_nodes):
         edges.append(
             GraphEdgeSpec(

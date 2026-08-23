@@ -3,14 +3,14 @@
 Last audited: **2026-08-21**; workflow re-architecture program and code-review
 findings added **2026-08-23**; task descriptions expanded for hand-off
 **2026-08-23**; code-review findings R01–R05 closed **2026-08-23**; R06
-closed **2026-08-23**. This file contains unfinished work only; completed
-audit work is recorded in [CHANGELOG.md](CHANGELOG.md) and git history.
+closed **2026-08-23**; R07/R10–R12/R14/R15 closed **2026-08-23**. This file
+contains unfinished work only; completed audit work is recorded in
+[CHANGELOG.md](CHANGELOG.md) and git history.
 
 ## Verification baseline
 
-- Local suite: **435 passed** (2026-08-23 post-R06 run; the R06 suite
-  `tests/test_served_graph_config.py` replaced env-platform skips with
-  deterministic builds), **93% coverage** with a 90% minimum.
+- Local suite: **452 passed** (2026-08-23 post-R07/R10–R12/R14/R15 run),
+  **93.64% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff (check + format),
   targeted Pyright (config + agent.py), ADK contract guards, SHA-pinned
   workflow validation, package build, YAML and JSON parsing, Markdown
@@ -33,14 +33,18 @@ audit work is recorded in [CHANGELOG.md](CHANGELOG.md) and git history.
 
 **Program closed 2026-08-23 — 25 complete · 1 architecture program complete
 (Phases A–F, ADR-005 Implemented, workflow backend only after F2).
-Unchecked tasks: R07–R15 (2026-08-23 deep code review).** R06 closed
+Unchecked tasks: R08, R09, R13 (2026-08-23 deep code review).** R06 closed
 2026-08-23: `agent._build_root_agent` now compiles `config.graph` first
 (ADR-005 graph-first) with the preset path as fallback, and applies
 `config.policies` (synthesis pre-compile, approval on the compiled root,
 either topology) — proven by `tests/test_served_graph_config.py` through the
 served entrypoint, not the compiler. The declarative graph/policies config
 surface is now load-bearing; "ADR-005 Implemented" stands without the R06
-qualifier.
+qualifier. R07/R10/R11/R12/R14/R15 closed 2026-08-23 (request-dependent
+expert routing with route normalization, visible aggregation failure +
+state marker, `(none)` error-message fixes, fail-fast empty specialist
+roster, concurrent plan steps, sugar-item mutual exclusivity); suite 452
+passed at that point, coverage 93.64%.
 
 **Review log**: streak=3 (final), last_reviewed=2026-08-23, status=stopped —
 three consecutive clean passes, recurring audit self-terminated (no new
@@ -787,7 +791,7 @@ Reuse the fake-model/Runner harness patterns from
   preset fallback unchanged without `graph:`. Suite 435 passed, 93.35%
   coverage, ruff check+format clean, pyright clean (agent.py + config),
   ADK assumptions + doc links green.
-- [ ] **R07 — `expert_dispatch`'s router always dispatches to the first
+- [x] **R07 — `expert_dispatch`'s router always dispatches to the first
   specialist; nothing ever writes `ctx.state['routed_to']` before the
   router node runs.** *Problem*: `src/basic_agent/compile/workflow.py:51`,
   `default_route_dispatch` does `route = ctx.state.get("routed_to",
@@ -808,6 +812,19 @@ Reuse the fake-model/Runner harness patterns from
   actually run (not just that the default one runs).
   *Done when*: `expert_dispatch` demonstrably routes different inputs to
   different specialists, not just to `specialists[0]` every time.
+  **Done (2026-08-23).** `_expert_dispatch_spec` now builds
+  START → `router_classifier` (llm node; strict roster-naming instruction,
+  `output_key: routed_to`, `options.no_state_schema`) → `router_agent`
+  (function node) → specialists. `default_route_dispatch` gained an optional
+  `routes` parameter (bound from `options.routes` via the same partial
+  mechanism as `default_route`): fuzzy classifier replies are normalized
+  (strip + casefold, equals-or-contains) against the roster, falling back to
+  `default_route` — honoring the E1 "always emit a valid route" contract;
+  `graph-routed.yaml` behavior unchanged (no `routes` → unbound passthrough).
+  `tests/test_expert_dispatch_routing.py` (6 tests): two different inputs
+  route to different specialists end-to-end through the Runner (risk vs
+  solution author sets, mutually exclusive), normalization unit tests, and
+  no-routes passthrough.
 - [ ] **R08 — Approval policy's `_TaskAgentTool` detection fails open
   (never gates) on `ImportError`/`AttributeError` instead of failing
   closed.** *Problem*: `src/basic_agent/policies/approval.py:39`,
@@ -842,7 +859,7 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: `approval_gate` has a programmatic veto (proven by a test
   that a gated tool call is blocked, not just discouraged by instruction
   text) rather than relying solely on prompt compliance.
-- [ ] **R10 — `default_aggregate_perspectives` swallows all exceptions at
+- [x] **R10 — `default_aggregate_perspectives` swallows all exceptions at
   debug level, silently dropping `aggregated_perspectives` from state
   instead of surfacing the failure.** *Problem*:
   `src/basic_agent/compile/workflow.py:79` wraps the aggregation logic in a
@@ -856,7 +873,14 @@ Reuse the fake-model/Runner harness patterns from
   absence rather than silently getting nothing.
   *Done when*: a forced-failure test proves the failure is visible (log
   level or state marker), not silently swallowed.
-- [ ] **R11 — Operator-precedence bug duplicated in two error-message
+  **Done (2026-08-23).** The aggregation still never propagates (graph
+  function boundary) but logs at `warning` with `exc_info=True` and writes
+  `ctx.state["aggregation_failed"] = True` in its own guarded try/except
+  (a broken state logs a second warning, never raises). Module-level logger
+  replaces the per-call import. Success-path ordering/snapshot semantics
+  byte-identical. `tests/test_compile_fixes.py`: hostile `to_dict`/state
+  failures assert the warning record and the marker; success path pinned.
+- [x] **R11 — Operator-precedence bug duplicated in two error-message
   builders: `"..." + ", ".join(x) or "(none)"` always takes the non-empty
   branch because `+` binds tighter than `or`.** *Problem*:
   `src/basic_agent/compile/llm_node.py:96` (`resolve_schema`'s "Unknown
@@ -872,7 +896,12 @@ Reuse the fake-model/Runner harness patterns from
   in a local variable first) in both files.
   *Done when*: calling each error path with an empty registry/node-set
   produces a message ending in `(none)`, verified by a test for each.
-- [ ] **R12 — `expert_dispatch` silently substitutes a default specialist
+  **Done (2026-08-23).** Both builders use
+  `f"{', '.join(sorted(x)) or '(none)'}"` so the fallback actually applies
+  (prefix text unchanged). `tests/test_compile_fixes.py`: empty-registry
+  `resolve_schema` and empty-node-set sugar expansion each raise a
+  ValueError ending in `(none)`; a populated-registry case pins the listing.
+- [x] **R12 — `expert_dispatch` silently substitutes a default specialist
   roster when `specialists` is empty, instead of failing fast like the
   pre-refactor `RouterStrategy.validate()` did.** *Problem*:
   `src/basic_agent/presets/catalog.py:333`,
@@ -889,6 +918,18 @@ Reuse the fake-model/Runner harness patterns from
   behavior matching the removed strategy).
   *Done when*: a test asserts `specialists: []` raises rather than
   silently falling back to `EXPERTS_DEFAULT`.
+  **Done (2026-08-23).** The silent `or EXPERTS_DEFAULT` fallback is gone.
+  Key-presence distinguishes unset from empty: the YAML loader raises
+  "execution.specialists must not be empty; list at least one specialist or
+  remove the key to use the default roster" when the key is present but
+  empty (programmatic `ExecutionConfig(specialists=[])` construction is
+  unaffected — parse-time only), and `_expert_dispatch_spec` raises
+  defensively when handed `specialists=()` directly (restoring the removed
+  `RouterStrategy.validate()` fail-fast). Unset still yields
+  `EXPERTS_DEFAULT` through `Preset.apply_defaults` (the
+  `defaults={"specialists": ...}` entry is unchanged).
+  `tests/test_expert_dispatch_routing.py` covers both raises plus
+  unset→default-roster.
 - [ ] **R13 — `_chain_before_tool`/`_iter_llm_agents` in
   `presets/catalog.py` are near-verbatim duplicates of
   `_chain_before_tool`/`iter_llm_agents` already defined and exported in
@@ -904,7 +945,7 @@ Reuse the fake-model/Runner harness patterns from
   shared module both import from) and delete the duplicate.
   *Done when*: `presets/catalog.py` has no local re-implementation; both
   call sites use the same function object.
-- [ ] **R14 — `plan_and_execute`'s dynamic plan steps run sequentially via
+- [x] **R14 — `plan_and_execute`'s dynamic plan steps run sequentially via
   a for-loop instead of concurrently, despite being independent.**
   *Problem*: `src/basic_agent/compile/workflow.py:138`, `_make_plan_execute`
   `await ctx.run_node(...)` one step at a time in a `for` loop even though
@@ -918,7 +959,15 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: a test with fake models measures (or otherwise proves)
   concurrent dispatch of independent plan steps, or a comment justifies why
   sequential execution is required.
-- [ ] **R15 — `_parse_sugar_item` doesn't enforce mutual exclusivity
+  **Done (2026-08-23).** `_make_plan_execute` dispatches the per-step
+  `ctx.run_node` awaitables via `asyncio.gather` (same `run_id`/
+  `use_sub_branch`/`raise_on_wait` args); gather preserves input order so
+  `plan_outputs` stays in step order (the preset-matrix ordering assertion
+  is green unchanged). The concurrency held on the real engine — no
+  fallback needed: `tests/test_compile_fixes.py` proves peak concurrency
+  3/3 with a sleeping fake model (warm-run timing ~0.17–0.20s vs the 0.45s
+  sequential floor; a warm-up run absorbs the one-time engine init).
+- [x] **R15 — `_parse_sugar_item` doesn't enforce mutual exclusivity
   between `parallel` and `loop` in the same sequence entry, unlike the
   sibling `_parse_sugar_form`.** *Problem*:
   `src/basic_agent/config/loader.py:792`, a sequence item with both
@@ -931,6 +980,13 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: a test config with both `parallel` and `loop` set on one
   sequence item raises a clear validation error instead of silently
   picking one.
+  **Done (2026-08-23).** `_parse_sugar_item` builds the same
+  `data.get(key) is not None` presence list as `_parse_sugar_form` and
+  raises `"{path}: exactly one of 'parallel' or 'loop' may be set; got
+  both"` before branching (all other behavior, including `parallel: null`
+  handling, unchanged). `tests/test_sugar_item_exclusivity.py` (3 tests):
+  the both-set YAML raises with the exact message; only-parallel and
+  only-loop items still load and validate.
 
 ## Closed in the 2026-08-21 audit
 

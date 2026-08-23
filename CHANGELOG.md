@@ -2,6 +2,39 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-23 — Review wave 1: routing, fail-fast config, error surfaces, concurrency (R07, R10–R12, R14, R15)
+
+- **R07 — request-dependent expert routing**: `expert_dispatch` now runs an
+  LLM classifier node before the router function node; the classifier writes
+  the specialist name to `routed_to` (schema-cleared) and
+  `default_route_dispatch` normalizes fuzzy replies against
+  `options.routes` (bound at compile time), falling back to `default_route`
+  so the router always emits a valid route (E1 contract). Different inputs
+  demonstrably reach different specialists
+  (`tests/test_expert_dispatch_routing.py`).
+- **R12 — fail-fast empty specialist roster**: the YAML loader rejects an
+  explicitly empty `execution.specialists` ("must not be empty; … or remove
+  the key"), and the spec builder raises defensively on `specialists=()`;
+  unset still yields the default roster via preset defaults. The silent
+  `or EXPERTS_DEFAULT` substitution is gone.
+- **R10 — visible aggregation failure**: `default_aggregate_perspectives`
+  logs failures at `warning` (was `debug`) and writes an
+  `aggregation_failed` state marker instead of silently dropping
+  `aggregated_perspectives`.
+- **R11 — `(none)` error-message fix**: the operator-precedence bug
+  (`"…" + ", ".join(x) or "(none)"` — the fallback never fired) fixed in
+  both `resolve_schema` and `_check_name_exists`.
+- **R14 — concurrent plan steps**: `plan_and_execute` dispatches
+  independent steps via `asyncio.gather` (peak concurrency proven 3/3 with
+  fake models); `plan_outputs` stays in step order.
+- **R15 — sugar-item mutual exclusivity**: a sequence item with both
+  `parallel:` and `loop:` now raises a clear validation error instead of
+  silently using `parallel`.
+- **No public-surface change**: catalog metadata, the eight use-case keys,
+  and the YAML/env contract are unchanged (`graph-routed.yaml` and the
+  preset matrix pass unmodified; the only loader change rejects a
+  previously-silently-mishandled misconfiguration).
+
 ## 2026-08-23 — R06: the declarative graph/policies config is load-bearing
 
 - **`config.graph` and `config.policies` now drive the served agent**

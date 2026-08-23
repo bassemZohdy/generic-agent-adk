@@ -30,7 +30,6 @@ from basic_agent.compile import compile_legacy
 from basic_agent.config.graph import GraphNodeSpec
 from basic_agent.config.sugar import (
     LoopSugar,
-    ParallelSugar,
     SequenceSugar,
     expand_sugar,
 )
@@ -134,27 +133,10 @@ def _pipeline_spec() -> Any:
 
 
 def _multi_perspective_spec() -> Any:
-    workers = [
-        GraphNodeSpec(name="parallel_worker_0", kind="llm", output_key="perspective_0"),
-        GraphNodeSpec(name="parallel_worker_1", kind="llm", output_key="perspective_1"),
-    ]
-    synthesizer = GraphNodeSpec(
-        name="perspective_synthesizer",
-        kind="llm",
-        output_key="last_response",
-        role=RoleConfig(instruction=SYNTHESIZER_INSTRUCTION),
-    )
-    sugar = SequenceSugar(
-        items=[
-            ParallelSugar(
-                items=["parallel_worker_0", "parallel_worker_1"],
-                name="parallel_agent",
-            ),
-            "perspective_synthesizer",
-        ]
-    )
-    by_name = {node.name: node for node in workers + [synthesizer]}
-    return expand_sugar(sugar, by_name)
+    """Built by the D2 policy helper: nested parallel + synthesizer node."""
+    from basic_agent.policies import legacy_multi_perspective_spec
+
+    return legacy_multi_perspective_spec(["parallel_worker_0", "parallel_worker_1"])
 
 
 def _refine_spec() -> Any:

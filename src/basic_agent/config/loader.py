@@ -11,6 +11,7 @@ from typing import Any
 
 import yaml
 
+from ..policies.synthesis import SYNTHESIZER_INSTRUCTION, SYNTHESIZER_OUTPUT_KEY
 from ..strategies.base import RoleConfig
 from ..util import split_csv
 from .graph import GraphEdgeSpec, GraphNodeSpec, GraphSpec, RetrySpec
@@ -128,6 +129,37 @@ class StateConfig:
 
 
 @dataclass
+class ApprovalPolicyConfig:
+    """Approval policy configuration (ADR-005 §4; TODO D1)."""
+
+    enabled: bool = False
+    gated_tools: list[str] = field(default_factory=list)
+    gated_prefixes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class SynthesisPolicyConfig:
+    """Synthesis policy configuration (ADR-005 §4; TODO D2).
+
+    ``instruction``/``output_key`` default to the canonical synthesizer
+    contract (same instruction and state behavior as the multi_perspective
+    use case).
+    """
+
+    enabled: bool = False
+    instruction: str = SYNTHESIZER_INSTRUCTION
+    output_key: str = SYNTHESIZER_OUTPUT_KEY
+
+
+@dataclass
+class PoliciesConfig:
+    """Cross-cutting policies; each section is optional."""
+
+    approval: ApprovalPolicyConfig | None = None
+    synthesis: SynthesisPolicyConfig | None = None
+
+
+@dataclass
 class AgentConfig:
     """Complete agent configuration."""
 
@@ -142,6 +174,7 @@ class AgentConfig:
     state: StateConfig | None = None
     roles: dict[str, RoleConfig] = field(default_factory=dict)
     graph: GraphSpec | None = None
+    policies: PoliciesConfig | None = None
 
     def validate(self) -> None:
         """Validate structural configuration requirements.
@@ -194,6 +227,7 @@ _CONFIG_KEYS = {
     "state",
     "roles",
     "graph",
+    "policies",
 }
 
 
@@ -848,6 +882,57 @@ def _parse_graph_spec(data: Any, path: str = "graph") -> GraphSpec:
     return parsed
 
 
+_POLICY_KEYS = {"approval", "synthesis"}
+_APPROVAL_POLICY_KEYS = {"enabled", "gated_tools", "gated_prefixes"}
+_SYNTHESIS_POLICY_KEYS = {"enabled", "instruction", "output_key"}
+
+
+def _parse_policies(data: Any, path: str = "policies") -> PoliciesConfig | None:
+    """Parse the ``policies`` section; None when absent."""
+    if data is None:
+        return None
+    data = _mapping(data, path)
+    _keys(data, _POLICY_KEYS, path)
+
+    approval = None
+    if data.get("approval") is not None:
+        section = _mapping(data["approval"], f"{path}.approval")
+        _keys(section, _APPROVAL_POLICY_KEYS, f"{path}.approval")
+        if "enabled" in section:
+            _boolean(section["enabled"], f"{path}.approval.enabled")
+        approval = ApprovalPolicyConfig(
+            enabled=section.get("enabled", False),
+            gated_tools=_string_list(
+                section.get("gated_tools", []), f"{path}.approval.gated_tools"
+            ),
+            gated_prefixes=_string_list(
+                section.get("gated_prefixes", []), f"{path}.approval.gated_prefixes"
+            ),
+        )
+
+    synthesis = None
+    if data.get("synthesis") is not None:
+        section = _mapping(data["synthesis"], f"{path}.synthesis")
+        _keys(section, _SYNTHESIS_POLICY_KEYS, f"{path}.synthesis")
+        if "enabled" in section:
+            _boolean(section["enabled"], f"{path}.synthesis.enabled")
+        instruction = _string(
+            section.get("instruction", SYNTHESIZER_INSTRUCTION),
+            f"{path}.synthesis.instruction",
+        )
+        output_key = _string(
+            section.get("output_key", SYNTHESIZER_OUTPUT_KEY),
+            f"{path}.synthesis.output_key",
+        )
+        synthesis = SynthesisPolicyConfig(
+            enabled=section.get("enabled", False),
+            instruction=instruction,
+            output_key=output_key,
+        )
+
+    return PoliciesConfig(approval=approval, synthesis=synthesis)
+
+
 def _parse_agent_config(data: dict) -> AgentConfig:
     """Parse raw dictionary into AgentConfig.
 
@@ -1056,6 +1141,8 @@ def _parse_agent_config(data: dict) -> AgentConfig:
     if data.get("graph") is not None:
         graph_config = _parse_graph_spec(data["graph"])
 
+    policies_config = _parse_policies(data.get("policies"))
+
     return AgentConfig(
         use_case=use_case,
         name=_string(agent_data.get("name", ""), "agent.name"),
@@ -1068,4 +1155,5 @@ def _parse_agent_config(data: dict) -> AgentConfig:
         state=state_config,
         roles=roles,
         graph=graph_config,
+        policies=policies_config,
     )

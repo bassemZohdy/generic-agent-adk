@@ -8,7 +8,7 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **479 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
+- Local suite: **489 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
   and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
   **96% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
@@ -33,8 +33,8 @@ contains unfinished work only; completed audit work is recorded in
 **25 complete · 0 partial · 1 architecture program in progress (Phases A–F
 below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
 complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C complete
-2026-08-23 (C1–C4; C4 parity for the six legacy-expressible presets,
-expert_dispatch/team_coordinator tracked with E2); Phase D next; code-review
+2026-08-23 (C1–C4); Phase D in progress (D1 approval policy and D2
+synthesis policy complete 2026-08-23; D3 concern mapping next); code-review
 findings R01–R05 closed 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
@@ -411,7 +411,7 @@ Reuse the fake-model/Runner harness patterns from
 
 #### Phase D — Cross-cutting policies
 
-- [ ] **D1 — Approval as a policy, not a use case.**
+- [x] **D1 — Approval as a policy, not a use case.**
   *Depends on*: C3, B3. *Files*: new `src/basic_agent/policies/approval.py`;
   config surface `policies.approval: {enabled, gated_tools, gated_prefixes}`
   in `config/loader.py`; source logic extracted from
@@ -424,7 +424,21 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: tests prove approval works on at least two different preset
   topologies (e.g. assistant and pipeline) on the chosen backend, and the
   invariant tools pass through un-gated.
-- [ ] **D2 — Synthesis/aggregation as a policy.**
+  **Done (2026-08-23).** `policies/approval.py` ships the extracted
+  veto + `request_confirmation` flow with the B3 invariants
+  (`UNCONDITIONAL_TOOLS = {request_approval, finish_task}` plus
+  `_TaskAgentTool` detection) and an `apply_approval_policy()` walker that
+  chains the callback after existing per-agent callbacks on both
+  `sub_agents` trees AND `Workflow.graph.nodes`. Config surface
+  `policies.approval` parses in the loader. `tests/test_policies.py`
+  proves: invariant passthrough (unit), gating on the compiled assistant
+  topology, and full interrupt→resume gating on the compiled pipeline
+  topology (gated tool never runs, confirmation interrupt raised, pipeline
+  completes after resume). Workflow-backend interrupt notes: the same
+  `request_confirmation` callback is the engine interrupt on LlmAgent
+  nodes; `request_input`-based (FunctionNode) policy interrupts were proven
+  in B2.
+- [x] **D2 — Synthesis/aggregation as a policy.**
   *Depends on*: C3. *Files*: new `src/basic_agent/policies/synthesis.py`;
   replaces `use_cases/multi_perspective.py`'s hand-rolled `compose()`
   override and `after_run` state scraping.
@@ -434,6 +448,18 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: `multi_perspective` behavior is reproduced via the policy
   (same state keys, same synthesizer instruction) and the policy also works
   applied to a raw fan-out graph.
+  **Done (2026-08-23).** `policies/synthesis.py`: `synthesizer_node()`
+  (canonical instruction/output_key — byte-equal to the use case's),
+  `with_synthesis()` (pure spec transform: appends the synthesizer after a
+  single terminal — the parallel sugar's join — or inserts a `synthesis_join`
+  for raw fan-outs), `legacy_multi_perspective_spec()` (nested parallel +
+  trailing step), `make_synthesis_after_run()` (same `perspective_*` →
+  `aggregated_perspectives` aggregation). Config surface
+  `policies.synthesis` parses. Tests: raw fan-out + join compile and run
+  with fake models (state keys match), after-run aggregation reproduces the
+  multi_perspective state contract, and the legacy spec reproduces the
+  golden parity (the C4 multi_perspective case now consumes this policy
+  helper).
 - [ ] **D3 — Map remaining orthogonals onto per-node config.**
   *Depends on*: C1. *Files*: `config/graph.py`, `compile/*`, docs.
   *Steps*: one documented home each for retries, timeouts, schemas, output

@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ..presets import PRESETS, Preset
 from ..util import is_production
 
 if TYPE_CHECKING:
@@ -24,11 +25,38 @@ CUSTOM_MODULE_ALLOWLIST_ENV = "AGENT_USE_CASE_MODULE_ALLOWLIST"
 
 
 class UseCaseRegistry:
-    """Registry of use-case agents by canonical key and alias (case-insensitive)."""
+    """Registry of use-case agents by canonical key and alias (case-insensitive).
+
+    Built-ins are registered both as facade instances (the current
+    strategy-based build path, kept until E3) and as presets (ADR-005 §5 —
+    catalog metadata + graph-spec builders consumed by the C3 compilers).
+    Custom modules via ``AGENT_USE_CASE_MODULE`` still contribute
+    ``BaseUseCaseAgent`` subclasses only.
+    """
 
     def __init__(self) -> None:
         self._use_cases: dict[str, BaseUseCaseAgent] = {}
         self._alias_to_key: dict[str, str] = {}
+        self._presets: dict[str, Preset] = {}
+        self._preset_alias_to_key: dict[str, str] = {}
+
+    def _register_preset(self, preset: Preset) -> None:
+        key = preset.key.lower()
+        if key in self._presets:
+            raise ValueError(f"Preset {key!r} is already registered")
+        for alias in preset.aliases:
+            alias = alias.lower()
+            if (
+                alias in self._preset_alias_to_key
+                and self._preset_alias_to_key[alias] != key
+            ):
+                raise ValueError(
+                    f"Preset alias {alias!r} is already registered for "
+                    f"{self._preset_alias_to_key[alias]!r}"
+                )
+            self._preset_alias_to_key[alias] = key
+        self._presets[key] = preset
+        logger.debug("Registered preset %r", key)
 
     def register(self, instance: BaseUseCaseAgent) -> None:
         """Register a use-case agent instance under its key and aliases.
@@ -88,6 +116,36 @@ class UseCaseRegistry:
             for key, instance in sorted(self._use_cases.items())
         ]
 
+    def get_preset(self, key: str) -> Preset:
+        """Return the preset for a canonical key or alias (case-insensitive)."""
+        canonical = self._preset_alias_to_key.get(key.lower(), key.lower())
+        try:
+            return self._presets[canonical]
+        except KeyError:
+            valid = ", ".join(sorted(self._presets))
+            raise ValueError(
+                f"Unknown preset {key!r}. Valid presets: {valid}"
+            ) from None
+
+    def has_preset(self, key: str) -> bool:
+        """Return True if the key or alias resolves to a registered preset."""
+        canonical = self._preset_alias_to_key.get(key.lower(), key.lower())
+        return canonical in self._presets
+
+    def list_presets(self) -> list[dict]:
+        """Return preset catalog entries sorted by key (same shape as
+        ``list_use_cases``, sourced from the preset data)."""
+        return [
+            {
+                "key": key,
+                "title": preset.title,
+                "when_to_use": preset.when_to_use,
+                "aliases": list(preset.aliases),
+                "interfaces": list(preset.interfaces),
+            }
+            for key, preset in sorted(self._presets.items())
+        ]
+
 
 _default_registry: UseCaseRegistry | None = None
 
@@ -110,7 +168,12 @@ def get_default_registry() -> UseCaseRegistry:
 
 
 def _register_builtins(registry: UseCaseRegistry) -> None:
-    """Register the eight built-in use cases (imports here avoid cycles)."""
+    """Register the eight built-in use cases (imports here avoid cycles).
+
+    Facade instances keep the current strategy-based build path until E3;
+    the ADR-005 presets are registered alongside so the catalog/graph layer
+    is served from preset data (E1).
+    """
     from .approval_gate import ApprovalGateAgent
     from .assistant import AssistantAgent
     from .expert_dispatch import ExpertDispatchAgent
@@ -131,6 +194,8 @@ def _register_builtins(registry: UseCaseRegistry) -> None:
         ApprovalGateAgent(),
     ):
         registry.register(instance)
+    for preset in PRESETS.values():
+        registry._register_preset(preset)
 
 
 def load_custom_use_cases(

@@ -8,7 +8,7 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **492 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
+- Local suite: **500 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
   and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
   **96% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
@@ -34,7 +34,8 @@ contains unfinished work only; completed audit work is recorded in
 below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
 complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C complete
 2026-08-23 (C1–C4); Phase D complete 2026-08-23 (D1–D3 policies + concern
-mapping); Phase E next (presets); code-review findings R01–R05 closed
+mapping); Phase E in progress (E1 presets complete 2026-08-23; E2
+classification matrix next); code-review findings R01–R05 closed
 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
@@ -484,7 +485,7 @@ Reuse the fake-model/Runner harness patterns from
 
 #### Phase E — Presets: the eight keys become data
 
-- [ ] **E1 — Preset = named partial config.**
+- [x] **E1 — Preset = named partial config.**
   *Depends on*: C1–C4, D1–D2. *Files*: new `src/basic_agent/presets/`
   (one data module or YAML per preset); rework
   `src/basic_agent/use_cases/registry.py` to serve presets.
@@ -497,6 +498,25 @@ Reuse the fake-model/Runner harness patterns from
   (`AGENT_USE_CASE_MODULE_ALLOWLIST`).
   *Done when*: snapshot tests prove the catalog surface unchanged; presets
   expand to graph specs consumed by the C3 compilers.
+  **Done (2026-08-23).** `presets/catalog.py` ships the eight preset
+  records (metadata byte-identical to the snapshot — hardcoded
+  `CATALOG_SNAPSHOT` in `tests/test_presets.py` taken before the refactor —
+  plus `defaults` and spec builders per the ADR-005 §5 classification:
+  assistant single node, pipeline sequence with "step N of count" defaults
+  and `roles.step_{i}` overrides, multi_perspective = with_synthesis
+  (workflow) / `legacy_multi_perspective_spec` (legacy), refine loop,
+  approval_gate sequence, plan_and_execute sequence, expert_dispatch
+  routing graph (`options.function: route_dispatch` + per-specialist
+  routes), team_coordinator escape hatch (builder raises with the documented
+  reason). Registry serves presets (`get_preset`/`has_preset`/
+  `list_presets` with the same alias/case resolution; facades remain the
+  build path until E3; custom-module loading untouched). Finding recorded:
+  ADK graph validation rejects duplicate (from,to) edge pairs even with
+  different routes, so the routing preset has no DEFAULT_ROUTE fallback —
+  the router function must always emit a valid route (validated at runtime).
+  `tests/test_presets.py` (10 tests): snapshot, metadata parity, preset
+  resolution, spec expansion + compile on both backends, escape-hatch
+  behavior.
 - [ ] **E2 — Re-classify the built-ins.**
   *Depends on*: E1. Mapping (from ADR-005 §5): `assistant` → single llm
   node; `pipeline` → `sequence` sugar (keep per-step "step N of count"

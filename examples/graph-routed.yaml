@@ -1,0 +1,40 @@
+# Routed graph example — conditional edges selected by an emitted route value
+# (ADR-005 §1; inexpressible in the old taxonomy).  The router function
+# (built-in `route_dispatch`) routes deterministically from state
+# `routed_to`, falling back to `default_route`.  Run:
+#   docker run -v ./graph-routed.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
+
+agent:
+  use_case: assistant
+  description: Routed graph demo — choose a research or a risk answer branch.
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+tools:
+  enabled: []
+
+graph:
+  nodes:
+    - name: router_agent
+      kind: function
+      options:
+        function: route_dispatch
+        default_route: research
+    - name: research_specialist
+      kind: llm
+      role:
+        instruction: Answer the request from a research perspective.
+    - name: risk_specialist
+      kind: llm
+      role:
+        instruction: Answer the request from a risk perspective.
+  edges:
+    - from: START
+      to: router_agent
+    - from: router_agent
+      to: research_specialist
+      route: research
+    - from: router_agent
+      to: risk_specialist
+      route: risk

@@ -102,6 +102,14 @@ One documented home per cross-cutting concern:
 Per-node `retry`/`timeout` on the legacy path are a documented rollback
 limitation; presets targeting legacy must not rely on them.
 
+**Note on `output_key` and strict state schemas**: with a state schema
+enabled (`state.enabled`), the workflow engine validates every
+`state_delta` write against the declared fields — nodes writing keys the
+schema does not declare (e.g. `perspective_0`) must set
+`options: {no_state_schema: true}` to clear the schema for that node. The
+legacy backend never validated these writes; the new examples
+(`examples/graph-nested.yaml`) demonstrate the option.
+
 ### Policies (D1/D2)
 
 ```yaml

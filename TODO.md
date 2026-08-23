@@ -8,8 +8,8 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **439 passed, 5 skipped** (2026-08-23 E3 run — 4 POSIX-sh and
-  1 docker-SDK platform skips; Linux CI runs the POSIX shapes), **93%
+- Local suite: **442 passed, 5 skipped** (2026-08-23 E3/F1 run — 4 POSIX-sh
+  and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes), **93%
   coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
   ADK contract guards, SHA-pinned workflow validation, package build, YAML and
@@ -36,7 +36,9 @@ complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C complete
 2026-08-23 (C1–C4); Phase D complete 2026-08-23 (D1–D3 policies + concern
 mapping); Phase E complete 2026-08-23 (E1 presets, E2 matrix, E3
 strategies/facades deleted — E2a dynamic-planning refinement remains);
-code-review findings R01–R05 closed 2026-08-23.**
+Phase F in progress (F1 docs + examples complete 2026-08-23; F2 legacy
+retirement awaits one release on the workflow default, then F3 closes the
+program); code-review findings R01–R05 closed 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -603,7 +605,7 @@ Reuse the fake-model/Runner harness patterns from
 
 #### Phase F — Cleanup, docs, and legacy retirement
 
-- [ ] **F1 — Rewrite user-facing docs and examples.**
+- [x] **F1 — Rewrite user-facing docs and examples.**
   *Depends on*: E2. *Files*: `docs/CONFIGURATION.md`,
   `docs/ARCHITECTURE.md`, `examples/*.yaml`, `README.md` sections that
   describe use cases.
@@ -614,6 +616,19 @@ Reuse the fake-model/Runner harness patterns from
   examples-validation test if present, else add one).
   *Done when*: markdown link check passes; every example parses and
   compiles.
+  **Done (2026-08-23).** New examples: `examples/graph-nested.yaml`
+  (outer sequence with a `graph` node whose subgraph fans out → join →
+  synthesizer — uses the documented `options.no_state_schema` for
+  intermediate keys) and `examples/graph-routed.yaml` (router function +
+  per-specialist route edges). `tests/test_graph_examples.py` (3 tests)
+  loads+validates+compiles EVERY `examples/*.yaml` through the real loader
+  and runs both new graph examples end-to-end with fake models (nested:
+  intake + perspectives + synthesize state keys; routed: default route
+  reaches the research branch). CONFIGURATION.md carries the sugar forms,
+  the policies section, the D3 concern table, the node-name/identifier and
+  `no_state_schema` notes; ARCHITECTURE.md (E3) documents the preset
+  shapes and custom surface; README use-case table is metadata-pinned and
+  unchanged.
 - [ ] **F2 — Retire the legacy path.**
   *Depends on*: one release shipped with workflow backend default + legacy
   rollback (per B4). *Files*: delete `src/basic_agent/compile/legacy.py`

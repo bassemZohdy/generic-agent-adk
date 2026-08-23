@@ -64,7 +64,7 @@ def build_llm_agent(
         instruction=instruction,
         tools=role.tools if role.tools is not None else (rt.tools or []),
         code_executor=rt.code_executor,
-        state_schema=(rt.state_schema if state_schema is _UNSET else state_schema),
+        state_schema=rt.state_schema if state_schema is _UNSET else state_schema,  # type: ignore[arg-type]
         output_schema=output_schema if output_schema is not None else rt.output_schema,
         output_key=output_key if output_key is not None else rt.output_key,
         before_agent_callback=rt.before_agent_callback,

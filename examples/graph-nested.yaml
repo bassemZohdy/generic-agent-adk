@@ -1,0 +1,60 @@
+# Nested graph example — a `graph` node carries its own subgraph (ADR-005).
+# Inexpressible in the old taxonomy: an inner fan-out + join + synthesizer
+# graph sits inside an outer sequence.  Run:
+#   docker run -v ./graph-nested.yaml:/app/config/agent.yaml -e GOOGLE_API_KEY=... generic-adk-agent-runtime
+
+agent:
+  use_case: assistant
+  description: Nested graph demo — intake, then a research subgraph that fans out, joins, and synthesizes.
+
+model:
+  name: "${ADK_MODEL:gemini-3.6-flash}"
+
+tools:
+  enabled: []
+
+graph:
+  nodes:
+    - name: intake
+      kind: llm
+      role:
+        instruction: Parse the request and record concisely what is being asked.
+      output_key: request_summary
+      options:
+        # intermediate keys live outside the root state schema (AgentState);
+        # clear the schema for nodes that write them (see CONFIGURATION.md)
+        no_state_schema: true
+    - name: research
+      kind: graph
+      graph:
+        nodes:
+          - name: researcher_a
+            kind: llm
+            role:
+              instruction: Investigate the request from the user's viewpoint.
+            output_key: perspective_0
+            options:
+              no_state_schema: true
+          - name: researcher_b
+            kind: llm
+            role:
+              instruction: Investigate the request from the market viewpoint.
+            output_key: perspective_1
+            options:
+              no_state_schema: true
+          - name: gather
+            kind: join
+          - name: synthesize
+            kind: llm
+            role:
+              instruction: Compare the research perspectives and produce one answer.
+        edges:
+          - from: START
+            to: [researcher_a, researcher_b]
+          - from: researcher_a
+            to: gather
+          - from: researcher_b
+            to: gather
+          - from: gather
+            to: synthesize
+  sequence: [intake, research]

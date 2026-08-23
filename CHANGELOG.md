@@ -2,6 +2,32 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-23 — R06: the declarative graph/policies config is load-bearing
+
+- **`config.graph` and `config.policies` now drive the served agent**
+  (code-review finding R06): `agent._build_root_agent` is graph-first — a
+  configured `graph:` block compiles directly via `compile_graph` (new
+  `_build_graph_root`), and the use-case preset path is the fallback when no
+  graph is configured. `policies.synthesis` transforms the spec pre-compile;
+  `policies.approval` applies to either root (graph or preset). Previously
+  both sections parsed and validated but were silently discarded at build
+  time.
+- **Proven through the served entrypoint**: new
+  `tests/test_served_graph_config.py` (6 tests) exercises
+  `_build_root_agent` — not the compiler — with YAML configs: custom graph
+  replaces the preset root and runs end-to-end (fake models), synthesis
+  appends the join/synthesizer/aggregate nodes, approval vetoes gated tools
+  with the confirmation interrupt on both topologies, and the preset
+  fallback is unchanged.
+- **Supporting changes**: `_KNOWN_TOOLS` hoisted to module level in
+  `agent.py` and shared with `compile_graph`; root/`get_root_agent` types
+  widened to `BaseAgent | Workflow`; snapshot `use_case` reports `graph`
+  for configured graphs.
+- **No public-surface change**: the eight use-case keys, YAML/env contract,
+  catalog metadata, and preset custom-module surface are unchanged; the
+  previously-documented-but-inert `graph:`/`policies:` YAML sections now do
+  what CONFIGURATION.md said they do.
+
 ## 2026-08-23 — Program close: legacy retired, workflow backend only (F2/F3)
 
 - **F2 — legacy path retired**: `compile/legacy.py` deleted together with

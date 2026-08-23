@@ -11,10 +11,12 @@ from typing import Any
 
 from google.adk.agents import Agent, BaseAgent
 from google.adk.plugins import BasePlugin
+from google.adk.workflow import Workflow
 from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from .autoconfig import CapabilityProvider, discover_capabilities
+from .compile.workflow import compile_graph
 from .config.loader import (
     AgentConfig,
     apply_env_overrides,
@@ -30,6 +32,12 @@ from .execution.resolver import (
 )
 from .knowledge import retrieve_knowledge  # noqa: F401 - public compatibility export
 from .models import resolve_model
+from .policies import (
+    apply_approval_policy,
+    make_approval_before_tool,
+    synthesizer_node,
+    with_synthesis,
+)
 from .runtime import RuntimeContext
 from .telemetry import invocation_attributes, tracer
 from .tools import (
@@ -162,6 +170,24 @@ DEFAULT_CONFIG_FILE = "/app/config/agent.yaml"
 # Capability flags are not tools and are filtered before construction.
 _SILENT_TOOL_NAMES = {"code_execution", "structured_output"}
 
+#: Tool names ``build_tool`` accepts; shared with ``compile_graph`` so graph
+#: node roles resolve their tool references under the same contract as the
+#: runtime tools section.
+_KNOWN_TOOLS = frozenset(
+    {
+        "knowledge",
+        "search",
+        "code_execution",
+        "approval",
+        "skills",
+        "mcp",
+        "openapi",
+        "application_integration",
+        "runtime",
+        "structured_output",
+    }
+)
+
 
 def _active_config_path() -> str | None:
     """Return the YAML config path to use, or None for the env-only path."""
@@ -206,18 +232,7 @@ def _build_runtime_context(config: AgentConfig) -> RuntimeContext:
         elif not nested.enabled and name in configured:
             configured.remove(name)
 
-    known_tools = {
-        "knowledge",
-        "search",
-        "code_execution",
-        "approval",
-        "skills",
-        "mcp",
-        "openapi",
-        "application_integration",
-        "runtime",
-        "structured_output",
-    }
+    known_tools = _KNOWN_TOOLS
     unknown = sorted(set(configured) - known_tools)
     if unknown:
         raise ValueError(f"Unknown tool name(s): {', '.join(unknown)}")
@@ -403,22 +418,76 @@ def _build_runtime_context(config: AgentConfig) -> RuntimeContext:
     )
 
 
-def _build_root_agent(config: AgentConfig, source: str) -> BaseAgent:
-    """Resolve the configured use case preset and build the root agent."""
+def _build_graph_root(
+    config: AgentConfig, runtime: RuntimeContext, source: str
+) -> BaseAgent | Workflow:
+    """Compile the declarative ``graph:`` config into the served root (R06).
+
+    The ``policies.synthesis`` section transforms the spec before compilation
+    (it appends the synthesizer after the fan-out); approval is applied to
+    the compiled tree by the caller, as it is for preset roots.
+    """
+    spec = config.graph
+    assert spec is not None  # guarded by the caller
+    synthesis = config.policies.synthesis if config.policies else None
+    if synthesis is not None and synthesis.enabled:
+        spec = with_synthesis(
+            spec,
+            synthesizer_node(
+                instruction=synthesis.instruction,
+                output_key=synthesis.output_key,
+            ),
+        )
+        logger.info("synthesis policy applied to the configured graph")
+    root = compile_graph(
+        spec,
+        runtime,
+        name="graph_agent",
+        config=config,
+        known_tools=set(_KNOWN_TOOLS),
+    )
+    logger.info(
+        "serving configured graph (%d nodes, source: %s)", len(spec.nodes), source
+    )
+    _resolved_runtime_snapshot["use_case"] = "graph"
+    return root
+
+
+def _build_root_agent(config: AgentConfig, source: str) -> BaseAgent | Workflow:
+    """Build the served root: a configured ``graph:`` first, preset fallback.
+
+    When the config carries a ``graph:`` block it is compiled directly
+    (ADR-005 graph-first); otherwise the configured use-case preset builds
+    the root.  The ``policies.approval`` section is topology-independent and
+    applies to either root (D1).
+    """
     runtime = _build_runtime_context(config)
-    canonical, preset = get_default_registry().resolve(config.use_case or "assistant")
-    logger.info("resolved use_case=%s (source: %s)", canonical, source)
-    _resolved_runtime_snapshot["use_case"] = canonical
-    root = preset.build(runtime)
+    if config.graph is not None:
+        root = _build_graph_root(config, runtime, source)
+    else:
+        canonical, preset = get_default_registry().resolve(
+            config.use_case or "assistant"
+        )
+        logger.info("resolved use_case=%s (source: %s)", canonical, source)
+        _resolved_runtime_snapshot["use_case"] = canonical
+        root = preset.build(runtime)
+    approval = config.policies.approval if config.policies else None
+    if approval is not None and approval.enabled:
+        root = apply_approval_policy(root, make_approval_before_tool(approval))
+        logger.info(
+            "approval policy applied (gated_tools=%s, gated_prefixes=%s)",
+            approval.gated_tools,
+            approval.gated_prefixes,
+        )
     if config.name:
         root.name = config.name
     return root
 
 
-_root_agent: BaseAgent | None = None
+_root_agent: BaseAgent | Workflow | None = None
 
 
-def get_root_agent() -> BaseAgent:
+def get_root_agent() -> BaseAgent | Workflow:
     """Resolve and build the root agent on first use, not during module import."""
     global _root_agent
     if _root_agent is None:

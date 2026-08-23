@@ -2,19 +2,20 @@
 
 Last audited: **2026-08-21**; workflow re-architecture program and code-review
 findings added **2026-08-23**; task descriptions expanded for hand-off
-**2026-08-23**; code-review findings R01–R05 closed **2026-08-23**. This file
-contains unfinished work only; completed audit work is recorded in
-[CHANGELOG.md](CHANGELOG.md) and git history.
+**2026-08-23**; code-review findings R01–R05 closed **2026-08-23**; R06
+closed **2026-08-23**. This file contains unfinished work only; completed
+audit work is recorded in [CHANGELOG.md](CHANGELOG.md) and git history.
 
 ## Verification baseline
 
-- Local suite: **421 passed, 5 skipped** (2026-08-23 F2 run — 4 POSIX-sh and
-  1 docker-SDK platform skips; Linux CI runs the POSIX shapes), **93%
-  coverage** with a 90% minimum.
-- Local checks passed: locked dependency validation, Ruff, targeted Pyright,
-  ADK contract guards, SHA-pinned workflow validation, package build, YAML and
-  JSON parsing, Markdown relative links, Python compilation, Compose profiles,
-  and the pinned sandbox Trivy/Syft check.
+- Local suite: **435 passed** (2026-08-23 post-R06 run; the R06 suite
+  `tests/test_served_graph_config.py` replaced env-platform skips with
+  deterministic builds), **93% coverage** with a 90% minimum.
+- Local checks passed: locked dependency validation, Ruff (check + format),
+  targeted Pyright (config + agent.py), ADK contract guards, SHA-pinned
+  workflow validation, package build, YAML and JSON parsing, Markdown
+  relative links, Python compilation, Compose profiles, and the pinned
+  sandbox Trivy/Syft check.
 - The latest published main pipeline passed all jobs; see the
   [CI/CD workflow history](https://github.com/bassemZohdy/generic-agent-adk/actions/workflows/ci.yml).
 - Workflow migration is proven locally through Phase B: graph roots (chain,
@@ -32,18 +33,14 @@ contains unfinished work only; completed audit work is recorded in
 
 **Program closed 2026-08-23 — 25 complete · 1 architecture program complete
 (Phases A–F, ADR-005 Implemented, workflow backend only after F2).
-Unchecked tasks: none.** ⚠️ **Re-qualification (2026-08-23 deep code review,
-see R06–R15 below): the "Done" evidence for C1/D1/D3/E1/E2/F1 was produced
-entirely through direct calls to `preset.build(runtime)` / the compiler
-modules — never through `agent.py`'s actual served entrypoint. R06 found
-that entrypoint never reads `config.graph` or `config.policies` at all, so
-the declarative graph-spec/policies config surface documented in
-CONFIGURATION.md and demonstrated in `examples/graph-nested.yaml` /
-`examples/graph-routed.yaml` has no effect when mounted as a real agent
-config — those examples are validated by `test_graph_examples.py` calling
-the compiler directly, not by being served. Treat "ADR-005 Implemented" as
-"compiler and presets implemented; declarative graph/policies config not
-yet load-bearing" until R06 closes.
+Unchecked tasks: R07–R15 (2026-08-23 deep code review).** R06 closed
+2026-08-23: `agent._build_root_agent` now compiles `config.graph` first
+(ADR-005 graph-first) with the preset path as fallback, and applies
+`config.policies` (synthesis pre-compile, approval on the compiled root,
+either topology) — proven by `tests/test_served_graph_config.py` through the
+served entrypoint, not the compiler. The declarative graph/policies config
+surface is now load-bearing; "ADR-005 Implemented" stands without the R06
+qualifier.
 
 **Review log**: streak=3 (final), last_reviewed=2026-08-23, status=stopped —
 three consecutive clean passes, recurring audit self-terminated (no new
@@ -750,7 +747,7 @@ Reuse the fake-model/Runner harness patterns from
 > independently re-verified against source in this session (not just by the
 > review agent) before logging. Ranked most-severe first.
 
-- [ ] **R06 — `_build_root_agent` never reads `config.graph` or
+- [x] **R06 — `_build_root_agent` never reads `config.graph` or
   `config.policies`; the declarative graph-config/policies system parses,
   validates, and is fully tested in isolation but has zero effect on the
   served agent.** *Problem*: `src/basic_agent/agent.py:406`
@@ -774,6 +771,22 @@ Reuse the fake-model/Runner harness patterns from
   served agent's behavior, proven by a test that goes through
   `_build_root_agent`, not `compile/workflow.py` or `Preset.build()`
   directly.
+  **Done (2026-08-23).** `_build_root_agent` is now graph-first: a
+  configured `graph:` compiles via `compile_graph` (new
+  `_build_graph_root`, `known_tools` shared with the runtime path), else
+  the preset path runs unchanged. `policies.synthesis` transforms the spec
+  pre-compile (`with_synthesis`); `policies.approval` applies
+  `apply_approval_policy` to either root (graph or preset —
+  topology-independent per D1). `_KNOWN_TOOLS` hoisted to module level;
+  root/`get_root_agent` widened to `BaseAgent | Workflow`. Proven by
+  `tests/test_served_graph_config.py` (6 tests) through
+  `_build_root_agent`: graph replaces the preset root (snapshot
+  `use_case=graph`), end-to-end run with fake models executes the custom
+  nodes, synthesis appends `synthesis_join`/synthesizer/aggregate, approval
+  vetoes a gated tool with the confirmation interrupt on both topologies,
+  preset fallback unchanged without `graph:`. Suite 435 passed, 93.35%
+  coverage, ruff check+format clean, pyright clean (agent.py + config),
+  ADK assumptions + doc links green.
 - [ ] **R07 — `expert_dispatch`'s router always dispatches to the first
   specialist; nothing ever writes `ctx.state['routed_to']` before the
   router node runs.** *Problem*: `src/basic_agent/compile/workflow.py:51`,

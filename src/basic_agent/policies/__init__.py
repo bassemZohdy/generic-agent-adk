@@ -1,7 +1,7 @@
-"""Cross-cutting policies (ADR-005 §4; TODO Phase D).
+"""Cross-cutting policies (ADR-005 §4).
 
 Policies are declarative, topology-independent behavior: they apply to any
-preset or raw graph, unlike the use-case-specific hooks they replace.
+preset or raw graph, unlike the use-case-specific hooks they replaced.
 """
 
 from __future__ import annotations
@@ -18,8 +18,6 @@ from .synthesis import (
     SYNTHESIZER_NAME,
     SYNTHESIZER_OUTPUT_KEY,
     SYNTHESIZER_STATE_KEY,
-    legacy_multi_perspective_spec,
-    make_synthesis_after_run,
     synthesizer_node,
     with_synthesis,
 )
@@ -33,9 +31,7 @@ __all__ = [
     "apply_approval_policy",
     "is_unconditional_tool",
     "iter_llm_agents",
-    "legacy_multi_perspective_spec",
     "make_approval_before_tool",
-    "make_synthesis_after_run",
     "synthesizer_node",
     "with_synthesis",
 ]

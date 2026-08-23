@@ -52,8 +52,8 @@ tools. Unknown names and unsupported output schemas fail before an agent starts.
 
 The optional `graph:` section replaces use-case-specific composition with a
 declarative graph; presets and the sugar forms below expand into exactly this
-spec before compilation. Backend selection: `AGENT_COMPOSE_BACKEND=workflow`
-(default — ADR-005 §3) or `legacy` (sugar-subset rollback target only).
+spec before compilation by the workflow compiler (the only backend — the
+legacy sugar compiler was retired with F2).
 
 ```yaml
 graph:
@@ -87,28 +87,24 @@ Nested sugar items (`{parallel: [a, b], name: parallel_agent}`) compile to
 subgraph nodes. Schema names resolve against the registered schema registry
 (fail-fast on unknown names).
 
-### Concern → config key → backend behavior (D3)
+### Concern → config key → behavior (D3)
 
-One documented home per cross-cutting concern:
+One documented home per cross-cutting concern (workflow backend):
 
-| Concern | Config key | Workflow backend | Legacy backend (rollback) |
-|---|---|---|---|
-| Retries | `graph.nodes[].retry` (`max_attempts`, `initial_delay`, `max_delay`, `backoff_factor`, `jitter`) | 1:1 → per-node ADK `RetryConfig` | not applied (sugar trees) |
-| Timeouts | `graph.nodes[].timeout` | 1:1 → per-node `BaseNode.timeout` | not applied (sugar trees) |
-| Schemas | `graph.nodes[].input_schema` / `output_schema` / `state_schema` | 1:1 → `BaseNode` fields | `output_schema`/`state_schema` applied; `input_schema` workflow-only |
-| Output keys | `graph.nodes[].output_key` | 1:1 → `state_delta` key (LlmAgent-node contract, Phase B1) | 1:1 |
-| Code execution | `execution.code_execution` + the `code_execution` tool (runtime-level) | resolved once by `resolve_code_executor()`; the resulting executor is attached to every `LlmAgent` node by the compiler's llm-node builder ([ADR-004 addendum](ADR-004-pluggable-code-execution.md)) | same builder (shared `llm_node.py`) |
-
-Per-node `retry`/`timeout` on the legacy path are a documented rollback
-limitation; presets targeting legacy must not rely on them.
+| Concern | Config key | Behavior |
+|---|---|---|
+| Retries | `graph.nodes[].retry` (`max_attempts`, `initial_delay`, `max_delay`, `backoff_factor`, `jitter`) | 1:1 → per-node ADK `RetryConfig` |
+| Timeouts | `graph.nodes[].timeout` | 1:1 → per-node `BaseNode.timeout` |
+| Schemas | `graph.nodes[].input_schema` / `output_schema` / `state_schema` | 1:1 → `BaseNode` fields |
+| Output keys | `graph.nodes[].output_key` | 1:1 → `state_delta` key (LlmAgent-node contract, Phase B1) |
+| Code execution | `execution.code_execution` + the `code_execution` tool (runtime-level) | resolved once by `resolve_code_executor()`; the resulting executor is attached to every `LlmAgent` node by the compiler's llm-node builder ([ADR-004 addendum](ADR-004-pluggable-code-execution.md)) |
 
 **Note on `output_key` and strict state schemas**: with a state schema
 enabled (`state.enabled`), the workflow engine validates every
 `state_delta` write against the declared fields — nodes writing keys the
 schema does not declare (e.g. `perspective_0`) must set
-`options: {no_state_schema: true}` to clear the schema for that node. The
-legacy backend never validated these writes; the new examples
-(`examples/graph-nested.yaml`) demonstrate the option.
+`options: {no_state_schema: true}` to clear the schema for that node (see
+`examples/graph-nested.yaml`).
 
 ### Policies (D1/D2)
 
@@ -129,9 +125,9 @@ policies:
   FunctionNode policies are the engine-interrupt path proven in Phase B2).
   Invariants — `request_approval`, `finish_task`, and `_TaskAgentTool`
   delegations are never gated (vetoing them deadlocks the flow; B3).
-- **synthesis**: appends the canonical synthesizer node after the join
-  (workflow) or as a trailing step (legacy nested shape) and aggregates
-  `perspective_*` state keys into `aggregated_perspectives` after the run.
+- **synthesis**: appends the canonical synthesizer node after the join and
+  a native aggregation node that folds `perspective_*` state keys into
+  `aggregated_perspectives` inside the graph.
 
 To use the Docker-backed sandbox with Compose, include `code_execution` in
 `AGENT_TOOLS` and start the `code-exec` profile. The profile supplies the

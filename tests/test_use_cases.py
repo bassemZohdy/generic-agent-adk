@@ -97,16 +97,6 @@ def test_defaults_do_not_mutate_caller():
 # --- custom hook surface (old BaseUseCaseAgent equivalents) ---
 
 
-def test_after_run_hook_attached_to_root(monkeypatch):
-    # Legacy roots carry run-hook fields; the workflow root's run-level hooks
-    # attach via the ADK plugin (B3 decision — policies are boundary nodes,
-    # observability via plugins), so pin the legacy path here.
-    monkeypatch.setenv("AGENT_COMPOSE_BACKEND", "legacy")
-    preset = get_default_registry().get("multi_perspective")
-    root = preset.build(MINIMAL_RUNTIME)
-    assert root.after_agent_callback is not None
-
-
 def test_before_tool_hook_attached_to_every_llm_agent():
     from basic_agent.policies.approval import iter_llm_agents
     from basic_agent.presets.catalog import _chain_before_tool
@@ -122,25 +112,8 @@ def test_before_tool_hook_attached_to_every_llm_agent():
         SimpleNamespace(name="web_search"), {}, SimpleNamespace()
     )
     assert calls == ["web_search"]
-    # The workflow-aware walker sees LlmAgents inside the graph too.
+    # The graph-aware walker sees LlmAgents inside the workflow too.
     assert list(iter_llm_agents(agent)) == [agent]
-
-
-def test_before_run_chains_with_runtime_callback():
-    calls = []
-
-    def runtime_cb(callback_context):
-        calls.append("runtime")
-
-    def hook(callback_context):
-        calls.append("hook")
-
-    from basic_agent.presets.catalog import _chain
-
-    root = LlmAgent(name="root", model="gemini-2.0-flash", instruction="x", tools=[])
-    root.before_agent_callback = _chain(runtime_cb, hook)
-    root.before_agent_callback(SimpleNamespace())
-    assert calls == ["runtime", "hook"]
 
 
 # --- registry contract ---
@@ -213,7 +186,6 @@ SNARKY = Preset(
     title="Snarky",
     when_to_use="Test-only use case.",
     spec=_snarky_spec,
-    legacy_spec=_snarky_spec,
 )
 
 PRESETS = {"snarky": SNARKY}

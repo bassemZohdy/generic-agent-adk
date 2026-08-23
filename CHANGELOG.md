@@ -2,6 +2,26 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-23 — Program close: legacy retired, workflow backend only (F2/F3)
+
+- **F2 — legacy path retired**: `compile/legacy.py` deleted together with
+  the `AGENT_COMPOSE_BACKEND` switch — the ADK graph workflow is the only
+  backend. Zero `src/` imports of the deprecated
+  `SequentialAgent`/`ParallelAgent`/`LoopAgent` remain and their pytest
+  deprecation filter was removed from `pyproject.toml`. Legacy-only
+  surfaces removed: preset `legacy_spec`/`legacy_name` fields, the
+  after-run aggregation helper (multi_perspective aggregation now runs
+  natively as a graph node), the frozen C4 parity test (its golden expired
+  with the compiler it guarded), and related tests. The ADK composition
+  import-isolation test is now enforced correctly (its old prefix matching
+  was vacuous) and allows only `compile/` and `agent.py`.
+- **F3 — program closed**: ADR-005 marked **Implemented**; ADR-003 records
+  the resolution; guard scripts re-run green on the final surface
+  (google-adk 2.6.3 assumptions, doc links, workflow SHA pins, ruff,
+  targeted pyright; full suite 421 passed, 5 platform skips, 93% coverage).
+- **No public-surface change**: the eight use-case keys, YAML/env contract,
+  catalog metadata, and preset custom-module surface are unchanged.
+
 ## 2026-08-23 — Graph-first re-architecture: workflow backend, presets, policies (Phases A–E)
 
 - **Architecture program complete through Phase E** (ADR-005 **Accepted**;

@@ -20,7 +20,6 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.workflow import Workflow
 from google.genai import types
 
-from basic_agent.compile import compile_legacy
 from basic_agent.runtime import RuntimeContext
 from basic_agent.use_cases import get_default_registry
 
@@ -154,23 +153,6 @@ def test_preset_runs_on_default_workflow_backend(key, overrides):
             "deterministic response 3",
         ]
         assert "executor_agent" in {e.author for e in events}
-
-
-@pytest.mark.parametrize(("key", "overrides"), MATRIX, ids=[case[0] for case in MATRIX])
-def test_preset_legacy_fallback_where_defined(key, overrides):
-    """Sugar-expressible presets also compile and run on the legacy backend."""
-    registry = get_default_registry()
-    preset = registry.get_preset(key)
-    if key in ("expert_dispatch", "team_coordinator"):
-        return  # no legacy sugar mapping (documented in the catalog)
-    rt = make_rt(**overrides)
-    spec = preset.build_legacy_spec(rt)
-    root = compile_legacy(spec, rt, name=preset.legacy_name)
-    events = run_agent(root, f"{key}-legacy-session")
-    state = state_of(events)
-
-    assert events, f"{key}: legacy run must record events"
-    assert state.get("last_response"), f"{key}: legacy output must land in state"
 
 
 def test_team_coordinator_runs_via_delegation_escape_hatch():

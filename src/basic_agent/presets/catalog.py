@@ -4,21 +4,18 @@ A preset is a named partial config: catalog metadata (key, title,
 when_to_use, aliases, interfaces — **identical to the pre-E3 catalog, pinned
 by the snapshot test**), runtime-defaults merge semantics (formerly
 ``BaseUseCaseAgent.resolve_runtime``), graph-spec builders consumed by the
-C3 compilers, and a custom-hook surface equivalent to the old
-``BaseUseCaseAgent`` overrides (before/after run, before/after tool).
+workflow compiler, and a custom before/after-tool hook surface.
 
 Classification per ADR-005 §5:
 
 - assistant → single llm node
 - pipeline → sequence sugar (per-step "step N of count" defaults + roles.step_{i})
-- multi_perspective → parallel + synthesis policy (workflow: with_synthesis;
-  legacy: nested parallel + trailing step) — aggregation wired as its
-  after-run hook (D2)
+- multi_perspective → parallel + synthesis policy (with_synthesis; the
+  ``perspective_*`` aggregation runs natively as a graph node)
 - refine_until_good → loop sugar (default max_iterations 5)
 - approval_gate → propose/complete sequence + approval policy
-- plan_and_execute → dynamic-planning preset on the workflow backend
-  (planner spawning executors via `ctx.run_node` — E2a; legacy fallback is
-  the two-role sequence)
+- plan_and_execute → dynamic-planning preset (planner spawning executors
+  via `ctx.run_node` — E2a)
 - expert_dispatch → routing-node graph (E1 finding: the ADK graph rejects
   duplicate (from,to) edges, so no DEFAULT_ROUTE fallback)
 - team_coordinator → delegation escape hatch: NO graph shape (ADR-005 §6)
@@ -37,11 +34,7 @@ from ..config.graph import (
     GraphSpec,
 )
 from ..config.sugar import LoopSugar, ParallelSugar, SequenceSugar, expand_sugar
-from ..policies.synthesis import (
-    legacy_multi_perspective_spec,
-    make_synthesis_after_run,
-    with_synthesis,
-)
+from ..policies.synthesis import with_synthesis
 from ..runtime import RoleConfig, RuntimeContext
 
 PIPELINE_STEP_INSTRUCTION = (
@@ -75,27 +68,6 @@ _DATACLASS_DEFAULTS: dict[str, Any] = {
     "require_approval": RuntimeContext.require_approval,
     "specialists": RuntimeContext.specialists,
 }
-
-
-def _chain(first: Callable | list[Callable] | None, second: Callable) -> Callable:
-    """Return a callback calling ``first`` then ``second``.
-
-    ``first`` may be a single callback, a list of callbacks (ADK 2.x allows
-    both; list semantics: run in order until one returns non-None), or None.
-    The first side's non-None return value wins; ``second`` always runs.
-    """
-    callbacks = list(first) if isinstance(first, list) else ([first] if first else [])
-
-    def chained(*args: Any, **kwargs: Any) -> Any:
-        first_result = None
-        for cb in callbacks:
-            first_result = cb(*args, **kwargs)
-            if first_result is not None:
-                break
-        second_result = second(*args, **kwargs)
-        return first_result if first_result is not None else second_result
-
-    return chained
 
 
 def _chain_before_tool(
@@ -136,9 +108,11 @@ def _chain_after_tool(
 class Preset:
     """A named partial config: catalog metadata plus spec builders.
 
-    Custom presets (``AGENT_USE_CASE_MODULE``) may set the hook fields; they
-    are wired by :meth:`build` with the same chaining semantics the old
-    ``BaseUseCaseAgent`` hooks had.
+    Custom presets (``AGENT_USE_CASE_MODULE``) may set the before/after-tool
+    hook fields; they are wired by :meth:`build` with ADK veto-preserving
+    chaining.  Run-level hooks on the workflow backend attach via the ADK
+    plugin (B3 decision: boundary nodes for policies, plugins for
+    observability), not through Preset fields.
     """
 
     key: str
@@ -148,12 +122,8 @@ class Preset:
     interfaces: tuple[str, ...] = ("rest", "web", "cli")
     defaults: dict = field(default_factory=dict)
     spec: Callable[[RuntimeContext], GraphSpec] | None = None
-    legacy_spec: Callable[[RuntimeContext], GraphSpec] | None = None
-    legacy_name: str | None = None
     escape_hatch_reason: str | None = None
     escape_hatch_builder: Callable[[RuntimeContext], Any] | None = None
-    before_run_callback: Callable[..., Any] | None = None
-    after_run_callback: Callable[..., Any] | None = None
     before_tool_callback: Callable[..., Any] | None = None
     after_tool_callback: Callable[..., Any] | None = None
 
@@ -191,37 +161,21 @@ class Preset:
             self.escape_hatch_reason or f"preset {self.key!r} has no graph spec yet"
         )
 
-    def build_legacy_spec(self, rt: RuntimeContext) -> GraphSpec:
-        """Return the legacy (sugar-subset) spec; raises when unsupported."""
-        if self.legacy_spec is not None:
-            return self.legacy_spec(rt)
-        raise NotImplementedError(
-            f"preset {self.key!r} has no legacy (sugar-subset) mapping"
-        )
-
     def build(self, rt: RuntimeContext) -> Any:
-        """Compile the preset into a runnable root (via the backend flag).
+        """Compile the preset into a runnable root (workflow backend).
 
         The public entry point previously served by ``BaseUseCaseAgent``:
-        applies defaults, compiles via ``compile_graph`` (workflow, default)
-        or ``compile_legacy`` (rollback), then wires any custom hook
-        callbacks with the old chaining semantics.
+        applies defaults, compiles via :func:`basic_agent.compile.compile_graph`,
+        then wires any custom hook callbacks with the chaining semantics.
+        ``team_coordinator`` short-circuits to its delegation escape hatch.
         """
-        from ..compile import compose_backend
-        from ..compile.legacy import compile_legacy
         from ..compile.workflow import compile_graph
 
         resolved = self.apply_defaults(rt)
         if self.escape_hatch_builder is not None:
             root = self.escape_hatch_builder(resolved)
-        elif compose_backend() == "workflow":
-            root = compile_graph(self.build_spec(resolved), resolved, name=self.key)
         else:
-            root = compile_legacy(
-                self.build_legacy_spec(resolved),
-                resolved,
-                name=self.legacy_name or self.key,
-            )
+            root = compile_graph(self.build_spec(resolved), resolved, name=self.key)
         if (
             self.before_tool_callback is not None
             or self.after_tool_callback is not None
@@ -235,49 +189,20 @@ class Preset:
                     agent.after_tool_callback = _chain_after_tool(
                         agent.after_tool_callback, self.after_tool_callback
                     )
-        self._wire_run_hooks(root, resolved)
         return root
-
-    def _wire_run_hooks(self, root: Any, resolved: RuntimeContext) -> None:
-        """Wire before/after run hooks onto the root (old build() semantics)."""
-        try:
-            before = self.before_run_callback
-            after = self.after_run_callback
-            if before is not None:
-                first = (
-                    root.before_agent_callback
-                    if root.before_agent_callback is not None
-                    else resolved.before_agent_callback
-                )
-                root.before_agent_callback = _chain(
-                    first,
-                    lambda callback_context: before(callback_context),
-                )
-            if after is not None:
-                first = (
-                    root.after_agent_callback
-                    if root.after_agent_callback is not None
-                    else resolved.after_agent_callback
-                )
-                root.after_agent_callback = _chain(
-                    first,
-                    lambda callback_context: after(callback_context),
-                )
-        except AttributeError:  # pragma: no cover - no run-hook fields on nodes
-            pass
 
 
 def _iter_llm_agents(root: Any):
     """Yield every LlmAgent in the tree, root included, depth-first.
 
-    Walks both legacy ``sub_agents`` trees and Workflow graphs.
+    Duck-typed (no ADK composition imports here): an LlmAgent carries a
+    ``before_tool_callback`` attribute; children live under ``sub_agents``
+    or — for Workflow graphs — under ``graph.nodes``.
     """
-    from google.adk.agents import LlmAgent
-
     stack = [root]
     while stack:
         node = stack.pop()
-        if isinstance(node, LlmAgent):
+        if hasattr(node, "before_tool_callback"):
             yield node
             stack.extend(reversed(getattr(node, "sub_agents", None) or []))
             continue
@@ -340,13 +265,6 @@ def _multi_perspective_spec(rt: RuntimeContext) -> GraphSpec:
     return with_synthesis(parallel)
 
 
-def _multi_perspective_legacy(rt: RuntimeContext) -> GraphSpec:
-    count = int((rt.extra_config or {}).get("workers", 2))
-    return legacy_multi_perspective_spec(
-        [f"parallel_worker_{index}" for index in range(count)]
-    )
-
-
 def _refine_spec(rt: RuntimeContext) -> GraphSpec:
     body = GraphNodeSpec(
         name="evaluator_optimizer_worker",
@@ -401,23 +319,6 @@ def _plan_execute_spec(rt: RuntimeContext) -> GraphSpec:
     )
     spec.validate()
     return spec
-
-
-def _plan_execute_legacy(rt: RuntimeContext) -> GraphSpec:
-    planner = GraphNodeSpec(
-        name="planner_agent",
-        kind="llm",
-        role=RoleConfig(instruction=PLANNER_INSTRUCTION),
-    )
-    executor = GraphNodeSpec(
-        name="executor_agent",
-        kind="llm",
-        role=RoleConfig(instruction=EXECUTOR_INSTRUCTION),
-    )
-    return expand_sugar(
-        SequenceSugar(items=[planner.name, executor.name]),
-        {planner.name: planner, executor.name: executor},
-    )
 
 
 def _expert_dispatch_spec(rt: RuntimeContext) -> GraphSpec:
@@ -526,8 +427,6 @@ PRESETS: dict[str, Preset] = {
             ),
             interfaces=("rest", "web", "cli", "live"),
             spec=_assistant_spec,
-            legacy_spec=_assistant_spec,
-            legacy_name="direct_agent",
         ),
         Preset(
             key="pipeline",
@@ -537,8 +436,6 @@ PRESETS: dict[str, Preset] = {
                 "fetch, analyze, summarize."
             ),
             spec=_pipeline_spec,
-            legacy_spec=_pipeline_spec,
-            legacy_name="sequential_agent",
         ),
         Preset(
             key="multi_perspective",
@@ -548,9 +445,6 @@ PRESETS: dict[str, Preset] = {
                 "compared or combined."
             ),
             spec=_multi_perspective_spec,
-            legacy_spec=_multi_perspective_legacy,
-            legacy_name="multi_perspective_agent",
-            after_run_callback=make_synthesis_after_run(),
         ),
         Preset(
             key="refine_until_good",
@@ -561,8 +455,6 @@ PRESETS: dict[str, Preset] = {
             ),
             defaults={"max_iterations": 5},
             spec=_refine_spec,
-            legacy_spec=_refine_spec,
-            legacy_name="evaluator_optimizer_agent",
         ),
         Preset(
             key="expert_dispatch",
@@ -597,8 +489,6 @@ PRESETS: dict[str, Preset] = {
                 "step by step afterwards."
             ),
             spec=_plan_execute_spec,
-            legacy_spec=_plan_execute_legacy,
-            legacy_name="plan_execute_agent",
         ),
         Preset(
             key="approval_gate",
@@ -609,8 +499,6 @@ PRESETS: dict[str, Preset] = {
             ),
             defaults={"require_approval": True},
             spec=_approval_gate_spec,
-            legacy_spec=_approval_gate_spec,
-            legacy_name="human_in_loop_agent",
         ),
     ]
 }

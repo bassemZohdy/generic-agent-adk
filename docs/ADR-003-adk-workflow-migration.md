@@ -168,3 +168,10 @@ All three gates now have passing **permanent** contract tests in
 
 The old "Not proven locally: real upstream Workflow migration" baseline line
 in TODO.md is now superseded: the migration is proven locally up to Phase C.
+
+**Resolution (2026-08-23, F2/F3):** the migration completed and the legacy
+`SequentialAgent`/`ParallelAgent`/`LoopAgent` compile path is **retired** —
+`compile/legacy.py` removed, no `src/` importer of the deprecated classes
+remains, and its deprecation warning filter is gone from `pyproject.toml`
+(the remaining `filterwarnings` entries are third-party noise only). The
+workflow backend is the only backend; ADR-005 is Implemented.

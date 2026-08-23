@@ -8,8 +8,8 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **442 passed, 5 skipped** (2026-08-23 E3/F1 run — 4 POSIX-sh
-  and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes), **93%
+- Local suite: **421 passed, 5 skipped** (2026-08-23 F2 run — 4 POSIX-sh and
+  1 docker-SDK platform skips; Linux CI runs the POSIX shapes), **93%
   coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
   ADK contract guards, SHA-pinned workflow validation, package build, YAML and
@@ -30,15 +30,9 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Status summary
 
-**25 complete · 0 partial · 1 architecture program in progress (Phases A–F
-below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
-complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C complete
-2026-08-23 (C1–C4); Phase D complete 2026-08-23 (D1–D3 policies + concern
-mapping); Phase E complete 2026-08-23 (E1 presets, E2 matrix + E2a dynamic
-planning, E3 strategies/facades deleted); Phase F in progress (F1 docs +
-examples complete 2026-08-23; F2 legacy retirement awaits one release on
-the workflow default, then F3 closes the program); code-review findings
-R01–R05 closed 2026-08-23.**
+**Program closed 2026-08-23 — 25 complete · 1 architecture program complete
+(Phases A–F, ADR-005 Implemented, workflow backend only after F2).
+Unchecked tasks: none.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -637,7 +631,7 @@ Reuse the fake-model/Runner harness patterns from
   `no_state_schema` notes; ARCHITECTURE.md (E3) documents the preset
   shapes and custom surface; README use-case table is metadata-pinned and
   unchanged.
-- [ ] **F2 — Retire the legacy path.**
+- [x] **F2 — Retire the legacy path.**
   *Depends on*: one release shipped with workflow backend default + legacy
   rollback (per B4). *Files*: delete `src/basic_agent/compile/legacy.py`
   and remaining legacy-only strategy remnants; drop the
@@ -646,7 +640,20 @@ Reuse the fake-model/Runner harness patterns from
   ADR-003, which prescribes exactly this exit).
   *Done when*: suite green with no deprecation filter and zero imports of
   the deprecated classes anywhere in `src/`.
-- [ ] **F3 — Close the program.**
+  **Done (2026-08-23).** `compile/legacy.py` deleted; the backend flag
+  (`AGENT_COMPOSE_BACKEND`/`compose_backend`) removed — the workflow
+  compiler is the only backend; the Workflow deprecation `filterwarnings`
+  entry dropped (suite shows no such warnings with it gone) and **zero
+  `src/` imports** of `SequentialAgent`/`ParallelAgent`/`LoopAgent` (the
+  isolation test is now enforced correctly — its old prefix-matching was
+  vacuous — and allows only `compile/` + `agent.py`; policies/presets were
+  re-pointed to duck typing). Legacy-only surfaces removed: `Preset`
+  `legacy_spec`/`legacy_name`/`build_legacy_spec`, the pre-E3 parity test
+  (its frozen golden expired with the compiler — the gate had held),
+  `legacy_multi_perspective_spec`, `_plan_execute_legacy` and the
+  after-run aggregation helper (the multi_perspective aggregation runs
+  natively as a graph node); related tests removed/updated.
+- [x] **F3 — Close the program.**
   *Depends on*: F1, F2. *Steps*: CHANGELOG summary; mark ADR-005
   "Implemented"; move this program's tasks to the closed section with a
   one-line evidence pointer each; re-run
@@ -654,6 +661,14 @@ Reuse the fake-model/Runner harness patterns from
   `docs/ADK-UPGRADE-CHECKLIST.md` manual steps against the final surface;
   update the Verification baseline above.
   *Done when*: this file's status summary reflects the program closed.
+  **Done (2026-08-23).** ADR-005 → **Implemented**; ADR-003 records the
+  F2 resolution; CHANGELOG carries the closing entry; guard scripts
+  re-run green against the final surface (assumptions on google-adk 2.6.3,
+  doc links, workflow pins, ruff, targeted pyright, full suite 421 passed /
+  5 platform skips, 93% coverage); Verification baseline and status summary
+  below updated. Phase-by-phase evidence stays in the records above
+  (A1–A5, B0–B4, C1–C4, D1–D3, E1–E2a, F1); no unchecked task remains in
+  this file except none — the program is closed.
 
 ## Closed in the 2026-08-21 audit
 

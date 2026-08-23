@@ -9,7 +9,7 @@ from google.adk.models.base_llm import BaseLlm
 from google.adk.models.llm_response import LlmResponse
 from google.genai import types
 
-from basic_agent.compile import compile_graph, compile_legacy
+from basic_agent.compile import compile_graph
 from basic_agent.config.graph import START
 from basic_agent.presets import PRESETS
 from basic_agent.runtime import RuntimeContext
@@ -153,15 +153,6 @@ def test_presets_expand_to_specs_and_compile():
         assert graph.name == f"{key}_wf"
 
 
-def test_presets_legacy_specs_compile_where_defined():
-    for key, preset in PRESETS.items():
-        if key in ("expert_dispatch", "team_coordinator"):
-            continue
-        spec = preset.build_legacy_spec(make_rt())
-        spec.validate()
-        compile_legacy(spec, make_rt(), name=f"{key}_agent")
-
-
 def test_expert_dispatch_routing_spec_structure():
     spec = PRESETS["expert_dispatch"].build_spec(
         make_rt(specialists=("research", "solution", "risk"))
@@ -190,13 +181,3 @@ def test_team_coordinator_is_delegation_escape_hatch():
     assert preset.escape_hatch_reason is not None
     with pytest.raises(NotImplementedError, match="delegation escape hatch"):
         preset.build_spec(make_rt())
-    with pytest.raises(NotImplementedError, match="no legacy"):
-        preset.build_legacy_spec(make_rt())
-
-
-def test_expert_dispatch_has_no_legacy_mapping():
-    preset = PRESETS["expert_dispatch"]
-    assert preset.spec is not None
-    assert preset.legacy_spec is None
-    with pytest.raises(NotImplementedError, match="no legacy"):
-        preset.build_legacy_spec(make_rt())

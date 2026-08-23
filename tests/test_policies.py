@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from google.adk.agents import LlmAgent, ParallelAgent, SequentialAgent
+from google.adk.agents import LlmAgent
 from google.adk.models.base_llm import BaseLlm
 from google.adk.models.llm_response import LlmResponse
 from google.adk.runners import Runner
@@ -30,9 +30,7 @@ from basic_agent.config.sugar import ParallelSugar, SequenceSugar, expand_sugar
 from basic_agent.policies import (
     apply_approval_policy,
     is_unconditional_tool,
-    legacy_multi_perspective_spec,
     make_approval_before_tool,
-    make_synthesis_after_run,
     with_synthesis,
 )
 from basic_agent.runtime import RuntimeContext
@@ -417,37 +415,6 @@ def test_synthesis_workflow_runs_and_aggregates_like_multi_perspective():
         "deterministic response 1",
         "deterministic response 2",
     ]
-    # The after-run helper (legacy path) reproduces the same contract.
-    after_run = make_synthesis_after_run()
-    callback_context = SimpleNamespace(state=dict(state))
-    after_run(callback_context)
-    assert state["aggregated_perspectives"] == [
-        "deterministic response 1",
-        "deterministic response 2",
-    ]
-
-
-def test_legacy_synthesis_spec_reproduces_multi_perspective_golden():
-    from basic_agent.compile import compile_legacy
-
-    rt = make_rt(DeterministicLlm(model="deterministic"))
-    spec = legacy_multi_perspective_spec(["parallel_worker_0", "parallel_worker_1"])
-    root = compile_legacy(spec, rt, name="multi_perspective_agent")
-
-    assert isinstance(root, SequentialAgent)
-    assert root.name == "multi_perspective_agent"
-    parallel, synthesizer = root.sub_agents
-    assert isinstance(parallel, ParallelAgent)
-    assert parallel.name == "parallel_agent"
-    assert [w.name for w in parallel.sub_agents] == [
-        "parallel_worker_0",
-        "parallel_worker_1",
-    ]
-    assert parallel.sub_agents[0].output_key == "perspective_0"
-    assert parallel.sub_agents[1].output_key == "perspective_1"
-    assert isinstance(synthesizer, LlmAgent)
-    assert synthesizer.name == "perspective_synthesizer"
-    assert "balanced final answer" in synthesizer.instruction
 
 
 # ─── config surface ──────────────────────────────────────────────────────────

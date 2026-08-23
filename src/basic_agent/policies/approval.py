@@ -22,8 +22,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from google.adk.agents import BaseAgent, LlmAgent
-
 #: Tool names that must never be gated by the approval policy.
 UNCONDITIONAL_TOOLS = frozenset({"request_approval", "finish_task"})
 
@@ -93,16 +91,17 @@ def _chain_before_tool(first: Any, second: Callable[..., Any]):
     return chained
 
 
-def iter_llm_agents(root: BaseAgent):
+def iter_llm_agents(root: Any):
     """Yield every LlmAgent in the tree, root included, depth-first.
 
-    Walks both legacy ``sub_agents`` trees and Workflow graphs (LlmAgent
-    nodes live in ``Workflow.graph.nodes``, not ``sub_agents``).
+    Duck-typed so this module stays free of ADK composition imports: an
+    LlmAgent carries a ``before_tool_callback`` attribute, and children live
+    under ``sub_agents`` or — for Workflow graphs — under ``graph.nodes``.
     """
     stack = [root]
     while stack:
         node = stack.pop()
-        if isinstance(node, LlmAgent):
+        if hasattr(node, "before_tool_callback"):
             yield node
             stack.extend(reversed(getattr(node, "sub_agents", None) or []))
             continue
@@ -114,9 +113,9 @@ def iter_llm_agents(root: BaseAgent):
 
 
 def apply_approval_policy(
-    root: BaseAgent,
+    root: Any,
     before_tool: Callable[..., Any],
-) -> BaseAgent:
+) -> Any:
     """Wire the approval callback after any existing per-agent callback.
 
     The runtime callback (if any) runs first and its veto wins; the approval

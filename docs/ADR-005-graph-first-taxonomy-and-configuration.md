@@ -1,8 +1,11 @@
 # ADR-005: Graph-first taxonomy and externalized configuration
 
-**Status:** Accepted — gates B1–B3 verified 2026-08-23 (tests in
-`tests/test_workflow_gates.py`; evidence appended to
-[ADR-003](./ADR-003-adk-workflow-migration.md#phase-b-spike-results-2026-08-23--gates-verified-evidence-in-tests)).
+**Status:** Implemented — the full program (Phases A–F2) shipped 2026-08-23.
+Gates B1–B3 verified in `tests/test_workflow_gates.py`; presets, policies,
+and the workflow compiler are the production path; the legacy sugar compiler
+has been **retired** (F2) and the program closed (F3). Evidence and history
+in [ADR-003](./ADR-003-adk-workflow-migration.md#phase-b-spike-results-2026-08-23--gates-verified-evidence-in-tests)
+and the TODO phases.
 **Supersedes** the taxonomy and strategy layers of
 [ADR-002](./ADR-002-use-case-taxonomy.md) (its catalog, config-resolution,
 custom-module, and hook concepts survive) and absorbs the migration plan of

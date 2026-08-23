@@ -1,4 +1,4 @@
-"""Phase C3 — compile layer tests: workflow/legacy backends + isolation."""
+"""Phase C3 — workflow compile-layer tests plus ADK import isolation."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from google.adk.agents import LlmAgent, LoopAgent, ParallelAgent, SequentialAgent
+from google.adk.agents import LlmAgent
 from google.adk.models.base_llm import BaseLlm
 from google.adk.models.llm_response import LlmResponse
 from google.adk.runners import Runner
@@ -27,8 +27,7 @@ from google.adk.workflow import (
 )
 from google.genai import types
 
-from basic_agent import compile as compile_pkg
-from basic_agent.compile import compile_graph, compile_legacy
+from basic_agent.compile import compile_graph
 from basic_agent.config.graph import (
     START,
     GraphEdgeSpec,
@@ -39,7 +38,6 @@ from basic_agent.config.graph import (
 from basic_agent.config.sugar import (
     AGAIN_ROUTE,
     LoopSugar,
-    ParallelSugar,
     SequenceSugar,
     expand_sugar,
 )
@@ -281,66 +279,6 @@ def test_compile_function_registry_node():
 # ─── legacy compiler (rollback-only) ─────────────────────────────────────────
 
 
-def test_compile_legacy_sequence():
-    spec = expand_sugar(
-        SequenceSugar(items=["sequential_step_0", "sequential_step_1"]),
-        {
-            "sequential_step_0": llm_node("sequential_step_0"),
-            "sequential_step_1": llm_node("sequential_step_1"),
-        },
-    )
-    agent = compile_legacy(spec, make_rt(), name="sequential_agent")
-
-    assert isinstance(agent, SequentialAgent)
-    assert agent.name == "sequential_agent"
-    assert [step.name for step in agent.sub_agents] == [
-        "sequential_step_0",
-        "sequential_step_1",
-    ]
-    assert all(isinstance(step, LlmAgent) for step in agent.sub_agents)
-
-
-def test_compile_legacy_parallel():
-    spec = expand_sugar(
-        ParallelSugar(items=["parallel_worker_0", "parallel_worker_1"]),
-        {
-            "parallel_worker_0": llm_node("parallel_worker_0"),
-            "parallel_worker_1": llm_node("parallel_worker_1"),
-        },
-    )
-    agent = compile_legacy(spec, make_rt(), name="parallel_agent")
-
-    assert isinstance(agent, ParallelAgent)
-    assert [worker.name for worker in agent.sub_agents] == [
-        "parallel_worker_0",
-        "parallel_worker_1",
-    ]
-
-
-def test_compile_legacy_loop():
-    spec = expand_sugar(
-        LoopSugar(body="loop_worker", max_iterations=5),
-        {"loop_worker": llm_node("loop_worker")},
-    )
-    agent = compile_legacy(spec, make_rt(), name="loop_agent")
-
-    assert isinstance(agent, LoopAgent)
-    assert agent.max_iterations == 5
-    assert [worker.name for worker in agent.sub_agents] == ["loop_worker"]
-
-
-def test_compile_legacy_rejects_explicit_edge_specs():
-    spec = GraphSpec(
-        nodes=[llm_node("a"), llm_node("b")],
-        edges=[
-            GraphEdgeSpec(source=START, target="a"),
-            GraphEdgeSpec(source="a", target="b"),
-        ],
-    )
-    with pytest.raises(ValueError, match="sugar subset only"):
-        compile_legacy(spec, make_rt())
-
-
 def test_per_node_concerns_attach_to_compiled_workflow_nodes():
     """D3: retry/timeout/schemas/output_key/code_executor per-node homes."""
     import pydantic
@@ -396,52 +334,6 @@ def test_per_node_concerns_attach_to_compiled_workflow_nodes():
     assert node.code_executor is executor
 
 
-def test_legacy_compiled_llm_applies_output_keys_schemas_executor_only():
-    """D3: legacy (rollback) applies schemas/keys/executor; retry/timeout are
-    workflow-backend-only per the concern table."""
-    import pydantic
-    from google.adk.code_executors.base_code_executor import BaseCodeExecutor
-
-    class OutputModel(pydantic.BaseModel):
-        answer: str
-
-    class FakeExecutor(BaseCodeExecutor):
-        def __init__(self) -> None:
-            super().__init__(stateful=False)
-
-        def execute_code(self, invocation_context, code_execution_input):
-            return None
-
-    executor = FakeExecutor()
-    rt = make_rt()
-    rt.code_executor = executor
-    spec = GraphSpec(
-        nodes=[
-            GraphNodeSpec(
-                name="direct_agent",
-                kind="llm",
-                retry=RetrySpec(max_attempts=9),
-                timeout=15.0,
-                output_schema="OutputModel",
-                output_key="answer_key",
-            )
-        ],
-        edges=[GraphEdgeSpec(source=START, target="direct_agent")],
-        shape="sequence",
-    )
-    node = compile_legacy(
-        spec, rt, name="direct_agent", schema_registry={"OutputModel": OutputModel}
-    )
-    assert isinstance(node, LlmAgent)
-    assert node.output_key == "answer_key"
-    assert node.output_schema is OutputModel
-    assert node.code_executor is executor
-    # Documented rollback limitation: per-node retry/timeout are not applied
-    # by the legacy sugar trees.
-    assert node.retry_config is None
-    assert node.timeout is None
-
-
 def test_unknown_schema_name_fails_fast():
     with pytest.raises(ValueError, match="Unknown schema name"):
         compile_graph(
@@ -455,16 +347,7 @@ def test_unknown_schema_name_fails_fast():
         )
 
 
-# ─── backend selection + import isolation ────────────────────────────────────
-
-
-def test_compose_backend_flag(monkeypatch):
-    assert compile_pkg.compose_backend() == "workflow"
-    monkeypatch.setenv("AGENT_COMPOSE_BACKEND", "legacy")
-    assert compile_pkg.compose_backend() == "legacy"
-    monkeypatch.setenv("AGENT_COMPOSE_BACKEND", "bogus")
-    with pytest.raises(ValueError, match="AGENT_COMPOSE_BACKEND"):
-        compile_pkg.compose_backend()
+# ─── import isolation ────────────────────────────────────────────────────────
 
 
 _COMPOSITION_SYMBOLS = {
@@ -487,17 +370,16 @@ _COMPOSITION_SYMBOLS = {
 }
 
 #: Importers allowed outside ``compile/``: agent.py subclasses Agent/BaseAgent
-#: (runtime assembly) and strategies/ + use_cases/ are the E3 retirement
-#: targets whose construction moves into compile/ before deletion.
+#: (runtime assembly; construction).  Everything else that touches ADK
+#: composition classes (including policies/presets — duck-typed instead)
+#: is a violation.
 _ALLOWED_COMPOSITION_IMPORTERS = {
     Path("basic_agent/agent.py"),
-    Path("basic_agent/strategies"),
-    Path("basic_agent/use_cases"),
     Path("basic_agent/compile"),
 }
 
 
-def test_only_compile_and_retiring_modules_import_adk_composition():
+def test_only_compile_and_agent_import_adk_composition():
     """ADR-005 §3 rule: compile/ is the sole composition-class importer."""
     src_root = Path(__file__).parents[1] / "src" / "basic_agent"
     offenders: list[str] = []
@@ -515,11 +397,12 @@ def test_only_compile_and_retiring_modules_import_adk_composition():
         if offending:
             relative = path.relative_to(src_root.parent)
             if not any(
-                relative == allowed or relative.parts[0] == allowed.parts[0]
+                relative == allowed
+                or (relative.parts[: len(allowed.parts)] == allowed.parts)
                 for allowed in _ALLOWED_COMPOSITION_IMPORTERS
             ):
                 offenders.append(f"{relative}: {sorted(offending)}")
     assert not offenders, (
-        "Only compile/ (and the E3-retirement modules agent.py, strategies/, "
-        f"use_cases/) may import ADK composition classes; found: {offenders}"
+        "Only compile/ (and agent.py, which subclasses Agent) may import ADK "
+        f"composition classes; found: {offenders}"
     )

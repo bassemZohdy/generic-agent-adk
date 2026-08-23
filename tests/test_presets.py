@@ -138,15 +138,22 @@ def _route_dispatch(ctx, node_input=None):
     ctx.route = "research"
 
 
+#: Per-preset runtime overrides for bare-``build_spec`` calls (no defaults
+#: are applied on that path, so expert_dispatch needs an explicit roster).
+_SPEC_RUNTIME_OVERRIDES = {
+    "expert_dispatch": {"specialists": ("research", "solution", "risk")},
+}
+
+
 def test_presets_expand_to_specs_and_compile():
     for key, preset in PRESETS.items():
         if key == "team_coordinator":
             continue
-        spec = preset.build_spec(make_rt())
+        spec = preset.build_spec(make_rt(**_SPEC_RUNTIME_OVERRIDES.get(key, {})))
         spec.validate()
         graph = compile_graph(
             spec,
-            make_rt(),
+            make_rt(**_SPEC_RUNTIME_OVERRIDES.get(key, {})),
             name=f"{key}_wf",
             function_registry={"route_dispatch": _route_dispatch},
         )
@@ -158,17 +165,30 @@ def test_expert_dispatch_routing_spec_structure():
         make_rt(specialists=("research", "solution", "risk"))
     )
     by_name = spec.nodes_by_name()
+    classifier = by_name["router_classifier"]
+    assert classifier.kind == "llm"
+    assert classifier.output_key == "routed_to"
+    assert classifier.options == {"no_state_schema": True}
+    assert classifier.role is not None and classifier.role.instruction is not None
+    # The classifier instruction lists the roster dynamically, in order.
+    assert "research, solution, risk" in classifier.role.instruction
     router = by_name["router_agent"]
     assert router.kind == "function"
     assert router.options == {
         "function": "route_dispatch",
         "default_route": "research",
+        "routes": ["research", "solution", "risk"],
     }
     assert spec.edges[0].source == START
-    assert spec.edges[0].target == "router_agent"
-    routes = {e.route for e in spec.edges[1:]}
+    assert spec.edges[0].target == "router_classifier"
+    assert (spec.edges[1].source, spec.edges[1].target) == (
+        "router_classifier",
+        "router_agent",
+    )
+    routes = {e.route for e in spec.edges[2:]}
     assert routes == {"research", "solution", "risk"}
     assert {n.name for n in spec.nodes} == {
+        "router_classifier",
         "router_agent",
         "router_specialist_research",
         "router_specialist_solution",

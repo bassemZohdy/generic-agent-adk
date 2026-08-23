@@ -37,19 +37,40 @@ FunctionRegistry = dict[str, Callable[..., Any]]
 
 
 def default_route_dispatch(
-    ctx: Any, node_input: Any = None, default_route: str = "research"
+    ctx: Any,
+    node_input: Any = None,
+    default_route: str = "research",
+    routes: list[str] | None = None,
 ) -> None:
     """Default routing-node implementation (ADR-005 §5, TODO E2).
 
     Deterministic, state-driven routing: uses ``ctx.state['routed_to']`` when
     present (matched against the graph's route edges at runtime), else
     ``default_route`` — the preset's first specialist, bound at compile time
-    from the router node's ``options.default_route``.  Presets/custom
-    configs can replace it via the function registry; an emitted route with
-    no matching edge ends the branch (engine behavior).
+    from the router node's ``options.default_route``.  When ``routes`` (the
+    graph's valid route names, bound from ``options.routes``) is provided,
+    the state value is normalized (strip + casefold) and matched against it
+    — a value equal to or containing a valid route name selects that route,
+    so a fuzzy classifier reply ("RISK.", "risk analysis") still lands on a
+    real edge; anything else falls back to ``default_route`` (E1 finding:
+    the router must always emit a valid route).  Presets/custom configs can
+    replace it via the function registry; an emitted route with no matching
+    edge ends the branch (engine behavior).
     """
     route = ctx.state.get("routed_to", default_route)
-    ctx.route = route if isinstance(route, str) and route else default_route
+    if not (isinstance(route, str) and route):
+        ctx.route = default_route
+        return
+    if routes is None:
+        ctx.route = route
+        return
+    normalized = route.strip().casefold()
+    for candidate in routes:
+        key = str(candidate).strip().casefold()
+        if key and (normalized == key or key in normalized):
+            ctx.route = candidate
+            return
+    ctx.route = default_route
 
 
 def default_aggregate_perspectives(ctx: Any, node_input: Any = None) -> None:
@@ -190,14 +211,33 @@ def _resolve_function(
     if isinstance(key, str) and key in functions:
         func = functions[key]
         if func is DEFAULT_FUNCTION_REGISTRY["route_dispatch"]:
-            # Bind the preset's default route (first specialist) into the
-            # built-in router so it matches the graph's route edges.  Custom
-            # routers control their own behavior and are passed through.
+            # Bind the preset's default route (first specialist) and valid
+            # routes (the graph's route names) into the built-in router so
+            # it matches the graph's route edges, including normalized
+            # fuzzy classifier output.  Custom routers control their own
+            # behavior and are passed through.
+            binds: dict[str, Any] = {}
             default = options.get("default_route", "research")
             if isinstance(default, str) and default:
+                binds["default_route"] = default
+            if "routes" in options:
+                routes = options["routes"]
+                if (
+                    not isinstance(routes, list)
+                    or not routes
+                    or not all(
+                        isinstance(item, str) and item.strip() for item in routes
+                    )
+                ):
+                    raise ValueError(
+                        f"route_dispatch node {node.name!r} options.routes "
+                        "must be a non-empty list of non-empty route names"
+                    )
+                binds["routes"] = list(routes)
+            if binds:
                 from functools import partial
 
-                return partial(func, default_route=default)
+                return partial(func, **binds)
         return func
     raise ValueError(
         f"function node {node.name!r} requires options.function (an entry in "

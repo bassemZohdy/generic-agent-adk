@@ -1073,9 +1073,20 @@ def _parse_agent_config(data: dict) -> AgentConfig:
         )
         if "require_approval" in execution_data:
             _boolean(execution_data["require_approval"], "execution.require_approval")
-        specialists = _string_list(
-            execution_data.get("specialists", []), "execution.specialists"
-        )
+        # Key presence distinguishes "not set" from "explicitly empty": an
+        # explicitly empty specialists list is a configuration error (the
+        # preset would otherwise silently substitute the default roster).
+        specialists: list[str] = []
+        if "specialists" in execution_data:
+            specialists = _string_list(
+                execution_data["specialists"], "execution.specialists"
+            )
+            if not specialists:
+                raise ValueError(
+                    "execution.specialists must not be empty; list at least "
+                    "one specialist or remove the key to use the default "
+                    "roster"
+                )
         execution_config = ExecutionConfig(
             max_iterations=_positive_int(
                 execution_data.get("max_iterations", 3),

@@ -64,6 +64,7 @@ class ParallelSugar:
 
     items: list[str]
     join_name: str | None = None
+    name: str | None = None
 
     def __post_init__(self) -> None:
         if len(self.items) < 2:
@@ -76,6 +77,7 @@ class LoopSugar:
 
     body: str
     max_iterations: int
+    name: str | None = None
 
     def __post_init__(self) -> None:
         if self.max_iterations < 1:
@@ -119,7 +121,7 @@ def _resolve_item(
     if isinstance(item, str):
         _check_name_exists(item, by_name)
         return by_name[item]
-    name = subgraph_name or f"{_SUBGRAPH_PREFIX}{index}"
+    name = subgraph_name or getattr(item, "name", None) or f"{_SUBGRAPH_PREFIX}{index}"
     # Nested specs reference only their own nodes: scope the registry down so
     # the subgraph does not inherit the whole outer graph.
     nested_by_name = {
@@ -243,8 +245,19 @@ def expand_sugar(
         raise ValueError(  # noqa: TRY004 - preserve actionable config error type
             f"Unknown sugar form: {type(sugar).__name__}"
         )
+    # The outer spec contains only the nodes its own edges touch (nested
+    # sugars carry their referenced nodes inside their subgraph), preserving
+    # endpoint order; fragment-added nodes (join/counter/subgraph) append.
+    outer_names: dict[str, None] = {}
+    for edge in fragment.edges:
+        if edge.source != START:
+            outer_names.setdefault(edge.source, None)
+        targets = edge.target if isinstance(edge.target, list) else [edge.target]
+        for target in targets:
+            outer_names.setdefault(target, None)
+    outer_nodes = [by_name[name] for name in outer_names if name in by_name]
     return GraphSpec(
-        nodes=list(by_name.values()) + fragment.nodes,
+        nodes=outer_nodes + fragment.nodes,
         edges=fragment.edges,
         shape=type(sugar).__name__.removesuffix("Sugar").lower(),
     )

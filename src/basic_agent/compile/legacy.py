@@ -105,8 +105,32 @@ def compile_legacy(
             state_schema=resolve_schema(node.state_schema, schemas),
         )
 
+    def compile_item(node_name: str) -> BaseAgent:
+        """Compile one sequence item (llm node or nested sugar subgraph)."""
+        node = by_name[node_name]
+        if node.kind == "llm":
+            return build_step(node_name)
+        if node.kind == "graph" and node.graph is not None:
+            return compile_legacy(
+                node.graph,
+                rt,
+                name=node.name,
+                config=config,
+                schema_registry=schemas,
+                known_tools=known_tools,
+            )
+        raise ValueError(
+            f"legacy sequence compile does not support node {node_name!r} "
+            f"of kind {node.kind!r}"
+        )
+
     if shape == "sequence":
-        steps = [build_step(node_name) for node_name in _linear_order(spec)]
+        order = _linear_order(spec)
+        if len(order) == 1 and by_name[order[0]].kind == "llm":
+            # Single llm node (assistant preset): the legacy tree is the
+            # bare LlmAgent, mirroring DirectStrategy.
+            return build_step(order[0])
+        steps = [compile_item(node_name) for node_name in order]
         return SequentialAgent(
             name=name or "sequential_agent",
             description=rt.description,
@@ -116,7 +140,13 @@ def compile_legacy(
     if shape == "parallel":
         join_nodes = {n.name for n in spec.nodes if n.kind == "join"}
         worker_names = [n.name for n in spec.nodes if n.name not in join_nodes]
-        workers = [build_step(node_name) for node_name in worker_names]
+        for worker_name in worker_names:
+            if by_name[worker_name].kind != "llm":
+                raise ValueError(
+                    f"legacy parallel compile does not support node "
+                    f"{worker_name!r} of kind {by_name[worker_name].kind!r}"
+                )
+        workers = [build_step(worker_name) for worker_name in worker_names]
         return ParallelAgent(
             name=name or "parallel_agent",
             description=rt.description,

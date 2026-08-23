@@ -745,14 +745,20 @@ def _parse_sugar_item(data: Any, path: str) -> str | ParallelSugar | LoopSugar:
             raise ValueError(f"{path} must not be empty")
         return data.strip()
     if isinstance(data, dict):
-        _keys(data, {"parallel", "loop"}, path)
+        _keys(data, {"parallel", "loop", "name"}, path)
+        name = None
+        if data.get("name") is not None:
+            name = _string(data["name"], f"{path}.name")
         if "parallel" in data:
             names = _string_list(data["parallel"], f"{path}.parallel")
             if len(names) < 2:
                 raise ValueError(f"{path}.parallel must have at least two names")
-            return ParallelSugar(items=names)
+            return ParallelSugar(items=names, name=name)
         if "loop" in data:
-            return _parse_loop_mapping(data["loop"], f"{path}.loop")
+            loop = _parse_loop_mapping(data["loop"], f"{path}.loop")
+            if name is not None:
+                loop.name = name
+            return loop
         raise ValueError(
             f"{path} must be a node name or a nested sugar form ('parallel' or 'loop')"
         )

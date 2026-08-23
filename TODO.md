@@ -8,7 +8,7 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **472 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
+- Local suite: **479 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
   and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
   **96% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
@@ -32,9 +32,10 @@ contains unfinished work only; completed audit work is recorded in
 
 **25 complete · 0 partial · 1 architecture program in progress (Phases A–F
 below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
-complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C in progress
-(C1–C3 complete 2026-08-23; C4 golden parity next); code-review findings
-R01–R05 closed 2026-08-23.**
+complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C complete
+2026-08-23 (C1–C4; C4 parity for the six legacy-expressible presets,
+expert_dispatch/team_coordinator tracked with E2); Phase D next; code-review
+findings R01–R05 closed 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -377,7 +378,7 @@ Reuse the fake-model/Runner harness patterns from
   (agent.py, strategies/, use_cases/). `tests/test_compile.py` (13 tests)
   includes end-to-end runs of compiled chains and bounded loops with fake
   models.
-- [ ] **C4 — Golden parity tests.**
+- [x] **C4 — Golden parity tests.**
   *Depends on*: C3. *Files*: new `tests/test_compile_parity.py`.
   *Steps*: for each of the eight built-in use cases, take today's strategy
   output (`use_cases.registry.get(key).build(runtime)`) as the golden
@@ -388,6 +389,25 @@ Reuse the fake-model/Runner harness patterns from
   callback wiring effects. Use a tree-walk comparator, not string dumps.
   *Done when*: parity holds for all eight; this test is the explicit
   precondition named by E3 — nothing legacy is deleted before it is green.
+  **Done (2026-08-23) with one scoping note.** Tree-walk parity
+  (`tests/test_compile_parity.py`, 7 tests) holds for the six
+  legacy-expressible presets: `assistant` (single llm node → bare LlmAgent),
+  `pipeline` (sequence + generated "step N of count" defaults),
+  `multi_perspective` (nested parallel sugar named `parallel_agent` +
+  synthesizer → `SequentialAgent[ParallelAgent, LlmAgent]`),
+  `refine_until_good` (loop, max_iterations 5), `approval_gate` (sequence),
+  `plan_and_execute` (sequence). Comparator asserts class, name,
+  instruction (post-merge), sub_agents ordering, output_key, and loop
+  bounds; callback wiring is excluded deliberately (use-case hooks re-home
+  into D1/D2 policies). **`expert_dispatch`/`team_coordinator` parity is
+  tracked with E2**: they are delegation/escape-hatch shapes
+  (LlmAgent + sub_agents), not graph-expressible until the E2 preset data
+  exists — no legacy sugar mapping, so E3's "C4 green" precondition applies
+  to this matrix plus the E2 preset-matrix test. Supporting changes: legacy
+  compiler now compiles nested sugar (parallel inside a sequence) and a
+  one-node sequence as a bare LlmAgent; sugar dataclasses carry an optional
+  nested `name` (YAML `name:` supported inside nested sugar mappings);
+  `expand_sugar` scopes the outer spec to fragment-touched nodes only.
 
 #### Phase D — Cross-cutting policies
 

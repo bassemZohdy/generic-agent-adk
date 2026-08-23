@@ -37,14 +37,17 @@ class DeterministicLlm(BaseLlm):
         )
 
 
+#: Final event author per example YAML (post-E3).  Terminal LlmAgent nodes
+#: author their own final event; terminal function nodes leave the workflow
+#: to author it — hence graph/agent-name mix below.
 EXPECTED_FINAL_AUTHORS = {
     "approval-gate.yaml": "human_in_loop_completer",
     "assistant.yaml": "direct_agent",
-    "expert-dispatch.yaml": "router_agent",
-    "multi-perspective.yaml": "perspective_synthesizer",
+    "expert-dispatch.yaml": "router_specialist_billing",
+    "multi-perspective.yaml": "multi_perspective",
     "pipeline.yaml": "sequential_step_2",
     "plan-and-execute.yaml": "executor_agent",
-    "refine-until-good.yaml": "evaluator_optimizer_worker",
+    "refine-until-good.yaml": "refine_until_good",
     "team-coordinator.yaml": "supervisor_agent",
 }
 

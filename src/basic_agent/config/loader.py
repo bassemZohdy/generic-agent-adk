@@ -12,7 +12,7 @@ from typing import Any
 import yaml
 
 from ..policies.synthesis import SYNTHESIZER_INSTRUCTION, SYNTHESIZER_OUTPUT_KEY
-from ..strategies.base import RoleConfig
+from ..runtime import RoleConfig
 from ..util import split_csv
 from .graph import GraphEdgeSpec, GraphNodeSpec, GraphSpec, RetrySpec
 from .sugar import (

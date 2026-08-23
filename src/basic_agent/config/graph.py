@@ -18,7 +18,7 @@ import keyword
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..strategies.base import RoleConfig
+from ..runtime import RoleConfig
 
 #: Sentinel source name for the workflow entry point.  Matches the edge DSL
 #: value used by the ADK graph parser (``START`` strings are resolved to the

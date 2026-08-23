@@ -1,18 +1,14 @@
-"""Phase C4 — golden parity: strategy trees vs legacy-compiled preset specs.
+"""C4 golden parity (frozen post-E3) — legacy-compiled preset trees.
 
-For each built-in use case that maps onto a legacy-expressible preset (per
-ADR-005 §5 / TODO E2), the preset-expanded graph spec compiled by
-``compile/legacy.py`` must be structurally equivalent to today's strategy
-output: same agent classes, same names, same instructions (including the
-generated per-step defaults and the instruction-merge contract), same
-``sub_agents`` ordering, same ``output_key``\\ s, same loop bounds.
+The original C4 test compared preset specs compiled by ``compile/legacy.py``
+against the live strategy trees.  E3 removed the strategy/facade layers; the
+pre-E3 tree shapes are now frozen here as explicit expected structures (the
+same shapes the old strategy implementations produced — green across
+Phases B–E).  The legacy compiler must keep producing them for the full
+rollback lifecycle (F2).
 
-Tree-walk comparator, not string dumps — per the C4 spec.  Callback wiring
-is excluded deliberately: use-case hook chaining (multi_perspective
-``after_run``, approval_gate ``before_tool``) is re-homed by the D1/D2
-policies; the trees must match on structure, not on the hook objects.
 ``expert_dispatch``/``team_coordinator`` are the routing/delegation presets
-— workflow-first shapes whose parity lands with E2 (no legacy sugar shape).
+— workflow-first shapes with no legacy sugar mapping (catalog raises).
 """
 
 from __future__ import annotations
@@ -20,21 +16,21 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-import pytest
-from google.adk.agents import LlmAgent, LoopAgent, SequentialAgent
+from google.adk.agents import LoopAgent
 from google.adk.models.base_llm import BaseLlm
 from google.adk.models.llm_response import LlmResponse
 from google.genai import types
 
 from basic_agent.compile import compile_legacy
-from basic_agent.config.graph import GraphNodeSpec
-from basic_agent.config.sugar import (
-    LoopSugar,
-    SequenceSugar,
-    expand_sugar,
+from basic_agent.presets import PRESETS
+from basic_agent.runtime import RuntimeContext
+
+BASE_INSTRUCTION = "Runtime policy: follow the operator's task."
+ROLE_PREFIX = (
+    BASE_INSTRUCTION
+    + "\n\nRole-specific instructions (follow only if consistent with the "
+    "runtime policy above):\n"
 )
-from basic_agent.strategies.base import RoleConfig, RuntimeContext
-from basic_agent.use_cases import get_default_registry
 
 PIPELINE_STEP_0 = (
     "You are step 0 of 2 in this pipeline. Perform your stage of the overall "
@@ -54,6 +50,16 @@ SYNTHESIZER_INSTRUCTION = (
     "Read the perspective outputs in session state, compare where they agree "
     "or differ, and produce one balanced final answer."
 )
+APPROVAL_PROPOSER_INSTRUCTION = (
+    "Propose a clear, actionable solution for the user's request."
+)
+APPROVAL_COMPLETER_INSTRUCTION = (
+    "Complete the user-approved action only after the approval tool has "
+    "returned confirmed. If approval is pending or rejected, do not invoke "
+    "any state-changing tool; explain that the action was not authorized."
+)
+PLANNER_INSTRUCTION = "Create a step-by-step plan to address the request."
+EXECUTOR_INSTRUCTION = "Execute the plan step by step."
 
 
 class DeterministicLlm(BaseLlm):
@@ -74,7 +80,7 @@ class DeterministicLlm(BaseLlm):
 def make_runtime(**overrides: Any) -> RuntimeContext:
     base = RuntimeContext(
         model=DeterministicLlm(model="deterministic"),
-        instruction="Runtime policy: follow the operator's task.",
+        instruction=BASE_INSTRUCTION,
         tools=[],
         description="parity test agent",
         output_key="last_response",
@@ -97,144 +103,115 @@ def describe(root: Any) -> dict[str, Any]:
     return entry
 
 
-def spec_single(name: str) -> Any:
-    return expand_sugar(
-        SequenceSugar(items=[name]),
-        {name: GraphNodeSpec(name=name, kind="llm")},
-    )
+def llm(name: str, instruction: str, output_key: str = "last_response") -> dict:
+    return {
+        "type": "LlmAgent",
+        "name": name,
+        "instruction": instruction,
+        "output_key": output_key,
+        "sub_agents": [],
+    }
 
 
-def spec_sequence(nodes: list[GraphNodeSpec]) -> Any:
-    by_name = {node.name: node for node in nodes}
-    return expand_sugar(SequenceSugar(items=[node.name for node in nodes]), by_name)
+def merged(role_instruction: str) -> str:
+    return ROLE_PREFIX + role_instruction
 
 
-def spec_loop(body: GraphNodeSpec, max_iterations: int) -> Any:
-    return expand_sugar(
-        LoopSugar(body=body.name, max_iterations=max_iterations),
-        {body.name: body},
-    )
+def container(name: str, sub_agents: list[dict]) -> dict:
+    return {
+        "type": "SequentialAgent",
+        "name": name,
+        "instruction": None,
+        "output_key": None,
+        "sub_agents": sub_agents,
+    }
 
 
-def _pipeline_spec() -> Any:
-    nodes = [
-        GraphNodeSpec(
-            name="sequential_step_0",
-            kind="llm",
-            role=RoleConfig(instruction=PIPELINE_STEP_0),
-        ),
-        GraphNodeSpec(
-            name="sequential_step_1",
-            kind="llm",
-            role=RoleConfig(instruction=PIPELINE_STEP_1),
-        ),
-    ]
-    return spec_sequence(nodes)
-
-
-def _multi_perspective_spec() -> Any:
-    """Built by the D2 policy helper: nested parallel + synthesizer node."""
-    from basic_agent.policies import legacy_multi_perspective_spec
-
-    return legacy_multi_perspective_spec(["parallel_worker_0", "parallel_worker_1"])
-
-
-def _refine_spec() -> Any:
-    body = GraphNodeSpec(
-        name="evaluator_optimizer_worker",
-        kind="llm",
-        role=RoleConfig(instruction=REFINE_INSTRUCTION),
-    )
-    return spec_loop(body, 5)
-
-
-def _approval_spec() -> Any:
-    proposer = GraphNodeSpec(
-        name="human_in_loop_proposer",
-        kind="llm",
-        role=RoleConfig(
-            instruction="Propose a clear, actionable solution for the user's request."
-        ),
-    )
-    completer = GraphNodeSpec(
-        name="human_in_loop_completer",
-        kind="llm",
-        role=RoleConfig(
-            instruction=(
-                "Complete the user-approved action only after the approval "
-                "tool has returned confirmed. If approval is pending or "
-                "rejected, do not invoke any state-changing tool; explain "
-                "that the action was not authorized."
-            )
-        ),
-    )
-    return spec_sequence([proposer, completer])
-
-
-def _plan_spec() -> Any:
-    planner = GraphNodeSpec(
-        name="planner_agent",
-        kind="llm",
-        role=RoleConfig(
-            instruction="Create a step-by-step plan to address the request."
-        ),
-    )
-    executor = GraphNodeSpec(
-        name="executor_agent",
-        kind="llm",
-        role=RoleConfig(instruction="Execute the plan step by step."),
-    )
-    return spec_sequence([planner, executor])
+#: Frozen pre-E3 golden structures per preset — the exact shapes the live
+#: strategy trees produced.  E3 froze them here; the legacy compiler must
+#: keep emitting them until F2 retires the backend.
+EXPECTED = {
+    "assistant": llm("direct_agent", BASE_INSTRUCTION),
+    "pipeline": container(
+        "sequential_agent",
+        [
+            llm("sequential_step_0", merged(PIPELINE_STEP_0)),
+            llm("sequential_step_1", merged(PIPELINE_STEP_1)),
+        ],
+    ),
+    "multi_perspective": container(
+        "multi_perspective_agent",
+        [
+            {
+                "type": "ParallelAgent",
+                "name": "parallel_agent",
+                "instruction": None,
+                "output_key": None,
+                "sub_agents": [
+                    llm("parallel_worker_0", BASE_INSTRUCTION, "perspective_0"),
+                    llm("parallel_worker_1", BASE_INSTRUCTION, "perspective_1"),
+                ],
+            },
+            llm("perspective_synthesizer", merged(SYNTHESIZER_INSTRUCTION)),
+        ],
+    ),
+    "refine_until_good": {
+        "type": "LoopAgent",
+        "name": "evaluator_optimizer_agent",
+        "instruction": None,
+        "output_key": None,
+        "max_iterations": 5,
+        "sub_agents": [llm("evaluator_optimizer_worker", merged(REFINE_INSTRUCTION))],
+    },
+    "approval_gate": container(
+        "human_in_loop_agent",
+        [
+            llm("human_in_loop_proposer", merged(APPROVAL_PROPOSER_INSTRUCTION)),
+            llm("human_in_loop_completer", merged(APPROVAL_COMPLETER_INSTRUCTION)),
+        ],
+    ),
+    "plan_and_execute": container(
+        "plan_execute_agent",
+        [
+            llm("planner_agent", merged(PLANNER_INSTRUCTION)),
+            llm("executor_agent", merged(EXECUTOR_INSTRUCTION)),
+        ],
+    ),
+}
 
 
 CASES = [
-    ("assistant", {}, spec_single("direct_agent"), "direct_agent"),
-    ("pipeline", {"extra_config": {"steps": 2}}, _pipeline_spec(), "sequential_agent"),
-    ("multi_perspective", {}, _multi_perspective_spec(), "multi_perspective_agent"),
-    ("refine_until_good", {}, _refine_spec(), "evaluator_optimizer_agent"),
-    ("approval_gate", {}, _approval_spec(), "human_in_loop_agent"),
-    ("plan_and_execute", {}, _plan_spec(), "plan_execute_agent"),
+    ("assistant", {}),
+    ("pipeline", {"extra_config": {"steps": 2}}),
+    ("multi_perspective", {"extra_config": {"workers": 2}}),
+    ("refine_until_good", {}),
+    ("approval_gate", {}),
+    ("plan_and_execute", {}),
 ]
 
 
-@pytest.mark.parametrize(
-    ("key", "runtime_overrides", "preset_spec", "root_name"),
-    CASES,
-    ids=[case[0] for case in CASES],
-)
-def test_legacy_compiled_preset_matches_strategy_parity(
-    key, runtime_overrides, preset_spec, root_name
-):
-    """Golden (current strategy tree) ≡ legacy-compiled preset spec."""
-    registry = get_default_registry()
-    golden = registry.get(key).build(make_runtime(**runtime_overrides))
-    compiled = compile_legacy(
-        preset_spec, make_runtime(**runtime_overrides), name=root_name
-    )
-
-    assert describe(compiled) == describe(golden), (
-        f"legacy-compiled preset for {key!r} diverges from the strategy tree"
-    )
+def test_preset_legacy_trees_match_frozen_pre_e3_golden():
+    """The legacy compiler still emits the exact pre-E3 strategy tree shapes."""
+    for key, overrides in CASES:
+        preset = PRESETS[key]
+        rt = preset.apply_defaults(make_runtime(**overrides))
+        compiled = compile_legacy(
+            preset.build_legacy_spec(rt), rt, name=preset.legacy_name
+        )
+        assert describe(compiled) == EXPECTED[key], key
 
 
 def test_parity_comparator_detects_divergence():
     """The comparator must catch a structural difference, not pass vacuously."""
-    good = spec_sequence(
-        [
-            GraphNodeSpec(name="sequential_step_0", kind="llm"),
-            GraphNodeSpec(name="sequential_step_1", kind="llm"),
-        ]
+    compiled = compile_legacy(
+        PRESETS["pipeline"].build_legacy_spec(make_runtime()),
+        make_runtime(),
     )
-    compiled = compile_legacy(good, make_runtime(), name="sequential_agent")
-    golden = SequentialAgent(
-        name="sequential_agent",
-        description="parity test agent",
-        sub_agents=[
-            LlmAgent(
-                name="sequential_step_0",
-                model=DeterministicLlm(model="deterministic"),
-                instruction="Runtime policy: follow the operator's task.",
-            )
-        ],
-    )
-    assert describe(compiled) != describe(golden)
+    wrong = {
+        "type": "SequentialAgent",
+        "name": "sequential_agent",
+        "instruction": None,
+        "output_key": None,
+        "sub_agents": [llm("sequential_step_0", merged(PIPELINE_STEP_0))],
+    }
+    assert describe(compiled) != wrong

@@ -2,6 +2,46 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-23 — Graph-first re-architecture: workflow backend, presets, policies (Phases A–E)
+
+- **Architecture program complete through Phase E** (ADR-005 **Accepted**;
+  the migration plan and evidence live in ADR-003's Phase B results):
+  - **Phase B gate spike**: real `Workflow` roots (chains, fan-out/join,
+    routed loops), `RequestInput` interrupt/resume, and the hook/policy
+    attachment point (boundary `FunctionNode`s for policies, ADK plugins
+    for observability; `finish_task` passthrough rule proven) pinned by
+    `tests/test_workflow_gates.py`.
+  - **Graph-spec config** (`config/graph.py` + sugar forms in
+    `config/sugar.py`): recursive nodes/edges with per-node retry, timeout,
+    schemas, output keys; `sequence`/`parallel`/`loop` sugar; fail-fast
+    validation.
+  - **Compilers** (`compile/`): the workflow backend is the default
+    (`AGENT_COMPOSE_BACKEND`); the legacy sugar compiler is the one-release
+    rollback path. The compile layer is the single sanctioned home for ADK
+    composition classes (enforced by a test).
+  - **Policies** (`policies/`): approval (veto + confirmation interrupt,
+    never gates `request_approval`/`finish_task`/`_TaskAgentTool`) and
+    synthesis (join + synthesizer + `perspective_*` aggregation) are now
+    declarative and topology-independent.
+  - **Presets** (`presets/`): the eight public use-case keys are data —
+    catalog byte-identical to the previous surface (snapshot-pinned), each
+    with graph-spec builders; `team_coordinator` keeps its documented
+    delegation escape hatch. The registry serves presets (alias/case
+    resolution and `AGENT_USE_CASE_MODULE` custom loading preserved; custom
+    modules now expose a `PRESETS` dict of `Preset`).
+- **Internal breaking change**: the per-use-case facade classes
+  (`use_cases/*.py`) and the strategy layer (`strategies/*`, nine builders)
+  were **removed**; `RuntimeContext`/`RoleConfig` moved to
+  `basic_agent.runtime`. **The public surface is unchanged**: the eight
+  use-case keys, the YAML/env contract, and the catalog metadata
+  (`list_use_cases()` byte-identical). Code that imported strategy or
+  facade classes directly (undocumented) must port to presets + compilers.
+- **Code-review findings R01–R05 closed**: WebSocket subprotocol token leak,
+  eager `settings_patch` imports, PERSISTENCE.md corrections, T11/T16
+  evidence re-qualification, and test-fixture cleanup.
+- Verified: 439+ tests, 96% coverage, ruff/pyright/doc-link/ADK-assumption
+  guards green on google-adk 2.6.3.
+
 ## 2026-08-21 — Authenticated interface integration, cloud executor & persistence tests, and Apache 2.0 license
 
 - **Authenticated interface integration matrix (`tests/test_authenticated_interfaces.py`)**:

@@ -35,7 +35,7 @@ from basic_agent.policies import (
     make_synthesis_after_run,
     with_synthesis,
 )
-from basic_agent.strategies.base import RuntimeContext
+from basic_agent.runtime import RuntimeContext
 from basic_agent.tools import request_approval
 
 APP_NAME = "policy-tests"
@@ -342,9 +342,18 @@ def test_with_synthesis_follows_parallel_join():
     combined = with_synthesis(spec)
 
     names = [n.name for n in combined.nodes]
-    assert names == ["p0", "p1", "p0_join", "perspective_synthesizer"]
-    assert combined.edges[-1] == GraphEdgeSpec(
+    assert names == [
+        "p0",
+        "p1",
+        "p0_join",
+        "perspective_synthesizer",
+        "synthesis_aggregate",
+    ]
+    assert combined.edges[-2] == GraphEdgeSpec(
         source="p0_join", target="perspective_synthesizer"
+    )
+    assert combined.edges[-1] == GraphEdgeSpec(
+        source="perspective_synthesizer", target="synthesis_aggregate"
     )
     combined.validate()
 
@@ -361,10 +370,13 @@ def test_with_synthesis_adds_join_to_raw_fanout():
 
     nodes = {n.name: n for n in combined.nodes}
     assert nodes["synthesis_join"].kind == "join"
-    assert combined.edges[-3] == GraphEdgeSpec(source="p0", target="synthesis_join")
-    assert combined.edges[-2] == GraphEdgeSpec(source="p1", target="synthesis_join")
-    assert combined.edges[-1] == GraphEdgeSpec(
+    assert combined.edges[-4] == GraphEdgeSpec(source="p0", target="synthesis_join")
+    assert combined.edges[-3] == GraphEdgeSpec(source="p1", target="synthesis_join")
+    assert combined.edges[-2] == GraphEdgeSpec(
         source="synthesis_join", target="perspective_synthesizer"
+    )
+    assert combined.edges[-1] == GraphEdgeSpec(
+        source="perspective_synthesizer", target="synthesis_aggregate"
     )
     # Workflow-compilable shape.
     compile_graph(combined, make_rt(DeterministicLlm(model="deterministic")))
@@ -373,6 +385,7 @@ def test_with_synthesis_adds_join_to_raw_fanout():
         "p1",
         "synthesis_join",
         "perspective_synthesizer",
+        "synthesis_aggregate",
     }
 
 
@@ -399,9 +412,14 @@ def test_synthesis_workflow_runs_and_aggregates_like_multi_perspective():
         "synthesizer node must run after the join"
     )
     assert "perspective_synthesizer" in {e.author for e in events}
-    # After-run aggregation reproduces the multi_perspective state keys.
+    # The native aggregator node writes the same state keys the use case did.
+    assert state["aggregated_perspectives"] == [
+        "deterministic response 1",
+        "deterministic response 2",
+    ]
+    # The after-run helper (legacy path) reproduces the same contract.
     after_run = make_synthesis_after_run()
-    callback_context = SimpleNamespace(state=state)
+    callback_context = SimpleNamespace(state=dict(state))
     after_run(callback_context)
     assert state["aggregated_perspectives"] == [
         "deterministic response 1",

@@ -22,13 +22,17 @@ from basic_agent.telemetry import tracer
 
 
 def test_root_agent_is_use_case_built():
-    assert isinstance(root_agent, LlmAgent)
-    assert root_agent.name == "direct_agent"  # assistant use case -> DIRECT strategy
-    assert root_agent.output_schema is GenericAgentResponse
-    assert root_agent.output_key == "last_response"
-    assert root_agent.state_schema is AgentState
-    assert root_agent.before_agent_callback is not None
-    assert root_agent.after_agent_callback is not None
+    # E3: assistant compiles to a single-llm-node Workflow graph.
+    from google.adk.workflow import Workflow
+
+    assert isinstance(root_agent, Workflow)
+    node = next(n for n in root_agent.graph.nodes if isinstance(n, LlmAgent))
+    assert node.name == "direct_agent"  # assistant preset -> single llm node
+    assert node.output_schema is GenericAgentResponse
+    assert node.output_key == "last_response"
+    assert node.state_schema is AgentState
+    assert node.before_agent_callback is not None
+    assert node.after_agent_callback is not None
 
 
 def test_agent_module_contract_exports():

@@ -103,24 +103,27 @@ reading `Settings`, because YAML values arrive via overlay, not env.
 
 ## Use cases → strategies
 
-| Use case | Strategy | ADK shape |
+| Use case | Preset shape (ADR-005) | Default backend output |
 |---|---|---|
-| `assistant` | `direct` | single `LlmAgent` |
-| `pipeline` | `sequential` | `SequentialAgent` |
-| `multi_perspective` | `parallel` + synthesis | `SequentialAgent(ParallelAgent, LlmAgent)` |
-| `refine_until_good` | `evaluator_optimizer` | optimizer/evaluator loop |
-| `expert_dispatch` | `router` | dynamic sub-agent routing |
-| `team_coordinator` | `supervisor` | supervisor + workers |
-| `plan_and_execute` | `planner_executor` | planner then executor |
-| `approval_gate` | `human_in_loop` | action + human confirmation |
+| `assistant` | single llm node | one `LlmAgent` node in a `Workflow` graph |
+| `pipeline` | `sequence` sugar | chain of `LlmAgent` nodes |
+| `multi_perspective` | `parallel` + synthesis policy | fan-out → `JoinNode` → synthesizer → aggregator |
+| `refine_until_good` | `loop` sugar | bounded routed loop |
+| `expert_dispatch` | routing-node graph | router function + specialist nodes |
+| `team_coordinator` | delegation escape hatch | `LlmAgent` + worker sub-agents (until #5581 / Node-as-Tool) |
+| `plan_and_execute` | two-role sequence | planner then executor (dynamic-planning preset: E2a) |
+| `approval_gate` | propose/complete sequence + approval policy | proposer/completer nodes |
 
-Strategies consume only `RuntimeContext`; metadata (key, title,
-when-to-use, defaults, aliases) lives only in `use_cases/`, and the
-registry catalog drives config validation errors — no hard-coded
-conditionals anywhere in the chain. Custom use cases plug in the same way:
-subclass `BaseUseCaseAgent`, point `AGENT_USE_CASE_MODULE` at the module
+Presets consume only `RuntimeContext` (`basic_agent.runtime`); catalog
+metadata (key, title, when-to-use, defaults, aliases) lives only in
+`presets/`, and the registry catalog drives config validation errors — no
+hard-coded conditionals anywhere in the chain. Custom use cases plug in the
+same way: expose a `PRESETS` dict of `basic_agent.presets.Preset` in a
+module (or a single `PRESET`), point `AGENT_USE_CASE_MODULE` at it
 (allowlisted in production via `AGENT_USE_CASE_MODULE_ALLOWLIST`), and the
-class registers itself.
+registry registers them. The `compile/` layer is the single sanctioned home
+for ADK composition classes; policies (`policies/`) attach per-run behavior
+(approval, synthesis) to any preset or raw graph.
 
 ## Code-execution resolution (ADR-004)
 

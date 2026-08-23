@@ -20,8 +20,8 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.workflow import Workflow
 from google.genai import types
 
-from basic_agent.compile import compile_graph, compile_legacy
-from basic_agent.strategies.base import RuntimeContext
+from basic_agent.compile import compile_legacy
+from basic_agent.runtime import RuntimeContext
 from basic_agent.use_cases import get_default_registry
 
 APP_NAME = "preset-matrix"
@@ -122,20 +122,18 @@ MATRIX = [
 
 @pytest.mark.parametrize(("key", "overrides"), MATRIX, ids=[case[0] for case in MATRIX])
 def test_preset_runs_on_default_workflow_backend(key, overrides):
-    """Each preset compiles and runs end-to-end on the workflow backend.
+    """Each preset compiles and runs end-to-end via ``Preset.build``.
 
     team_coordinator runs through its documented delegation escape hatch
-    (the current LlmAgent + sub_agents shape) — no graph shape exists.
+    (LlmAgent + sub_agents) — no graph shape exists.
     """
     registry = get_default_registry()
     preset = registry.get_preset(key)
     rt = make_rt(**overrides)
+    root = preset.build(rt)
     if key == "team_coordinator":
-        root = registry.get(key).build(rt)
         events = run_agent(root, "team_coordinator-workflow-session")
     else:
-        spec = preset.build_spec(rt)
-        root = compile_graph(spec, rt, name=f"{key}_wf")
         events = run_workflow(root, f"{key}-workflow-session")
     state = state_of(events)
 
@@ -158,7 +156,7 @@ def test_preset_legacy_fallback_where_defined(key, overrides):
         return  # no legacy sugar mapping (documented in the catalog)
     rt = make_rt(**overrides)
     spec = preset.build_legacy_spec(rt)
-    root = compile_legacy(spec, rt, name=f"{key}_agent")
+    root = compile_legacy(spec, rt, name=preset.legacy_name)
     events = run_agent(root, f"{key}-legacy-session")
     state = state_of(events)
 
@@ -167,11 +165,10 @@ def test_preset_legacy_fallback_where_defined(key, overrides):
 
 
 def test_team_coordinator_runs_via_delegation_escape_hatch():
-    """E2: team_coordinator is the ADR-005 §6 escape hatch — LlmAgent+sub_agents."""
+    """E2/E3: team_coordinator is the ADR-005 §6 escape hatch — LlmAgent+sub_agents."""
     registry = get_default_registry()
     rt = make_rt(extra_config={"workers": 2})
-    instance = registry.get("team_coordinator")
-    root = instance.build(rt)
+    root = registry.get_preset("team_coordinator").build(rt)
 
     assert isinstance(root, LlmAgent)
     assert [worker.name for worker in root.sub_agents] == [

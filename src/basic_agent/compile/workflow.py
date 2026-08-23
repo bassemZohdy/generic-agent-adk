@@ -28,30 +28,62 @@ from google.adk.workflow import (
 from ..config.graph import START, GraphNodeSpec, GraphSpec, RetrySpec
 from ..config.sugar import AGAIN_ROUTE
 from ..models import resolve_model
-from ..strategies.base import RuntimeContext
+from ..runtime import RuntimeContext
 from ..tools import build_tool
-from .llm_node import build_llm_agent, resolve_role_spec, resolve_schema
+from .llm_node import _UNSET, build_llm_agent, resolve_role_spec, resolve_schema
 
 SchemaRegistry = dict[str, type]
 FunctionRegistry = dict[str, Callable[..., Any]]
 
 
-def default_route_dispatch(ctx: Any, node_input: Any = None) -> None:
+def default_route_dispatch(
+    ctx: Any, node_input: Any = None, default_route: str = "research"
+) -> None:
     """Default routing-node implementation (ADR-005 §5, TODO E2).
 
     Deterministic, state-driven routing: uses ``ctx.state['routed_to']`` when
-    present (matched against the graph's route edges at runtime), else the
-    first specialist route ``"research"``.  Presets/custom configs can
-    replace it via the function registry; an emitted route with no matching
-    edge ends the branch (engine behavior).
+    present (matched against the graph's route edges at runtime), else
+    ``default_route`` — the preset's first specialist, bound at compile time
+    from the router node's ``options.default_route``.  Presets/custom
+    configs can replace it via the function registry; an emitted route with
+    no matching edge ends the branch (engine behavior).
     """
-    route = ctx.state.get("routed_to", "research")
-    ctx.route = route if isinstance(route, str) and route else "research"
+    route = ctx.state.get("routed_to", default_route)
+    ctx.route = route if isinstance(route, str) and route else default_route
+
+
+def default_aggregate_perspectives(ctx: Any, node_input: Any = None) -> None:
+    """Default synthesis aggregation (D2): ``perspective_*`` → aggregated list.
+
+    Boundary-node equivalent of
+    ``policies.synthesis.make_synthesis_after_run`` for the workflow
+    backend: runs after the synthesizer node and writes
+    ``aggregated_perspectives`` into session state with the exact key and
+    ordering the multi_perspective use case used.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    try:
+        # ADK's State is a delta-tracking view: snapshot via to_dict() to
+        # iterate it, then write the aggregate back (recorded as a delta).
+        state = ctx.state
+        source = state.to_dict() if hasattr(state, "to_dict") else state
+        keys = sorted(
+            (key for key in source if key.startswith("perspective_")),
+            key=lambda key: (
+                int(key.split("_", 1)[1]) if key.split("_", 1)[1].isdigit() else 2**63
+            ),
+        )
+        state["aggregated_perspectives"] = [source[key] for key in keys]
+    except Exception:
+        logger.debug("Unable to aggregate multi-perspective state", exc_info=True)
 
 
 #: Built-in function implementations resolvable from ``options.function``.
 DEFAULT_FUNCTION_REGISTRY: FunctionRegistry = {
     "route_dispatch": default_route_dispatch,
+    "aggregate_perspectives": default_aggregate_perspectives,
 }
 
 
@@ -108,7 +140,17 @@ def _resolve_function(
         return _make_loop_counter(node.name, max_iterations)
     key = options.get("function")
     if isinstance(key, str) and key in functions:
-        return functions[key]
+        func = functions[key]
+        if func is DEFAULT_FUNCTION_REGISTRY["route_dispatch"]:
+            # Bind the preset's default route (first specialist) into the
+            # built-in router so it matches the graph's route edges.  Custom
+            # routers control their own behavior and are passed through.
+            default = options.get("default_route", "research")
+            if isinstance(default, str) and default:
+                from functools import partial
+
+                return partial(func, default_route=default)
+        return func
     raise ValueError(
         f"function node {node.name!r} requires options.function (an entry in "
         "the function registry) or options.kind='loop_counter'"
@@ -157,13 +199,23 @@ def compile_graph(
                 resolve_model=resolve_model,
                 build_tool=build_tool,
             )
+            # ``options.no_state_schema`` clears the schema for nodes that
+            # write intermediate keys the root schema does not declare
+            # (e.g. multi_perspective workers); an explicit per-node schema
+            # overrides it; otherwise the runtime default applies.
+            if node_spec.options.get("no_state_schema"):
+                state_schema: type | None | object = None
+            elif node_spec.state_schema is not None:
+                state_schema = resolve_schema(node_spec.state_schema, schemas)
+            else:
+                state_schema = _UNSET
             return build_llm_agent(
                 rt,
                 name=node_spec.name,
                 role=role,
                 output_key=node_spec.output_key,
                 output_schema=resolve_schema(node_spec.output_schema, schemas),
-                state_schema=resolve_schema(node_spec.state_schema, schemas),
+                state_schema=state_schema,
                 retry_config=retry,
                 timeout=timeout,
             )

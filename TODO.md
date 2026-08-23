@@ -8,9 +8,9 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **517 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
-  and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
-  **96% coverage** with a 90% minimum.
+- Local suite: **439 passed, 5 skipped** (2026-08-23 E3 run — 4 POSIX-sh and
+  1 docker-SDK platform skips; Linux CI runs the POSIX shapes), **93%
+  coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
   ADK contract guards, SHA-pinned workflow validation, package build, YAML and
   JSON parsing, Markdown relative links, Python compilation, Compose profiles,
@@ -34,8 +34,8 @@ contains unfinished work only; completed audit work is recorded in
 below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
 complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C complete
 2026-08-23 (C1–C4); Phase D complete 2026-08-23 (D1–D3 policies + concern
-mapping); Phase E in progress (E1 presets + E2 preset matrix complete
-2026-08-23; E2a dynamic-planning refinement and E3 deletion next);
+mapping); Phase E complete 2026-08-23 (E1 presets, E2 matrix, E3
+strategies/facades deleted — E2a dynamic-planning refinement remains);
 code-review findings R01–R05 closed 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
@@ -561,7 +561,7 @@ Reuse the fake-model/Runner harness patterns from
   plan step; keep the sequence fallback until then. *Done when*: the preset
   runs the dynamic shape with fake models on the workflow backend and the
   sequence remains the legacy/rollback path.
-- [ ] **E3 — Delete the per-use-case classes and nine strategies.**
+- [x] **E3 — Delete the per-use-case classes and nine strategies.**
   *Depends on*: E1, E2, C4 green, full suite green. *Files*: remove
   `src/basic_agent/strategies/*` (except what `compile/legacy.py` still
   needs until F2) and the eight `use_cases/*.py` facade classes; keep a
@@ -574,6 +574,32 @@ Reuse the fake-model/Runner harness patterns from
   (public YAML/env/catalog surface unchanged).
   *Done when*: suite green, coverage ≥ 90%, no orphan imports,
   CHANGELOG updated.
+  **Done (2026-08-23).** Strategies (9 builders + base/registry) and the
+  eight facade classes removed; `RoleConfig`/`RuntimeContext` moved to
+  `basic_agent.runtime` (no ADK imports; consumed by compile/presets/
+  policies/agent). Registry serves presets only (get/resolve/has/
+  list_use_cases identical contracts; `AGENT_USE_CASE_MODULE` custom
+  surface migrated: modules expose `PRESETS`/`PRESET` of `Preset` —
+  legacy `BaseUseCaseAgent`-style modules are rejected with migration
+  guidance; production allowlist unchanged). `Preset` gained
+  `apply_defaults` (old resolve_runtime rules), `build()` (backend flag,
+  root naming via legacy_name), `escape_hatch_builder`
+  (team_coordinator = LlmAgent + `supervisor_worker_{i}`), and the hook
+  surface (before/after run/tool with old chaining semantics — run hooks
+  attach on legacy roots; workflow roots use boundary nodes/plugins per
+  the B3 decision: the D2 aggregation now runs natively as a graph node,
+  `aggregate_perspectives`, and multi_perspective workflow runs keep the
+  state contract without an after-run hook). Built-ins: 43 lines removed
+  from the old facade path; no orphan imports; docs (CONFIGURATION.md,
+  ARCHITECTURE.md) updated for the preset/custom surface; CHANGELOG entry
+  files the internal breaking change. C4 frozen: the legacy compiler's
+  post-E3 trees are pinned against explicit pre-E3 golden structures
+  (test_compile_parity.py). Notes: state-schema semantics for intermediate
+  keys (`options.no_state_schema` on multi_perspective workers — the
+  workflow engine validates state_delta against the schema, the legacy
+  path never did); default router binds the preset's first specialist via
+  `options.default_route` (the ADK graph rejects duplicate (from,to)
+  edges, so no DEFAULT_ROUTE fallback).
 
 #### Phase F — Cleanup, docs, and legacy retirement
 

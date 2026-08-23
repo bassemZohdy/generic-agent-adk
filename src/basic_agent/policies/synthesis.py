@@ -17,7 +17,7 @@ from typing import Any
 
 from ..config.graph import GraphEdgeSpec, GraphNodeSpec, GraphSpec
 from ..config.sugar import ParallelSugar, SequenceSugar, expand_sugar
-from ..strategies.base import RoleConfig
+from ..runtime import RoleConfig
 
 logger = logging.getLogger(__name__)
 
@@ -61,13 +61,19 @@ def with_synthesis(
     synthesizer: GraphNodeSpec | None = None,
     *,
     join_name: str = "synthesis_join",
+    aggregator_name: str = "synthesis_aggregate",
+    with_aggregator: bool = True,
 ) -> GraphSpec:
     """Append a synthesizer node after a fan-out graph (workflow shape).
 
     Pure spec transformation: when the graph has a single terminal (e.g. the
     parallel sugar's join), the synthesizer follows it directly; a raw
-    fan-out with several terminals first gets an implicit join.  The result
-    stays a valid, workflow-compilable GraphSpec.
+    fan-out with several terminals first gets an implicit join.  By default
+    an aggregation ``function`` node (``options.function:
+    aggregate_perspectives`` — built-in registry entry) follows the
+    synthesizer so ``perspective_*`` → ``aggregated_perspectives`` happens
+    natively inside the graph (no after-run callback on the workflow
+    backend).
     """
     synth = synthesizer or synthesizer_node()
     outgoing = _outgoing(spec)
@@ -83,6 +89,15 @@ def with_synthesis(
         for terminal in terminals:
             new_edges.append(GraphEdgeSpec(source=terminal, target=join.name))
         new_edges.append(GraphEdgeSpec(source=join.name, target=synth.name))
+
+    if with_aggregator:
+        aggregator = GraphNodeSpec(
+            name=aggregator_name,
+            kind="function",
+            options={"function": "aggregate_perspectives"},
+        )
+        new_nodes.append(aggregator)
+        new_edges.append(GraphEdgeSpec(source=synth.name, target=aggregator.name))
 
     combined = GraphSpec(nodes=new_nodes, edges=new_edges, shape=spec.shape)
     combined.validate()

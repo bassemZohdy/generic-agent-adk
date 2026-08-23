@@ -15,7 +15,13 @@ from typing import Any
 
 from google.adk.agents import BaseAgent, LlmAgent
 
-from ..strategies.base import RoleConfig, RuntimeContext
+from ..runtime import RoleConfig, RuntimeContext
+
+#: Sentinel distinguishing "not provided" from an explicit None schema:
+#: per-node configs may deliberately clear a schema (intermediate state keys
+#: the root schema does not declare, e.g. multi_perspective workers).
+_UNSET = object()
+
 
 #: Tool names that configure runtime behavior rather than exposing a tool
 #: (mirrors ``agent._SILENT_TOOL_NAMES``; kept in sync by comment).
@@ -31,7 +37,7 @@ def build_llm_agent(
     sub_agents: list[BaseAgent] | None = None,
     output_key: str | None = None,
     output_schema: type | None = None,
-    state_schema: type | None = None,
+    state_schema: type | None | object = _UNSET,
     retry_config: Any = None,
     timeout: float | None = None,
 ) -> LlmAgent:
@@ -58,7 +64,7 @@ def build_llm_agent(
         instruction=instruction,
         tools=role.tools if role.tools is not None else (rt.tools or []),
         code_executor=rt.code_executor,
-        state_schema=state_schema if state_schema is not None else rt.state_schema,
+        state_schema=(rt.state_schema if state_schema is _UNSET else state_schema),
         output_schema=output_schema if output_schema is not None else rt.output_schema,
         output_key=output_key if output_key is not None else rt.output_key,
         before_agent_callback=rt.before_agent_callback,

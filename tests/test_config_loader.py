@@ -14,7 +14,7 @@ from basic_agent.config.loader import (
     load_config_from_env,
     load_config_from_yaml,
 )
-from basic_agent.strategies.base import RoleConfig
+from basic_agent.runtime import RoleConfig
 
 _ALL_CONFIG_ENV_VARS = (
     "AGENT_CONFIG_FILE",

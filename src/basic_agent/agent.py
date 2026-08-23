@@ -30,7 +30,7 @@ from .execution.resolver import (
 )
 from .knowledge import retrieve_knowledge  # noqa: F401 - public compatibility export
 from .models import resolve_model
-from .strategies.base import RuntimeContext
+from .runtime import RuntimeContext
 from .telemetry import invocation_attributes, tracer
 from .tools import (
     ToolPolicy,
@@ -404,14 +404,12 @@ def _build_runtime_context(config: AgentConfig) -> RuntimeContext:
 
 
 def _build_root_agent(config: AgentConfig, source: str) -> BaseAgent:
-    """Resolve the configured use case and build the root ADK agent tree."""
+    """Resolve the configured use case preset and build the root agent."""
     runtime = _build_runtime_context(config)
-    canonical, use_case_agent = get_default_registry().resolve(
-        config.use_case or "assistant"
-    )
+    canonical, preset = get_default_registry().resolve(config.use_case or "assistant")
     logger.info("resolved use_case=%s (source: %s)", canonical, source)
     _resolved_runtime_snapshot["use_case"] = canonical
-    root = use_case_agent.build(runtime)
+    root = preset.build(runtime)
     if config.name:
         root.name = config.name
     return root

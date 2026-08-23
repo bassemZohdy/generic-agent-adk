@@ -43,7 +43,7 @@ from basic_agent.config.sugar import (
     SequenceSugar,
     expand_sugar,
 )
-from basic_agent.strategies.base import RuntimeContext
+from basic_agent.runtime import RuntimeContext
 
 APP_NAME = "compile-tests"
 USER_ID = "compile-user"

@@ -61,13 +61,22 @@ def test_env_only_use_case_flows_specialists_into_built_agent(monkeypatch):
     assert config.use_case == "expert_dispatch"
 
     built = agent_module._build_root_agent(config, "env")
-    assert len(built.sub_agents) == 3
-    assert {sub.name for sub in built.sub_agents} == {
+    # E3: expert_dispatch compiles to a routing graph; specialists are nodes.
+    from google.adk.workflow import Workflow
+
+    assert isinstance(built, Workflow)
+    node_names = {n.name for n in built.graph.nodes if hasattr(n, "name")}
+    assert {
         "router_specialist_research",
         "router_specialist_solution",
         "router_specialist_risk",
+    } <= node_names
+    instructions = {
+        n.instruction
+        for n in built.graph.nodes
+        if isinstance(n, LlmAgent) and "specialist" in n.name
     }
-    assert len({sub.instruction for sub in built.sub_agents}) == 3
+    assert len(instructions) == 3
 
 
 def test_default_resolution_builds_assistant(monkeypatch):
@@ -78,10 +87,14 @@ def test_default_resolution_builds_assistant(monkeypatch):
     assert config.use_case == "assistant"
 
     built = agent_module._build_root_agent(config, "env")
-    assert isinstance(built, LlmAgent)
-    assert built.name == "direct_agent"
-    assert built.before_agent_callback is not None
-    assert built.after_agent_callback is not None
+    # E3: the assistant preset compiles to a single-llm-node Workflow.
+    from google.adk.workflow import Workflow
+
+    assert isinstance(built, Workflow)
+    node = next(n for n in built.graph.nodes if isinstance(n, LlmAgent))
+    assert node.name == "direct_agent"
+    assert node.before_agent_callback is not None
+    assert node.after_agent_callback is not None
 
 
 def test_yaml_litellm_provider_builds_litellm_root_agent(tmp_path, monkeypatch):
@@ -103,9 +116,12 @@ model:
     config = resolve_agent_config()
     built = agent_module._build_root_agent(config, "yaml")
 
-    assert isinstance(built, LlmAgent)
-    assert isinstance(built.model, LiteLlm)
-    assert built.model.model == "openai/gpt-4o"
+    from google.adk.workflow import Workflow
+
+    assert isinstance(built, Workflow)
+    node = next(n for n in built.graph.nodes if isinstance(n, LlmAgent))
+    assert isinstance(node.model, LiteLlm)
+    assert node.model.model == "openai/gpt-4o"
 
 
 def test_yaml_skills_tool_loads_configured_skill_directory(tmp_path, monkeypatch):

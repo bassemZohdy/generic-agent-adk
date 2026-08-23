@@ -19,9 +19,9 @@ from google.adk.agents import BaseAgent, LoopAgent, ParallelAgent, SequentialAge
 
 from ..config.graph import START, GraphSpec
 from ..models import resolve_model
-from ..strategies.base import RuntimeContext
+from ..runtime import RuntimeContext
 from ..tools import build_tool
-from .llm_node import build_llm_agent, resolve_role_spec, resolve_schema
+from .llm_node import _UNSET, build_llm_agent, resolve_role_spec, resolve_schema
 
 SchemaRegistry = dict[str, type]
 
@@ -96,13 +96,21 @@ def compile_legacy(
             resolve_model=resolve_model,
             build_tool=build_tool,
         )
+        # Only an explicitly declared per-node schema overrides; otherwise the
+        # runtime default applies (same semantics as the workflow compiler).
+        if node.state_schema is not None:
+            state_schema: type | None | object = resolve_schema(
+                node.state_schema, schemas
+            )
+        else:
+            state_schema = _UNSET
         return build_llm_agent(
             rt,
             name=node.name,
             role=role,
             output_key=node.output_key,
             output_schema=resolve_schema(node.output_schema, schemas),
-            state_schema=resolve_schema(node.state_schema, schemas),
+            state_schema=state_schema,
         )
 
     def compile_item(node_name: str) -> BaseAgent:

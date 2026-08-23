@@ -12,7 +12,7 @@ from google.genai import types
 from basic_agent.compile import compile_graph, compile_legacy
 from basic_agent.config.graph import START
 from basic_agent.presets import PRESETS
-from basic_agent.strategies.base import RuntimeContext
+from basic_agent.runtime import RuntimeContext
 from basic_agent.use_cases import get_default_registry
 
 #: Snapshot of ``registry.list_use_cases()`` taken BEFORE the E1 refactor
@@ -129,7 +129,7 @@ def test_registry_serves_presets():
     assert registry.has_preset("ASSISTANT")
     preset = registry.get_preset("MULTI_PERSPECTIVE")
     assert preset.key == "multi_perspective"
-    with pytest.raises(ValueError, match="Unknown preset"):
+    with pytest.raises(ValueError, match="Unknown use case"):
         registry.get_preset("nonexistent")
 
 
@@ -169,7 +169,10 @@ def test_expert_dispatch_routing_spec_structure():
     by_name = spec.nodes_by_name()
     router = by_name["router_agent"]
     assert router.kind == "function"
-    assert router.options == {"function": "route_dispatch"}
+    assert router.options == {
+        "function": "route_dispatch",
+        "default_route": "research",
+    }
     assert spec.edges[0].source == START
     assert spec.edges[0].target == "router_agent"
     routes = {e.route for e in spec.edges[1:]}

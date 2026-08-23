@@ -323,10 +323,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           docker run --rm -e GOOGLE_API_KEY=ci-smoke -e AGENT_USE_CASE=assistant "${{ steps.tag.outputs.value }}" \
-            python -c "from basic_agent.agent import root_agent; assert root_agent.name == 'direct_agent', root_agent.name; print('image startup OK: assistant -> direct_agent')"
+            python -c "from basic_agent.agent import root_agent; from google.adk.workflow import Workflow; assert isinstance(root_agent, Workflow), type(root_agent).__name__; names=[getattr(n,'name','') for n in root_agent.graph.nodes]; assert 'direct_agent' in names, names; print('image startup OK: assistant -> Workflow(direct_agent)')"
           docker run --rm -e GOOGLE_API_KEY=ci-smoke \
             -v "$GITHUB_WORKSPACE/examples/approval-gate.yaml:/app/config/agent.yaml:ro" "${{ steps.tag.outputs.value }}" \
-            python -c "from basic_agent.agent import root_agent; assert type(root_agent).__name__ == 'SequentialAgent', type(root_agent).__name__; print('image config OK: approval_gate -> SequentialAgent')"
+            python -c "from basic_agent.agent import root_agent; from google.adk.workflow import Workflow; assert isinstance(root_agent, Workflow), type(root_agent).__name__; names=[getattr(n,'name','') for n in root_agent.graph.nodes]; assert 'human_in_loop_proposer' in names, names; print('image config OK: approval_gate -> Workflow(human_in_loop_proposer)')"
           cid=$(docker run -d --rm -p 18002:8002 -e GOOGLE_API_KEY=ci-smoke -e AUTH_DISABLED=true "${{ steps.tag.outputs.value }}")
           trap 'docker rm -f $cid >/dev/null 2>&1 || true' EXIT
           for i in $(seq 1 30); do
@@ -378,10 +378,10 @@ jobs:
       - name: Test image startup
         run: |
           docker run --rm -e GOOGLE_API_KEY=ci-smoke -e AGENT_USE_CASE=assistant "${{ needs.build.outputs.image-tag }}" \
-            python -c "from basic_agent.agent import root_agent; assert root_agent.name == 'direct_agent', root_agent.name; print('image startup OK: assistant -> direct_agent')"
+            python -c "from basic_agent.agent import root_agent; from google.adk.workflow import Workflow; assert isinstance(root_agent, Workflow), type(root_agent).__name__; names=[getattr(n,'name','') for n in root_agent.graph.nodes]; assert 'direct_agent' in names, names; print('image startup OK: assistant -> Workflow(direct_agent)')"
           docker run --rm -e GOOGLE_API_KEY=ci-smoke \
             -v "$GITHUB_WORKSPACE/examples/approval-gate.yaml:/app/config/agent.yaml:ro" "${{ needs.build.outputs.image-tag }}" \
-            python -c "from basic_agent.agent import root_agent; assert type(root_agent).__name__ == 'SequentialAgent', type(root_agent).__name__; print('image config OK: approval_gate -> SequentialAgent')"
+            python -c "from basic_agent.agent import root_agent; from google.adk.workflow import Workflow; assert isinstance(root_agent, Workflow), type(root_agent).__name__; names=[getattr(n,'name','') for n in root_agent.graph.nodes]; assert 'human_in_loop_proposer' in names, names; print('image config OK: approval_gate -> Workflow(human_in_loop_proposer)')"
           cid=$(docker run -d --rm -p 18002:8002 -e GOOGLE_API_KEY=ci-smoke -e AUTH_DISABLED=true "${{ needs.build.outputs.image-tag }}")
           trap 'docker rm -f $cid >/dev/null 2>&1 || true' EXIT
           for i in $(seq 1 30); do

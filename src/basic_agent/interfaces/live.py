@@ -82,8 +82,10 @@ def _get_runner() -> Runner:
     """Share one runner and plugin instance across WebSocket connections."""
     global _runner
     if _runner is None:
+        # The configured preset compiles to a graph Workflow root — the
+        # runner must take it as a BaseNode (`node=`), not as an `agent=`.
         _runner = Runner(
-            agent=get_root_agent(),
+            node=get_root_agent(),
             app_name=APP_NAME,
             session_service=session_service,
             memory_service=memory_service,

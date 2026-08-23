@@ -165,6 +165,14 @@ All three gates now have passing **permanent** contract tests in
    `get_fast_api_app(agents_dir=...)` and will be pointed at the compiled
    workflow root in Phase C3/E2 — no interface change was needed for the
    spike because the middleware layers are orthogonal to graph execution.
+   **Resolved (2026-08-23):** the served root is a custom
+   `interfaces/agent.py` module exposing the lazy `root_agent` file
+   attribute, which the ADK AgentLoader discovers from the `agents_dir` it
+   scans — it now serves the configured preset compiled to a graph
+   `Workflow` (see `tests/test_served_root.py`; `/list-apps` shows the
+   agent and `/run` executes it). The Live interface's runner was pointed
+   at the Workflow root via `Runner(node=...)` (a BaseNode root must not be
+   passed as `agent=`).
 
 The old "Not proven locally: real upstream Workflow migration" baseline line
 in TODO.md is now superseded: the migration is proven locally up to Phase C.

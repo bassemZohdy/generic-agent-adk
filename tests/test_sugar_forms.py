@@ -75,7 +75,7 @@ def test_expand_loop_exact_structure_bounded_by_routing():
     counter = GraphNodeSpec(
         name="worker_loop_counter",
         kind="function",
-        options={"max_iterations": 5},
+        options={"kind": "loop_counter", "max_iterations": 5},
     )
     assert fragment.nodes == [counter]
     assert fragment.entry == "worker"
@@ -184,7 +184,7 @@ graph:
     assert spec is not None
     counter = spec.nodes_by_name()["worker_loop_counter"]
     assert counter.kind == "function"
-    assert counter.options == {"max_iterations": 5}
+    assert counter.options == {"kind": "loop_counter", "max_iterations": 5}
     assert spec.edges[-1].route == AGAIN_ROUTE
 
 

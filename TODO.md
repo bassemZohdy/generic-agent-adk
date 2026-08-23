@@ -8,7 +8,7 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **459 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
+- Local suite: **472 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
   and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
   **96% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
@@ -33,8 +33,8 @@ contains unfinished work only; completed audit work is recorded in
 **25 complete · 0 partial · 1 architecture program in progress (Phases A–F
 below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
 complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C in progress
-(C1–C2 complete 2026-08-23); code-review findings R01–R05 closed
-2026-08-23.**
+(C1–C3 complete 2026-08-23; C4 golden parity next); code-review findings
+R01–R05 closed 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -348,7 +348,7 @@ Reuse the fake-model/Runner harness patterns from
   tests). Loader sugar branch: exactly one of `sequence`/`parallel`/`loop`
   per graph (mutually exclusive with explicit `edges`), name references
   resolved against declared nodes.
-- [ ] **C3 — Implement the graph compilers.**
+- [x] **C3 — Implement the graph compilers.**
   *Depends on*: C1, C2, B3, B4. *Files*: new
   `src/basic_agent/compile/workflow.py` (full spec → `Workflow`) and
   `src/basic_agent/compile/legacy.py` (sugar subset → current
@@ -365,6 +365,18 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: both compilers build all C2 sugar shapes; workflow compiler
   additionally builds routed/nested specs; the import-isolation test
   passes.
+  **Done (2026-08-23).** `compile/` ships: `workflow.py` (explicit-edge
+  compile of the full spec incl. routed/fan-out/join and nested subgraphs;
+  built-in bounded-loop counter via options.kind='loop_counter'; function
+  registry for function nodes), `legacy.py` (sugar-subset only — raises on
+  explicit-edge specs; rollback-only), `llm_node.py` (exact
+  `AgentStrategy.llm()` semantics + per-node output_key/schemas/retry/
+  timeout), `compose_backend()` (`AGENT_COMPOSE_BACKEND`, default
+  `workflow`). Import-isolation test greps `src/` for composition imports
+  and fails on anything outside `compile/` and the E3-retirement modules
+  (agent.py, strategies/, use_cases/). `tests/test_compile.py` (13 tests)
+  includes end-to-end runs of compiled chains and bounded loops with fake
+  models.
 - [ ] **C4 — Golden parity tests.**
   *Depends on*: C3. *Files*: new `tests/test_compile_parity.py`.
   *Steps*: for each of the eight built-in use cases, take today's strategy

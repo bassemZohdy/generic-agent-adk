@@ -95,8 +95,15 @@ class GraphNodeSpec:
 
 @dataclass
 class GraphSpec:
-    """The graph-spec configuration model (nodes + edges)."""
+    """The graph-spec configuration model (nodes + edges).
 
+    ``shape`` is set by sugar expansion (C2) to ``"sequence"``/``"parallel"``/
+    ``"loop"`` and left ``None`` for explicitly-edged specs; it is provenance
+    for the legacy compiler (which covers the sugar subset only) and ignored
+    by the workflow compiler.
+    """
+
+    shape: str | None = None
     nodes: list[GraphNodeSpec] = field(default_factory=list)
     edges: list[GraphEdgeSpec] = field(default_factory=list)
 

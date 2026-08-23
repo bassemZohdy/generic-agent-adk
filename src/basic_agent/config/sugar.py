@@ -198,7 +198,7 @@ def expand_loop(
     counter = GraphNodeSpec(
         name=counter_name,
         kind="function",
-        options={"max_iterations": sugar.max_iterations},
+        options={"kind": "loop_counter", "max_iterations": sugar.max_iterations},
     )
     edges = [
         GraphEdgeSpec(source=entry, target=body),
@@ -244,5 +244,7 @@ def expand_sugar(
             f"Unknown sugar form: {type(sugar).__name__}"
         )
     return GraphSpec(
-        nodes=list(by_name.values()) + fragment.nodes, edges=fragment.edges
+        nodes=list(by_name.values()) + fragment.nodes,
+        edges=fragment.edges,
+        shape=type(sugar).__name__.removesuffix("Sugar").lower(),
     )

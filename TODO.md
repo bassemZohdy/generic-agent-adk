@@ -8,7 +8,7 @@ contains unfinished work only; completed audit work is recorded in
 
 ## Verification baseline
 
-- Local suite: **500 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
+- Local suite: **517 passed, 5 skipped** (2026-08-23 Windows run — 4 POSIX-sh
   and 1 docker-SDK platform skips; Linux CI runs the POSIX shapes),
   **96% coverage** with a 90% minimum.
 - Local checks passed: locked dependency validation, Ruff, targeted Pyright,
@@ -34,9 +34,9 @@ contains unfinished work only; completed audit work is recorded in
 below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
 complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C complete
 2026-08-23 (C1–C4); Phase D complete 2026-08-23 (D1–D3 policies + concern
-mapping); Phase E in progress (E1 presets complete 2026-08-23; E2
-classification matrix next); code-review findings R01–R05 closed
-2026-08-23.**
+mapping); Phase E in progress (E1 presets + E2 preset matrix complete
+2026-08-23; E2a dynamic-planning refinement and E3 deletion next);
+code-review findings R01–R05 closed 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -517,7 +517,7 @@ Reuse the fake-model/Runner harness patterns from
   `tests/test_presets.py` (10 tests): snapshot, metadata parity, preset
   resolution, spec expansion + compile on both backends, escape-hatch
   behavior.
-- [ ] **E2 — Re-classify the built-ins.**
+- [x] **E2 — Re-classify the built-ins.**
   *Depends on*: E1. Mapping (from ADR-005 §5): `assistant` → single llm
   node; `pipeline` → `sequence` sugar (keep per-step "step N of count"
   default instructions + `roles.step_{i}` overrides); `multi_perspective` →
@@ -536,6 +536,31 @@ Reuse the fake-model/Runner harness patterns from
   *Done when*: a preset matrix test parametrized over all eight keys builds
   and runs each preset on the default backend (plus legacy fallback where
   defined) with fake models, green.
+  **Done (2026-08-23).** `tests/test_preset_matrix.py` (17 tests): all
+  eight keys build and RUN with fake models — workflow backend via
+  `Runner(node=...)` for every preset (team_coordinator through its
+  documented delegation escape hatch: LlmAgent + `supervisor_worker_{i}`
+  sub_agents), legacy sugar fallback for the six sugar-expressible presets
+  (expert_dispatch/team_coordinator have no legacy mapping — catalog
+  raises). Per-preset assertions: bounded loop counter == 5 for
+  refine_until_good, research specialist runs for expert_dispatch,
+  perspective_0/1 state for multi_perspective, output in state everywhere.
+  `expert_dispatch` router contract settled: a built-in
+  `default_route_dispatch` (compile-time `DEFAULT_FUNCTION_REGISTRY`,
+  overrideable) routes deterministically from `ctx.state['routed_to']`
+  (default `"research"`) — `options.function: route_dispatch` now resolves
+  without a custom registry.
+- [ ] **E2a — Dynamic-planning preset for plan_and_execute (deferred part of
+  E2's mapping).** ADR-005 §5 targets a planner node spawning executors via
+  `ctx.run_node()` on the workflow backend. The E2 matrix currently runs the
+  two-role sequence preset on both backends (green). Build the
+  `PlanExecuteDynamicPreset`-style spec when the engine's dynamic-node
+  scheduling (`DynamicNodeScheduler`/`ctx.run_node()`, verified in Phase B,
+  ADR-003 §re-evaluation item 5) is wired through the compile layer:
+  planner llm-node → function node calling `ctx.run_node(executor)` per
+  plan step; keep the sequence fallback until then. *Done when*: the preset
+  runs the dynamic shape with fake models on the workflow backend and the
+  sequence remains the legacy/rollback path.
 - [ ] **E3 — Delete the per-use-case classes and nine strategies.**
   *Depends on*: E1, E2, C4 green, full suite green. *Files*: remove
   `src/basic_agent/strategies/*` (except what `compile/legacy.py` still

@@ -36,6 +36,25 @@ SchemaRegistry = dict[str, type]
 FunctionRegistry = dict[str, Callable[..., Any]]
 
 
+def default_route_dispatch(ctx: Any, node_input: Any = None) -> None:
+    """Default routing-node implementation (ADR-005 §5, TODO E2).
+
+    Deterministic, state-driven routing: uses ``ctx.state['routed_to']`` when
+    present (matched against the graph's route edges at runtime), else the
+    first specialist route ``"research"``.  Presets/custom configs can
+    replace it via the function registry; an emitted route with no matching
+    edge ends the branch (engine behavior).
+    """
+    route = ctx.state.get("routed_to", "research")
+    ctx.route = route if isinstance(route, str) and route else "research"
+
+
+#: Built-in function implementations resolvable from ``options.function``.
+DEFAULT_FUNCTION_REGISTRY: FunctionRegistry = {
+    "route_dispatch": default_route_dispatch,
+}
+
+
 def _retry_config(spec: RetrySpec | None) -> RetryConfig | None:
     """Map the config RetrySpec onto the ADK RetryConfig (None = engine default)."""
     if spec is None:
@@ -122,8 +141,10 @@ def compile_graph(
         A Workflow ready to be served as ``Runner(node=...)`` root.
     """
     spec.validate()
+    # Built-in functions (e.g. route_dispatch) always resolve; explicit
+    # registries override them by name.
+    functions = {**DEFAULT_FUNCTION_REGISTRY, **(function_registry or {})}
     schemas = schema_registry or {}
-    functions = function_registry or {}
 
     def compile_node(node_spec: GraphNodeSpec) -> BaseNode:
         retry = _retry_config(node_spec.retry)

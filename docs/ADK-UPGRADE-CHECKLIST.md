@@ -26,6 +26,11 @@ ADR-003, and this checklist agree.
   re-verified on every upgrade; `scripts/check-adk-assumptions.py` asserts
   their existence and signatures, and `tests/test_workflow_gates.py` proves
   they run (Phase B).
+- Verify `google.adk.tools.agent_tool._TaskAgentTool` on every upgrade: the
+  approval policy's `is_unconditional_tool` imports this private symbol for
+  delegation detection. If it moves or is renamed, detection fails CLOSED
+  with logged warnings — approval gating becomes stricter (more tools
+  gated), never silently permissive.
 - Run all eight YAML examples through a real ADK `Runner` and confirm the
   expected final agent/output event.
 - Exercise approval confirmation with approve, reject, disconnect, and resume

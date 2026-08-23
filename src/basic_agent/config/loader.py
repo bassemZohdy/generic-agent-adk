@@ -133,6 +133,8 @@ class ApprovalPolicyConfig:
     """Approval policy configuration (ADR-005 §4; TODO D1)."""
 
     enabled: bool = False
+    #: Gate every non-unconditional tool (name/prefix lists ignored).
+    gate_all: bool = False
     gated_tools: list[str] = field(default_factory=list)
     gated_prefixes: list[str] = field(default_factory=list)
 
@@ -888,7 +890,7 @@ def _parse_graph_spec(data: Any, path: str = "graph") -> GraphSpec:
 
 
 _POLICY_KEYS = {"approval", "synthesis"}
-_APPROVAL_POLICY_KEYS = {"enabled", "gated_tools", "gated_prefixes"}
+_APPROVAL_POLICY_KEYS = {"enabled", "gate_all", "gated_tools", "gated_prefixes"}
 _SYNTHESIS_POLICY_KEYS = {"enabled", "instruction", "output_key"}
 
 
@@ -905,8 +907,11 @@ def _parse_policies(data: Any, path: str = "policies") -> PoliciesConfig | None:
         _keys(section, _APPROVAL_POLICY_KEYS, f"{path}.approval")
         if "enabled" in section:
             _boolean(section["enabled"], f"{path}.approval.enabled")
+        if "gate_all" in section:
+            _boolean(section["gate_all"], f"{path}.approval.gate_all")
         approval = ApprovalPolicyConfig(
             enabled=section.get("enabled", False),
+            gate_all=section.get("gate_all", False),
             gated_tools=_string_list(
                 section.get("gated_tools", []), f"{path}.approval.gated_tools"
             ),

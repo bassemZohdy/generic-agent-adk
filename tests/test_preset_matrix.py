@@ -145,6 +145,15 @@ def test_preset_runs_on_default_workflow_backend(key, overrides):
         assert "router_specialist_research" in {e.author for e in events}
     if key == "multi_perspective":
         assert "perspective_0" in state and "perspective_1" in state
+    if key == "plan_and_execute":
+        # E2a dynamic planning: the executor ran once per plan step and the
+        # planner published the collected outputs.
+        assert state["plan_outputs"] == [
+            "deterministic response 1",
+            "deterministic response 2",
+            "deterministic response 3",
+        ]
+        assert "executor_agent" in {e.author for e in events}
 
 
 @pytest.mark.parametrize(("key", "overrides"), MATRIX, ids=[case[0] for case in MATRIX])

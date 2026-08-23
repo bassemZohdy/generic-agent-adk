@@ -46,7 +46,7 @@ EXPECTED_FINAL_AUTHORS = {
     "expert-dispatch.yaml": "router_specialist_billing",
     "multi-perspective.yaml": "multi_perspective",
     "pipeline.yaml": "sequential_step_2",
-    "plan-and-execute.yaml": "executor_agent",
+    "plan-and-execute.yaml": "plan_and_execute",
     "refine-until-good.yaml": "refine_until_good",
     "team-coordinator.yaml": "supervisor_agent",
 }

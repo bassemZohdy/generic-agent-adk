@@ -227,7 +227,7 @@ def test_compile_loop_counter_function_is_built_in():
     }
     counter = compiled["worker_loop_counter"]
     assert isinstance(counter, FunctionNode)
-    assert counter.rerun_on_resume is False  # FunctionNode default
+    assert counter.rerun_on_resume is True  # compiled function nodes are resumable
     # Counter edges: body → counter and routed back with AGAIN_ROUTE.
     edge_routes = {
         (e.from_node.name, e.to_node.name): e.route for e in workflow.graph.edges

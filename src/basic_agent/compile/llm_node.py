@@ -40,6 +40,7 @@ def build_llm_agent(
     state_schema: type | None | object = _UNSET,
     retry_config: Any = None,
     timeout: float | None = None,
+    rerun_on_resume: bool = True,
 ) -> LlmAgent:
     """Build an LlmAgent from runtime config with optional role overrides.
 
@@ -74,6 +75,7 @@ def build_llm_agent(
         sub_agents=sub_agents or [],
         retry_config=retry_config,
         timeout=timeout,
+        rerun_on_resume=rerun_on_resume,
     )
 
 

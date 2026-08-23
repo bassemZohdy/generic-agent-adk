@@ -34,11 +34,11 @@ contains unfinished work only; completed audit work is recorded in
 below, absorbing former T25/T27). Phase A complete 2026-08-23; Phase B
 complete 2026-08-23 (gate spike — ADR-005 accepted); Phase C complete
 2026-08-23 (C1–C4); Phase D complete 2026-08-23 (D1–D3 policies + concern
-mapping); Phase E complete 2026-08-23 (E1 presets, E2 matrix, E3
-strategies/facades deleted — E2a dynamic-planning refinement remains);
-Phase F in progress (F1 docs + examples complete 2026-08-23; F2 legacy
-retirement awaits one release on the workflow default, then F3 closes the
-program); code-review findings R01–R05 closed 2026-08-23.**
+mapping); Phase E complete 2026-08-23 (E1 presets, E2 matrix + E2a dynamic
+planning, E3 strategies/facades deleted); Phase F in progress (F1 docs +
+examples complete 2026-08-23; F2 legacy retirement awaits one release on
+the workflow default, then F3 closes the program); code-review findings
+R01–R05 closed 2026-08-23.**
 
 ## Working agreements for executing agents (read before taking any task)
 
@@ -552,17 +552,25 @@ Reuse the fake-model/Runner harness patterns from
   overrideable) routes deterministically from `ctx.state['routed_to']`
   (default `"research"`) — `options.function: route_dispatch` now resolves
   without a custom registry.
-- [ ] **E2a — Dynamic-planning preset for plan_and_execute (deferred part of
-  E2's mapping).** ADR-005 §5 targets a planner node spawning executors via
-  `ctx.run_node()` on the workflow backend. The E2 matrix currently runs the
-  two-role sequence preset on both backends (green). Build the
-  `PlanExecuteDynamicPreset`-style spec when the engine's dynamic-node
-  scheduling (`DynamicNodeScheduler`/`ctx.run_node()`, verified in Phase B,
-  ADR-003 §re-evaluation item 5) is wired through the compile layer:
-  planner llm-node → function node calling `ctx.run_node(executor)` per
-  plan step; keep the sequence fallback until then. *Done when*: the preset
-  runs the dynamic shape with fake models on the workflow backend and the
-  sequence remains the legacy/rollback path.
+- [x] **E2a — Dynamic-planning preset for plan_and_execute.** ADR-005 §5
+  targets a planner node spawning executors via `ctx.run_node()` on the
+  workflow backend. Preset shape: planner `function` node →
+  `options.function: plan_execute` (built-in; `options.executor` names the
+  compiled executor node, `options.steps` the deterministic step list) →
+  per step, `ctx.run_node(executor, node_input=step, run_id=f"plan_step_{i}")`
+  prints outputs to `plan_outputs` state; the executor is edge-disconnected
+  (dynamic-only). Engine requirements captured: dynamically scheduled nodes
+  (and the planner FunctionNode) need `rerun_on_resume=True` — `build_llm_agent`
+  defaults it True (matching ADK's own graph-node semantics) and the
+  compiler sets it on FunctionNodes. The two-role sequence remains the
+  legacy/rollback path (`_plan_execute_legacy`).
+  *Done when*: the preset runs the dynamic shape with fake models on the
+  workflow backend and the sequence remains the legacy/rollback path.
+  **Done (2026-08-23).** The matrix test runs `plan_and_execute` dynamically
+  (executor 3×, `plan_outputs` == the three responses, executor author in
+  the stream); legacy compile still emits the frozen pre-E3 sequence tree
+  (C4 parity green); `plan-and-execute.yaml` example runs through the
+  dynamic shape.
 - [x] **E3 — Delete the per-use-case classes and nine strategies.**
   *Depends on*: E1, E2, C4 green, full suite green. *Files*: remove
   `src/basic_agent/strategies/*` (except what `compile/legacy.py` still

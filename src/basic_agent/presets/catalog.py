@@ -375,6 +375,33 @@ def _approval_gate_spec(rt: RuntimeContext) -> GraphSpec:
 
 
 def _plan_execute_spec(rt: RuntimeContext) -> GraphSpec:
+    """Dynamic-planning preset (E2a): a planner node spawns executors.
+
+    The planner is a ``function`` node (``options.function: plan_execute``)
+    that runs the executor node once per plan step via ``ctx.run_node`` —
+    the engine's dynamic scheduler (dedup/resume by run_id).  The executor
+    is edge-disconnected: it is only ever spawned dynamically.  The legacy
+    fallback remains the two-role sequence (``_plan_execute_legacy``).
+    """
+    planner = GraphNodeSpec(
+        name="planner_agent",
+        kind="function",
+        options={
+            "function": "plan_execute",
+            "executor": "executor_agent",
+            "steps": ["step 1", "step 2", "step 3"],
+        },
+    )
+    executor = GraphNodeSpec(name="executor_agent", kind="llm")
+    spec = GraphSpec(
+        nodes=[planner, executor],
+        edges=[GraphEdgeSpec(source=START, target="planner_agent")],
+    )
+    spec.validate()
+    return spec
+
+
+def _plan_execute_legacy(rt: RuntimeContext) -> GraphSpec:
     planner = GraphNodeSpec(
         name="planner_agent",
         kind="llm",
@@ -568,7 +595,7 @@ PRESETS: dict[str, Preset] = {
                 "step by step afterwards."
             ),
             spec=_plan_execute_spec,
-            legacy_spec=_plan_execute_spec,
+            legacy_spec=_plan_execute_legacy,
             legacy_name="plan_execute_agent",
         ),
         Preset(

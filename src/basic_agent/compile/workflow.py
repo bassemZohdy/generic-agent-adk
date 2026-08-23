@@ -120,15 +120,44 @@ def _make_loop_counter(counter_name: str, max_iterations: int) -> Callable[..., 
     return loop_counter
 
 
+def _make_plan_execute(
+    executor_node: BaseNode, steps: list[str]
+) -> Callable[..., Any]:
+    """Build the dynamic plan-and-execute function (E2a).
+
+    Spawns the executor node once per plan step via ``ctx.run_node`` (the
+    engine's DynamicNodeScheduler — dedup/resume/replay handled by run_id),
+    collects the outputs, and publishes ``plan_outputs`` to session state.
+    The planner's ``rerun_on_resume`` is set at FunctionNode construction.
+    """
+
+    async def plan_execute(ctx: Any, node_input: Any = None) -> None:
+        outputs = []
+        for index, step in enumerate(steps):
+            output = await ctx.run_node(
+                executor_node,
+                node_input=step,
+                run_id=f"plan_step_{index}",
+                use_sub_branch=True,
+                raise_on_wait=True,
+            )
+            outputs.append(output)
+        ctx.state["plan_outputs"] = outputs
+
+    return plan_execute
+
+
 def _resolve_function(
     node: GraphNodeSpec,
     functions: FunctionRegistry,
+    compiled: dict[str, BaseNode] | None = None,
 ) -> Callable[..., Any]:
     """Resolve a function-kind node's implementation.
 
     ``options.kind == 'loop_counter'`` selects the built-in bounded-loop
     counter; otherwise ``options.function`` names an entry in the
-    ``function_registry`` passed to :func:`compile_graph`.
+    ``function_registry`` passed to :func:`compile_graph`.  The built-in
+    ``plan_execute`` (E2a) gets the compiled executor node bound in.
     """
     options = node.options
     if options.get("kind") == "loop_counter":
@@ -139,6 +168,23 @@ def _resolve_function(
             )
         return _make_loop_counter(node.name, max_iterations)
     key = options.get("function")
+    if key == "plan_execute":
+        # Dynamic planning (E2a): bind the compiled executor node and the
+        # plan steps (the executor is edge-disconnected and spawned via
+        # ctx.run_node at runtime).
+        executor_name = options.get("executor")
+        if not isinstance(executor_name, str) or not compiled or executor_name not in compiled:
+            raise ValueError(
+                f"plan_execute node {node.name!r} requires options.executor "
+                "naming a compiled node in the same graph"
+            )
+        steps = options.get("steps", ["step 1", "step 2", "step 3"])
+        if not isinstance(steps, list) or not all(isinstance(s, str) for s in steps):
+            raise ValueError(
+                f"plan_execute node {node.name!r} options.steps must be a "
+                "list of strings"
+            )
+        return _make_plan_execute(compiled[executor_name], steps)
     if isinstance(key, str) and key in functions:
         func = functions[key]
         if func is DEFAULT_FUNCTION_REGISTRY["route_dispatch"]:
@@ -188,7 +234,7 @@ def compile_graph(
     functions = {**DEFAULT_FUNCTION_REGISTRY, **(function_registry or {})}
     schemas = schema_registry or {}
 
-    def compile_node(node_spec: GraphNodeSpec) -> BaseNode:
+    def compile_node(node_spec: GraphNodeSpec, compiled: dict[str, BaseNode]) -> BaseNode:
         retry = _retry_config(node_spec.retry)
         timeout = node_spec.timeout
         if node_spec.kind == "llm":
@@ -222,10 +268,11 @@ def compile_graph(
         if node_spec.kind == "join":
             return JoinNode(name=node_spec.name, retry_config=retry, timeout=timeout)
         if node_spec.kind == "function":
-            func = _resolve_function(node_spec, functions)
+            func = _resolve_function(node_spec, functions, compiled)
             return FunctionNode(
                 func=func,
                 name=node_spec.name,
+                rerun_on_resume=True,
                 retry_config=retry,
                 timeout=timeout,
             )
@@ -241,7 +288,18 @@ def compile_graph(
             known_tools=known_tools,
         )
 
-    compiled = {node.name: compile_node(node) for node in spec.nodes}
+    # Two-phase compile: function nodes that need sibling nodes (dynamic
+    # plan_execute spawns its executor via ctx.run_node) compile after the
+    # rest of the map is available.
+    compiled: dict[str, BaseNode] = {}
+    deferred: list[GraphNodeSpec] = []
+    for node in spec.nodes:
+        if node.kind == "function" and node.options.get("function") == "plan_execute":
+            deferred.append(node)
+        else:
+            compiled[node.name] = compile_node(node, compiled)
+    for node_spec in deferred:
+        compiled[node_spec.name] = compile_node(node_spec, compiled)
 
     edges: list[Any] = []
     for edge_spec in spec.edges:

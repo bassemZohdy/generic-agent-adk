@@ -10,6 +10,8 @@ engine's START node; our ``DEFAULT_ROUTE`` is the engine's value already
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -34,6 +36,8 @@ from .llm_node import _UNSET, build_llm_agent, resolve_role_spec, resolve_schema
 
 SchemaRegistry = dict[str, type]
 FunctionRegistry = dict[str, Callable[..., Any]]
+
+logger = logging.getLogger(__name__)
 
 
 def default_route_dispatch(
@@ -82,9 +86,6 @@ def default_aggregate_perspectives(ctx: Any, node_input: Any = None) -> None:
     ``aggregated_perspectives`` into session state with the exact key and
     ordering the multi_perspective use case used.
     """
-    import logging
-
-    logger = logging.getLogger(__name__)
     try:
         # ADK's State is a delta-tracking view: snapshot via to_dict() to
         # iterate it, then write the aggregate back (recorded as a delta).
@@ -98,7 +99,18 @@ def default_aggregate_perspectives(ctx: Any, node_input: Any = None) -> None:
         )
         state["aggregated_perspectives"] = [source[key] for key in keys]
     except Exception:
-        logger.debug("Unable to aggregate multi-perspective state", exc_info=True)
+        # Runtime boundary (graph function): never propagate — raising here
+        # would fail the node — but surface the failure at warning level
+        # and mark state so downstream consumers can detect the absence
+        # instead of silently missing ``aggregated_perspectives`` (R10).
+        logger.warning("Unable to aggregate multi-perspective state", exc_info=True)
+        try:
+            ctx.state["aggregation_failed"] = True
+        except Exception:
+            # State itself is broken: still never propagate (graph function).
+            logger.warning(
+                "Unable to write aggregation_failed state marker", exc_info=True
+            )
 
 
 #: Built-in function implementations resolvable from ``options.function``.
@@ -151,17 +163,23 @@ def _make_plan_execute(executor_node: BaseNode, steps: list[str]) -> Callable[..
     """
 
     async def plan_execute(ctx: Any, node_input: Any = None) -> None:
-        outputs = []
-        for index, step in enumerate(steps):
-            output = await ctx.run_node(
-                executor_node,
-                node_input=step,
-                run_id=f"plan_step_{index}",
-                use_sub_branch=True,
-                raise_on_wait=True,
+        # Steps are independent (each has its own run_id and sub-branch), so
+        # dispatch them concurrently (R14).  asyncio.gather preserves the
+        # awaitables' input order in its result list, so plan_outputs stays
+        # in step order.
+        outputs = await asyncio.gather(
+            *(
+                ctx.run_node(
+                    executor_node,
+                    node_input=step,
+                    run_id=f"plan_step_{index}",
+                    use_sub_branch=True,
+                    raise_on_wait=True,
+                )
+                for index, step in enumerate(steps)
             )
-            outputs.append(output)
-        ctx.state["plan_outputs"] = outputs
+        )
+        ctx.state["plan_outputs"] = list(outputs)
 
     return plan_execute
 

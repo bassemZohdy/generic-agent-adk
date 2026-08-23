@@ -19,15 +19,26 @@ returns a veto response; after the human confirms, the tool proceeds.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 #: Tool names that must never be gated by the approval policy.
 UNCONDITIONAL_TOOLS = frozenset({"request_approval", "finish_task"})
 
 
 def is_unconditional_tool(tool: Any) -> bool:
-    """Return True when a tool must never be gated (approval/finish/delegation)."""
+    """Return True when a tool must never be gated (approval/finish/delegation).
+
+    Fails CLOSED: if the private ADK ``_TaskAgentTool`` symbol cannot be
+    resolved (``ImportError``/``AttributeError`` — e.g. an ADK upgrade moved
+    or renamed it), the delegation check is unknown, so the tool is treated
+    as gate-able (returns False) and a warning is logged. Detection failure
+    makes approval gating stricter (more tools gated), never silently
+    permissive.
+    """
     name = getattr(tool, "name", tool)
     if name in UNCONDITIONAL_TOOLS:
         return True
@@ -35,8 +46,15 @@ def is_unconditional_tool(tool: Any) -> bool:
         from google.adk.tools.agent_tool import _TaskAgentTool
 
         return isinstance(tool, _TaskAgentTool)
-    except (ImportError, AttributeError):  # pragma: no cover - ADK surface
-        return True  # fail safe: unknown tool classes are not gated
+    except (ImportError, AttributeError):
+        logger.warning(
+            "Cannot resolve google.adk.tools.agent_tool._TaskAgentTool "
+            "(ADK surface moved?); treating tool %r as gate-able — "
+            "failing closed",
+            name,
+            exc_info=True,
+        )
+        return False
 
 
 def make_approval_before_tool(config: Any) -> Callable[..., Any]:
@@ -44,6 +62,9 @@ def make_approval_before_tool(config: Any) -> Callable[..., Any]:
 
     Mirrors the use case's veto contract: returning a dict skips the actual
     tool call (ADK before_tool_callback semantics); ``None`` lets it run.
+
+    With ``gate_all`` true, every non-unconditional tool is gated (the
+    name/prefix lists are ignored — treated as gated unconditionally).
     """
 
     def before_tool(tool: Any, args: dict[str, Any], tool_context: Any) -> dict | None:
@@ -52,10 +73,13 @@ def make_approval_before_tool(config: Any) -> Callable[..., Any]:
             return None
         if not config.enabled:
             return None
-        gated = name in config.gated_tools or any(
-            isinstance(name, str) and name.startswith(prefix)
-            for prefix in config.gated_prefixes
-        )
+        if getattr(config, "gate_all", False):
+            gated = True
+        else:
+            gated = name in config.gated_tools or any(
+                isinstance(name, str) and name.startswith(prefix)
+                for prefix in config.gated_prefixes
+            )
         if gated and not tool_context.state.get("human_approved"):
             request_confirmation = getattr(tool_context, "request_confirmation", None)
             if callable(request_confirmation):

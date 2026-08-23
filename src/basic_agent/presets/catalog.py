@@ -23,6 +23,7 @@ Classification per ADR-005 §5:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -33,9 +34,18 @@ from ..config.graph import (
     GraphNodeSpec,
     GraphSpec,
 )
+from ..config.loader import ApprovalPolicyConfig
 from ..config.sugar import LoopSugar, ParallelSugar, SequenceSugar, expand_sugar
+from ..policies.approval import (
+    _chain_before_tool,
+    apply_approval_policy,
+    iter_llm_agents,
+    make_approval_before_tool,
+)
 from ..policies.synthesis import with_synthesis
 from ..runtime import RoleConfig, RuntimeContext
+
+logger = logging.getLogger(__name__)
 
 PIPELINE_STEP_INSTRUCTION = (
     "You are step {index} of {count} in this pipeline. Perform your stage of "
@@ -68,22 +78,6 @@ _DATACLASS_DEFAULTS: dict[str, Any] = {
     "require_approval": RuntimeContext.require_approval,
     "specialists": RuntimeContext.specialists,
 }
-
-
-def _chain_before_tool(
-    first: Callable | list[Callable] | None, second: Callable
-) -> Callable:
-    """Chain before-tool callbacks while preserving veto short-circuiting."""
-    callbacks = list(first) if isinstance(first, list) else ([first] if first else [])
-
-    def chained(*args: Any, **kwargs: Any) -> Any:
-        for callback in callbacks:
-            result = callback(*args, **kwargs)
-            if result is not None:
-                return result
-        return second(*args, **kwargs)
-
-    return chained
 
 
 def _chain_after_tool(
@@ -168,6 +162,9 @@ class Preset:
         applies defaults, compiles via :func:`basic_agent.compile.compile_graph`,
         then wires any custom hook callbacks with the chaining semantics.
         ``team_coordinator`` short-circuits to its delegation escape hatch.
+        When ``require_approval`` resolves true, a gate-all approval policy
+        is applied across the tree (R09) — the flag drives an enforceable
+        veto, not just prompt text.
         """
         from ..compile.workflow import compile_graph
 
@@ -180,7 +177,7 @@ class Preset:
             self.before_tool_callback is not None
             or self.after_tool_callback is not None
         ):
-            for agent in _iter_llm_agents(root):
+            for agent in iter_llm_agents(root):
                 if self.before_tool_callback is not None:
                     agent.before_tool_callback = _chain_before_tool(
                         agent.before_tool_callback, self.before_tool_callback
@@ -189,28 +186,17 @@ class Preset:
                     agent.after_tool_callback = _chain_after_tool(
                         agent.after_tool_callback, self.after_tool_callback
                     )
+        if resolved.require_approval:
+            apply_approval_policy(
+                root,
+                make_approval_before_tool(
+                    ApprovalPolicyConfig(enabled=True, gate_all=True)
+                ),
+            )
+            logger.info(
+                "approval gate applied via require_approval (preset %s)", self.key
+            )
         return root
-
-
-def _iter_llm_agents(root: Any):
-    """Yield every LlmAgent in the tree, root included, depth-first.
-
-    Duck-typed (no ADK composition imports here): an LlmAgent carries a
-    ``before_tool_callback`` attribute; children live under ``sub_agents``
-    or — for Workflow graphs — under ``graph.nodes``.
-    """
-    stack = [root]
-    while stack:
-        node = stack.pop()
-        if hasattr(node, "before_tool_callback"):
-            yield node
-            stack.extend(reversed(getattr(node, "sub_agents", None) or []))
-            continue
-        graph = getattr(node, "graph", None)
-        if graph is not None:
-            stack.extend(reversed(graph.nodes))
-        else:
-            stack.extend(reversed(getattr(node, "sub_agents", None) or []))
 
 
 def _assistant_spec(rt: RuntimeContext) -> GraphSpec:

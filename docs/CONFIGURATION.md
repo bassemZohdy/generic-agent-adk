@@ -115,6 +115,7 @@ schema does not declare (e.g. `perspective_0`) must set
 policies:
   approval:
     enabled: true
+    gate_all: false
     gated_tools: [publish]
     gated_prefixes: [legacy_]
   synthesis:
@@ -128,6 +129,12 @@ policies:
   FunctionNode policies are the engine-interrupt path proven in Phase B2).
   Invariants — `request_approval`, `finish_task`, and `_TaskAgentTool`
   delegations are never gated (vetoing them deadlocks the flow; B3).
+- **approval.gate_all**: `true` gates every tool except the unconditional
+  set (`request_approval`/`finish_task`/`_TaskAgentTool` delegations);
+  blocked pending `human_approved` state with a `request_confirmation`
+  interrupt. Default `false` — zero behavior change for existing configs.
+  (The same gate is applied automatically when `execution.require_approval`
+  is true.)
 - **synthesis**: appends the canonical synthesizer node after the join and
   a native aggregation node that folds `perspective_*` state keys into
   `aggregated_perspectives` inside the graph.

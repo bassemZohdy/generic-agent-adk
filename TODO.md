@@ -32,7 +32,18 @@ contains unfinished work only; completed audit work is recorded in
 
 **Program closed 2026-08-23 — 25 complete · 1 architecture program complete
 (Phases A–F, ADR-005 Implemented, workflow backend only after F2).
-Unchecked tasks: none.**
+Unchecked tasks: none.** ⚠️ **Re-qualification (2026-08-23 deep code review,
+see R06–R15 below): the "Done" evidence for C1/D1/D3/E1/E2/F1 was produced
+entirely through direct calls to `preset.build(runtime)` / the compiler
+modules — never through `agent.py`'s actual served entrypoint. R06 found
+that entrypoint never reads `config.graph` or `config.policies` at all, so
+the declarative graph-spec/policies config surface documented in
+CONFIGURATION.md and demonstrated in `examples/graph-nested.yaml` /
+`examples/graph-routed.yaml` has no effect when mounted as a real agent
+config — those examples are validated by `test_graph_examples.py` calling
+the compiler directly, not by being served. Treat "ADR-005 Implemented" as
+"compiler and presets implemented; declarative graph/policies config not
+yet load-bearing" until R06 closes.
 
 **Review log**: streak=3 (final), last_reviewed=2026-08-23, status=stopped —
 three consecutive clean passes, recurring audit self-terminated (no new
@@ -731,6 +742,182 @@ Reuse the fake-model/Runner harness patterns from
   unconditional hard rules (legacy retired with F2; nothing left to build
   on or delete) plus the enforced composition-import isolation; phases
   marked historical. Review log updated.
+
+### Code review findings — deep review of the workflow re-architecture program (2026-08-23, `e0bf24f..HEAD`)
+
+> High-effort correctness/simplification review of the entire graph-first
+> re-architecture diff. The two most severe findings (R06, R07) were
+> independently re-verified against source in this session (not just by the
+> review agent) before logging. Ranked most-severe first.
+
+- [ ] **R06 — `_build_root_agent` never reads `config.graph` or
+  `config.policies`; the declarative graph-config/policies system parses,
+  validates, and is fully tested in isolation but has zero effect on the
+  served agent.** *Problem*: `src/basic_agent/agent.py:406`
+  (`_build_root_agent`) only calls
+  `get_default_registry().resolve(config.use_case or "assistant")` then
+  `preset.build(runtime)` — it never touches `config.graph` or
+  `config.policies` anywhere. Verified directly: neither identifier appears
+  in the function body. A user who follows `docs/CONFIGURATION.md` or
+  `examples/graph-nested.yaml`/`examples/graph-routed.yaml` and mounts a
+  custom `graph:` block or sets `policies.approval.enabled: true` gets no
+  error — the config loads and validates cleanly, then is silently
+  discarded in favor of whatever `use_case` preset resolves.
+  *Fix*: wire `_build_root_agent` to compile `config.graph` (via
+  `compile/workflow.py`) when present, apply `config.policies` (via
+  `policies/approval.py` / `policies/synthesis.py`) to the resulting tree,
+  and fall back to the preset path only when no `graph:` is configured.
+  Add a test that builds the actual served root (through `agent.py`, not
+  the compiler directly) from a YAML file containing a custom `graph:` +
+  `policies:` block and asserts the compiled shape/policy is present.
+  *Done when*: a config-file-driven graph/policy actually changes the
+  served agent's behavior, proven by a test that goes through
+  `_build_root_agent`, not `compile/workflow.py` or `Preset.build()`
+  directly.
+- [ ] **R07 — `expert_dispatch`'s router always dispatches to the first
+  specialist; nothing ever writes `ctx.state['routed_to']` before the
+  router node runs.** *Problem*: `src/basic_agent/compile/workflow.py:51`,
+  `default_route_dispatch` does `route = ctx.state.get("routed_to",
+  default_route)`. Verified directly: no node upstream of `route_dispatch`
+  in the compiled graph ever sets `routed_to` — it is a bare `function`
+  node fed straight from START with no classifier. So `route` is always
+  `default_route`, which `presets/catalog.py` sets to
+  `specialists[0]` (`"research"` by default). Every request is silently
+  routed to the same specialist regardless of content.
+  `tests/test_preset_matrix.py`'s "research specialist runs for
+  expert_dispatch" assertion cannot catch this because research is also the
+  always-taken default path.
+  *Fix*: add an LLM classifier node before `route_dispatch` that writes
+  `ctx.state['routed_to']` based on the request (e.g. an `llm` node with a
+  routing instruction and structured output, or a `before` hook on the
+  function node), or otherwise make the route selection request-dependent.
+  Add a test with two different inputs asserting two different specialists
+  actually run (not just that the default one runs).
+  *Done when*: `expert_dispatch` demonstrably routes different inputs to
+  different specialists, not just to `specialists[0]` every time.
+- [ ] **R08 — Approval policy's `_TaskAgentTool` detection fails open
+  (never gates) on `ImportError`/`AttributeError` instead of failing
+  closed.** *Problem*: `src/basic_agent/policies/approval.py:39`,
+  `is_unconditional_tool` catches the private-ADK-symbol lookup for
+  `_TaskAgentTool` and returns `True` (meaning "never gate this tool") on
+  exception, rather than treating an unresolvable check as "gate it to be
+  safe." An ADK upgrade that renames/removes
+  `google.adk.tools.agent_tool._TaskAgentTool` makes every tool call hit
+  the except branch, so `is_unconditional_tool` returns `True` universally
+  and the approval veto silently stops blocking anything — with no error.
+  *Fix*: fail closed — on lookup failure, treat the tool as gate-able
+  (return `False`) rather than unconditional, and log a warning so the ADK
+  upgrade checklist (`docs/ADK-UPGRADE-CHECKLIST.md`) surfaces it.
+  *Done when*: a test that monkeypatches the `_TaskAgentTool` import to
+  raise confirms the approval gate still blocks state-changing tools rather
+  than passing everything through.
+- [ ] **R09 — `approval_gate` preset sets `RuntimeContext.require_approval
+  = True` but nothing reads that field; the preset enforces nothing beyond
+  prompt text.** *Problem*: `src/basic_agent/presets/catalog.py:280` sets
+  `require_approval=True` in the preset defaults, but neither
+  `compile/workflow.py` nor `compile/llm_node.py` reads
+  `RuntimeContext.require_approval` anywhere (grep confirms no consumer).
+  The compiled `approval_gate` graph is two plain LLM nodes relying
+  entirely on prompt instructions ("only after the approval tool has
+  returned confirmed") with no programmatic veto boundary — a regression
+  from the pre-refactor `use_cases/approval_gate.py`'s `before_tool` veto.
+  A model can ignore or be prompt-injected around plain instruction text.
+  *Fix*: either have the preset apply the D1 approval policy
+  (`policies/approval.py`) by default when `require_approval` is true (so
+  `approval_gate` gets a real gate, matching D1's stated design), or wire
+  `require_approval` to something enforceable in the compiler.
+  *Done when*: `approval_gate` has a programmatic veto (proven by a test
+  that a gated tool call is blocked, not just discouraged by instruction
+  text) rather than relying solely on prompt compliance.
+- [ ] **R10 — `default_aggregate_perspectives` swallows all exceptions at
+  debug level, silently dropping `aggregated_perspectives` from state
+  instead of surfacing the failure.** *Problem*:
+  `src/basic_agent/compile/workflow.py:79` wraps the aggregation logic in a
+  bare `except Exception` logged only via `logger.debug` (unlikely enabled
+  in production). A `KeyError` or similar bug during
+  snapshot/write-back silently leaves `aggregated_perspectives` missing
+  from state with no error anywhere in the run.
+  *Fix*: narrow the exception handling to expected failure modes, log at
+  `warning`/`error` level, and consider surfacing a state marker (e.g.
+  `aggregation_failed: true`) so downstream consumers can detect the
+  absence rather than silently getting nothing.
+  *Done when*: a forced-failure test proves the failure is visible (log
+  level or state marker), not silently swallowed.
+- [ ] **R11 — Operator-precedence bug duplicated in two error-message
+  builders: `"..." + ", ".join(x) or "(none)"` always takes the non-empty
+  branch because `+` binds tighter than `or`.** *Problem*:
+  `src/basic_agent/compile/llm_node.py:96` (`resolve_schema`'s "Unknown
+  schema name" error) and `src/basic_agent/config/sugar.py:92`
+  (`_check_name_exists`'s "unknown node" error) both write
+  `f"...: " + ", ".join(sorted(x)) or "(none)"`. Since the f-string prefix
+  is always non-empty, the whole expression is always truthy, so `or
+  "(none)"` never fires — an empty registry/node-set produces a
+  dangling `"...valid schemas: "` / `"...valid nodes: "` with nothing
+  after the colon instead of the intended `"(none)"`.
+  *Fix*: parenthesize correctly:
+  `f"...: {', '.join(sorted(x)) or '(none)'}"` (or build the joined string
+  in a local variable first) in both files.
+  *Done when*: calling each error path with an empty registry/node-set
+  produces a message ending in `(none)`, verified by a test for each.
+- [ ] **R12 — `expert_dispatch` silently substitutes a default specialist
+  roster when `specialists` is empty, instead of failing fast like the
+  pre-refactor `RouterStrategy.validate()` did.** *Problem*:
+  `src/basic_agent/presets/catalog.py:333`,
+  `list(rt.specialists) or list(EXPERTS_DEFAULT)` treats an empty
+  `specialists` list as "use the default roster" rather than a
+  configuration error. The removed `RouterStrategy.validate()` raised
+  `ValueError` for exactly this case ("ROUTER strategy requires at least
+  one specialist in config"); this preset silently ignores a
+  `specialists: []` misconfiguration and builds anyway — compounding R07,
+  since the router won't even reflect the intended roster.
+  *Fix*: raise a clear `ValueError` when `rt.specialists` is explicitly
+  empty (distinguish "not set, use default" from "set to `[]`" if the
+  config model allows that distinction; otherwise restore fail-fast
+  behavior matching the removed strategy).
+  *Done when*: a test asserts `specialists: []` raises rather than
+  silently falling back to `EXPERTS_DEFAULT`.
+- [ ] **R13 — `_chain_before_tool`/`_iter_llm_agents` in
+  `presets/catalog.py` are near-verbatim duplicates of
+  `_chain_before_tool`/`iter_llm_agents` already defined and exported in
+  `policies/approval.py`, instead of being imported.** *Problem*:
+  `src/basic_agent/presets/catalog.py:73` and `:195` re-implement tree-walk
+  helpers that already exist in `src/basic_agent/policies/approval.py:75`
+  and `:94`. A future fix to the traversal logic (e.g. handling a new
+  node/composition type) applied to one copy leaves the other stale,
+  making the preset-level tool-wiring and the D1 approval policy's own
+  wiring walk the LLM-agent tree inconsistently.
+  *Fix*: import `iter_llm_agents`/`_chain_before_tool` from
+  `policies/approval.py` in `presets/catalog.py` (or hoist both into a
+  shared module both import from) and delete the duplicate.
+  *Done when*: `presets/catalog.py` has no local re-implementation; both
+  call sites use the same function object.
+- [ ] **R14 — `plan_and_execute`'s dynamic plan steps run sequentially via
+  a for-loop instead of concurrently, despite being independent.**
+  *Problem*: `src/basic_agent/compile/workflow.py:138`, `_make_plan_execute`
+  `await ctx.run_node(...)` one step at a time in a `for` loop even though
+  each step is dispatched to its own sub-branch with no data dependency on
+  a prior step's output. An N-step plan takes roughly N× a single LLM
+  call's latency instead of roughly 1×.
+  *Fix*: gather the per-step `ctx.run_node(...)` awaitables (e.g. via
+  `asyncio.gather`) so independent steps execute concurrently, unless a
+  genuine ordering dependency is intended (in which case document why the
+  sequential await is required).
+  *Done when*: a test with fake models measures (or otherwise proves)
+  concurrent dispatch of independent plan steps, or a comment justifies why
+  sequential execution is required.
+- [ ] **R15 — `_parse_sugar_item` doesn't enforce mutual exclusivity
+  between `parallel` and `loop` in the same sequence entry, unlike the
+  sibling `_parse_sugar_form`.** *Problem*:
+  `src/basic_agent/config/loader.py:792`, a sequence item with both
+  `parallel:` and `loop:` keys set (e.g. a copy-paste error) silently uses
+  `parallel` and drops `loop` — no validation error — because the
+  `parallel` branch returns first. `_parse_sugar_form` (the top-level
+  sugar parser) does enforce `len(present) != 1` for the analogous case.
+  *Fix*: apply the same `len(present) != 1` (or equivalent) check inside
+  `_parse_sugar_item` before branching.
+  *Done when*: a test config with both `parallel` and `loop` set on one
+  sequence item raises a clear validation error instead of silently
+  picking one.
 
 ## Closed in the 2026-08-21 audit
 

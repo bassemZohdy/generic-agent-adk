@@ -111,7 +111,7 @@ reading `Settings`, because YAML values arrive via overlay, not env.
 | `refine_until_good` | `loop` sugar | bounded routed loop |
 | `expert_dispatch` | routing-node graph | router function + specialist nodes |
 | `team_coordinator` | delegation escape hatch | `LlmAgent` + worker sub-agents (until #5581 / Node-as-Tool) |
-| `plan_and_execute` | two-role sequence | planner then executor (dynamic-planning preset: E2a) |
+| `plan_and_execute` | dynamic planning (`plan_execute`, spawns executors via `ctx.run_node`) | planner function + dynamically scheduled executor; legacy fallback = two-role sequence |
 | `approval_gate` | propose/complete sequence + approval policy | proposer/completer nodes |
 
 Presets consume only `RuntimeContext` (`basic_agent.runtime`); catalog

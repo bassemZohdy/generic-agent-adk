@@ -16,7 +16,9 @@ Classification per ADR-005 §5:
   after-run hook (D2)
 - refine_until_good → loop sugar (default max_iterations 5)
 - approval_gate → propose/complete sequence + approval policy
-- plan_and_execute → two-role sequence (dynamic-planning preset: E2a)
+- plan_and_execute → dynamic-planning preset on the workflow backend
+  (planner spawning executors via `ctx.run_node` — E2a; legacy fallback is
+  the two-role sequence)
 - expert_dispatch → routing-node graph (E1 finding: the ADK graph rejects
   duplicate (from,to) edges, so no DEFAULT_ROUTE fallback)
 - team_coordinator → delegation escape hatch: NO graph shape (ADR-005 §6)

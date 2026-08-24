@@ -166,13 +166,19 @@ class Preset:
         is applied across the tree (R09) — the flag drives an enforceable
         veto, not just prompt text.
         """
+        from ..compile.functions import custom_function_registry
         from ..compile.workflow import compile_graph
 
         resolved = self.apply_defaults(rt)
         if self.escape_hatch_builder is not None:
             root = self.escape_hatch_builder(resolved)
         else:
-            root = compile_graph(self.build_spec(resolved), resolved, name=self.key)
+            root = compile_graph(
+                self.build_spec(resolved),
+                resolved,
+                name=self.key,
+                function_registry=custom_function_registry(),
+            )
         if (
             self.before_tool_callback is not None
             or self.after_tool_callback is not None

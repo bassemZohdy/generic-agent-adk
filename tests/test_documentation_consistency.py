@@ -70,3 +70,65 @@ def test_sandbox_documentation_covers_activation_configuration_and_verification(
     assert "unsafe_local" in readme
     assert "read-only root filesystem" in readme
     assert "scripts/verify-sandbox-runtime.sh" in readme
+
+
+#: Package entries intentionally absent from ARCHITECTURE.md's module map
+#: (dunder init plus build artifacts).
+_MODULE_MAP_SKIP = {"__init__.py", "__pycache__"}
+
+
+def _architecture_module_map_entries() -> list[str]:
+    """Extract documented module names from ARCHITECTURE.md's module map."""
+    architecture = (ROOT / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+    section = architecture.split("## Module map (`src/basic_agent/`)")[1]
+    section = section.split("\n## ")[0]
+    names = []
+    for line in section.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) < 2 or set(cells[0]) <= {"-", " ", ":"}:
+            continue  # header separator row
+        name = cells[0].strip("`").rstrip("/")
+        if name == "Module / Package":  # header row
+            continue
+        names.append(name)
+    return names
+
+
+def test_module_map_documents_every_top_level_package_entry():
+    """Every src/basic_agent/ entry appears in the module map (G02).
+
+    Guards against the class of drift where the map keeps describing deleted
+    modules (e.g. the removed strategies/ layer) or new top-level modules
+    land undocumented.
+    """
+    package_dir = ROOT / "src" / "basic_agent"
+    on_disk = {
+        entry.name
+        for entry in package_dir.iterdir()
+        if entry.name not in _MODULE_MAP_SKIP and not entry.name.startswith(".")
+    }
+    documented = set(_architecture_module_map_entries())
+
+    missing_from_docs = sorted(on_disk - documented)
+    assert not missing_from_docs, (
+        f"src/basic_agent/ entries missing from ARCHITECTURE.md's module "
+        f"map: {missing_from_docs}"
+    )
+
+
+def test_module_map_names_only_modules_that_exist_on_disk():
+    """No documented row may reference a deleted/moved module (G02)."""
+    package_dir = ROOT / "src" / "basic_agent"
+    on_disk = {entry.name for entry in package_dir.iterdir()}
+
+    stale = [
+        name
+        for name in _architecture_module_map_entries()
+        if name and name not in on_disk
+    ]
+    assert not stale, (
+        f"ARCHITECTURE.md module map documents entries that no longer exist "
+        f"in src/basic_agent/: {stale}"
+    )

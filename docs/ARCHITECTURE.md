@@ -65,7 +65,7 @@ Google ADK Workflow (BaseNode tree)
 | `runtime.py` | Framework-neutral `RoleConfig`/`RuntimeContext` data contracts shared by the compile and preset layers (formerly `strategies/base.py`; imports no ADK composition classes). |
 | `presets/` | `catalog.py`: the eight built-in presets — catalog metadata (key, title, when-to-use, aliases, interfaces), runtime-defaults merge, and the graph-spec builders the compiler consumes. Presets are data, not classes. |
 | `policies/` | Cross-cutting, topology-independent behavior applied to any preset or raw graph: `approval.py` (tool-veto + confirmation-interrupt gate; never gates `request_approval`/`finish_task`/delegation tools) and `synthesis.py` (appends a synthesizer node plus native aggregation after a fan-out). |
-| `compile/` | The single sanctioned home for ADK composition-class construction. `workflow.py`: turns a `GraphSpec` into an ADK `google.adk.workflow.Workflow`. `llm_node.py`: the shared `LlmAgent` builder (instruction merge, role overrides, code executor, schemas, callbacks). |
+| `compile/` | The single sanctioned home for ADK composition-class construction. `workflow.py`: turns a `GraphSpec` into an ADK `google.adk.workflow.Workflow`. `llm_node.py`: the shared `LlmAgent` builder (instruction merge, role overrides, code executor, schemas, callbacks). `functions.py`: custom graph-function loading (`AGENT_FUNCTION_MODULE`, allowlisted in production via `AGENT_FUNCTION_MODULE_ALLOWLIST`). |
 | `use_cases/` | Public registry only (`registry.py`): resolves `agent.use_case` (+ aliases) to a `presets/` entry and loads custom presets via `AGENT_USE_CASE_MODULE`. The per-use-case facade classes and the strategy layer were deleted in E3 (ADR-005); nothing else lives here. |
 | `telemetry.py` | OpenTelemetry tracer, invocation span attributes. |
 
@@ -137,7 +137,11 @@ hard-coded conditionals anywhere in the chain. Custom use cases plug in the
 same way: expose a `PRESETS` dict of `basic_agent.presets.Preset` in a
 module (or a single `PRESET`), point `AGENT_USE_CASE_MODULE` at it
 (allowlisted in production via `AGENT_USE_CASE_MODULE_ALLOWLIST`), and the
-registry registers them. The `compile/` layer is the single sanctioned home
+registry registers them. Custom graph function nodes plug in the same way:
+expose a `FUNCTIONS` dict of callables in a module, point
+`AGENT_FUNCTION_MODULE` at it (allowlisted via
+`AGENT_FUNCTION_MODULE_ALLOWLIST`), and the compiler resolves
+`options.function` names against the merged registry. The `compile/` layer is the single sanctioned home
 for ADK composition classes; policies (`policies/`) attach per-run behavior
 (approval, synthesis) to any preset or raw graph.
 

@@ -2,6 +2,26 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-23 — Custom graph-function extension point + module-map drift guard (G01, G02)
+
+- **G01 — `AGENT_FUNCTION_MODULE` extension point**: `compile/functions.py`
+  loads a Python module exposing a `FUNCTIONS` dict of callables into the
+  compiler's function registry, gated by `AGENT_FUNCTION_MODULE_ALLOWLIST` in
+  production.  Both `compile_graph` call sites (`agent._build_graph_root`,
+  `Preset.build`) now pass the merged registry, so `kind: function` nodes
+  with `options.function` names beyond the built-in set
+  (`route_dispatch`, `aggregate_perspectives`) are reachable from YAML/env
+  without editing the compiler.  Built-in names can never be shadowed: the
+  registry is seeded with `DEFAULT_FUNCTION_REGISTRY` before the custom
+  module is loaded.  The allowlist/production rules are shared with the
+  use-case loader via `util.resolve_allowlisted_file` (R13-style dedupe).
+  ADR-005 addendum records the decision (option (a) — open extension point).
+- **G02 — module-map drift guard**: `test_documentation_consistency.py`
+  gained two tests asserting every `src/basic_agent/` top-level entry has a
+  row in `ARCHITECTURE.md`'s module map, and no documented row names a
+  deleted module.  The test would have caught the pre-audit staleness where
+  the map described the removed `strategies/` layer as current.
+
 ## 2026-08-23 — CI restored: post-F2 image smoke assertions (C01)
 
 - **Fixed the "Test image startup" smoke step in `.github/workflows/ci.yml`**

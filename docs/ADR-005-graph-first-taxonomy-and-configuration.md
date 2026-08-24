@@ -185,3 +185,30 @@ Phase B (gate spike) gates acceptance of this ADR; Phase C golden parity
 tests (preset-expanded specs structurally equal to current strategy trees)
 gate any legacy deletion; the preset matrix plus interface/auth suites gate
 Phase E–F cleanup.
+
+## Addendum (2026-08-23, G01): custom graph-function extension point
+
+The original ADR noted that `compile_graph` accepts a `function_registry`
+parameter but neither call site (`agent._build_root_graph`, `Preset.build`)
+ever passes one, making `options.function` nodes resolvable only against the
+fixed built-in set (`route_dispatch`, `aggregate_perspectives`, …).  This
+was the one concrete gap where "generic, flexible configuration" stopped
+short: graph *topology* was fully generic, but custom step *logic* beyond
+LLM nodes was not configurable without forking the compiler.
+
+**Decision**: option (a) — implement a documented, allowlisted extension
+point mirroring `AGENT_USE_CASE_MODULE`'s pattern.  `AGENT_FUNCTION_MODULE`
+(allowlisted in production via `AGENT_FUNCTION_MODULE_ALLOWLIST`) loads a
+Python module exposing a `FUNCTIONS` dict of callables into the compiler's
+function registry.  Built-in names (`route_dispatch`,
+`aggregate_perspectives`) can never be shadowed: the registry is seeded with
+the built-ins before the custom module is loaded.  Both call sites now pass
+the merged registry, so custom presets (loaded via `AGENT_USE_CASE_MODULE`)
+can also reference custom function-node implementations.
+
+**Rationale**: closing the extension point (option (b) — record
+closed-by-design, delete the dead parameter) would have been simpler but
+contradicts ADR-005's stated goal of generic, topology-agnostic
+configuration.  The allowlist pattern is already proven for custom use cases
+and the security posture (production requires an explicit allowlist of
+permitted module roots) is identical.

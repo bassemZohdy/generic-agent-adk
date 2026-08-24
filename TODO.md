@@ -5,16 +5,15 @@ This file contains **unfinished work only**. Completed work is recorded in
 standing context a future contributor (human or agent) needs before taking
 any task.
 
-Last audited: **2026-08-23** — 2 open items below (G01, G02), found during a
-documentation/architecture-accuracy audit the same date. All prior work
-streams are closed as of that date: the workflow re-architecture program
-(Phases A–F, ADR-005 Implemented), the deep code review (R01–R15), and the
-CI smoke-assertion fix (C01).
+Last audited: **2026-08-23** — backlog empty. All work streams closed on
+that date: the workflow re-architecture program (Phases A–F, ADR-005
+Implemented), the deep code review (R01–R15), the CI smoke-assertion
+fix (C01), and the doc/architecture-accuracy findings (G01, G02).
 
 ## Verification baseline
 
-- Local suite: **459 passed**, **94.14% coverage** (90% minimum) —
-  2026-08-23 close-of-work run.
+- Local suite: **469 passed**, **94.14% coverage** (90% minimum) —
+  2026-08-23 post-G01/G02 run.
 - Local checks passed: locked dependency validation, Ruff (check + format),
   targeted Pyright (config + agent.py), ADK contract guards, SHA-pinned
   workflow validation, package build, YAML and JSON parsing, Markdown
@@ -40,8 +39,7 @@ CI smoke-assertion fix (C01).
 
 ## Status summary
 
-**2 open items (2026-08-23 doc/architecture audit): G01, G02 — see
-"Remaining work" below.** Everything from prior waves is closed:
+**Backlog empty (2026-08-23).** Everything ever tracked here is closed:
 
 - **Workflow re-architecture program** — Phases A–F complete; ADR-005
   **Implemented**; the workflow compiler is the only backend (legacy
@@ -123,67 +121,46 @@ lives in git history (each closure was committed with its findings text).
 
 ## Remaining work
 
-Found 2026-08-23 during a documentation/architecture-accuracy audit
-prompted by a recurring critique: that the use-case/strategy classification
-was wrong and configuration needed to be more generic. That critique was
-already addressed in code by ADR-005 (presets are data, not classes; the
-`graph:` config is genuinely topology-generic) — the two gaps below are
-what's left, ranked most severe first.
+None — the backlog is empty. Add new findings/tasks above this line with
+the established format (problem → fix → done-when), ranked most severe
+first.
 
 ### G01 — `graph:` function nodes have no config-level extension point
 
-**Problem**: `compile_graph()` (`compile/workflow.py`) accepts a
-`function_registry` parameter merged over `DEFAULT_FUNCTION_REGISTRY`, but
-neither call site (`agent.py` `_build_graph_root`, `presets/catalog.py`
-`Preset.build`) ever passes one. A `graph:` node with `kind: function` can
-therefore only ever resolve to the fixed built-in set (`route_dispatch`,
-the loop counter, `aggregate_perspectives`, …). Unlike presets — pluggable
-via `AGENT_USE_CASE_MODULE` — there is no equivalent mechanism to register a
-custom function-node callable from YAML/env. This is the one concrete place
-where "generic, flexible configuration" (ADR-005's stated goal) stops short:
-graph *topology* is fully generic, but custom step *logic* beyond LLM nodes
-is not configurable, only forkable.
-
-**Fix**: either (a) design and implement a documented, allowlisted
-extension point (e.g. `AGENT_FUNCTION_MODULE`, mirroring
-`AGENT_USE_CASE_MODULE`'s allowlist pattern) so an operator can register
-`options.function` implementations without editing `compile/workflow.py`;
-or (b) if the team deliberately wants this closed (arbitrary callables from
-config is a real execution-safety boundary, not an oversight), record that
-decision in ADR-005 or a short new ADR, and delete the now-explicitly-dead
-`function_registry` parameter from the two call sites so the code doesn't
-imply an extension point that isn't reachable.
-
-**Done when**: either custom function nodes are reachable from a documented
-config surface with a passing test exercising a non-built-in function name,
-or the closed-by-design decision is recorded in an ADR and the dead
-parameter is removed.
+**Done (2026-08-23).** Option (a) implemented: `compile/functions.py`
+loads a Python module exposing a `FUNCTIONS` dict of callables into the
+compiler's function registry via `AGENT_FUNCTION_MODULE` (allowlisted in
+production via `AGENT_FUNCTION_MODULE_ALLOWLIST`).  Both `compile_graph`
+call sites (`agent._build_graph_root`, `Preset.build`) now pass the merged
+registry; built-in names (`route_dispatch`, `aggregate_perspectives`) can
+never be shadowed.  The allowlist/production rules are shared with the
+use-case loader via `util.resolve_allowlisted_file` (R13-style dedupe).
+ADR-005 addendum records the decision.  `tests/test_custom_function_module.py`
+(8 tests): end-to-end through `_build_root_agent` with a non-built-in
+function name writes state, builtin-shadow rejection, production allowlist
+enforcement, malformed-module rejection, and no-env-var regression.  Suite
+469 passed, ruff clean, ADK assumptions green.
 
 ### G02 — extend `tests/test_documentation_consistency.py` for architecture-doc/module-map drift
 
-**Problem**: `docs/ARCHITECTURE.md`'s "one-minute version" diagram and
-module-map table described the deleted `strategies/`/per-use-case-class
-layer as current, well after E3/F2/F3 deleted that code (fixed in this
-audit — see the current diff/commit). `test_documentation_consistency.py`
-already guards README/CONFIGURATION.md against several classes of drift
-(use-case keys, ports, model examples, sandbox terms) but has no check
-tying `ARCHITECTURE.md`'s module map to the actual `src/basic_agent/`
-package list, so this class of staleness has no regression guard and can
-silently recur.
-
-**Fix**: add a test that reads the top-level package/module names under
-`src/basic_agent/` (e.g. via `git ls-files` or `pathlib`) and asserts each
-has a corresponding row in `ARCHITECTURE.md`'s module-map table (or an
-explicit skip-list for intentionally-undocumented internals), and that no
-documented row names a module that no longer exists on disk.
-
-**Done when**: the new test fails against the pre-audit version of
-`ARCHITECTURE.md` (i.e., it would actually have caught this) and passes on
-the current tree; added to the existing `test_documentation_consistency.py`
-file, no new script needed.
+**Done (2026-08-23).** `test_documentation_consistency.py` gained two tests:
+`test_module_map_documents_every_top_level_package_entry` (every
+`src/basic_agent/` entry has a row in the module map) and
+`test_module_map_names_only_modules_that_exist_on_disk` (no documented row
+names a deleted module).  Proven to catch pre-audit drift: running the
+checker against `git show 305234f^:docs/ARCHITECTURE.md` flags `strategies`
+as stale and `compile`/`policies`/`presets`/`runtime.py` as missing — the
+exact class of staleness G02 was filed to prevent.  Suite 469 passed, ruff
+clean.
 
 ## History
 
+- **2026-08-23 doc/architecture-accuracy findings (G01, G02)** — G01:
+  `AGENT_FUNCTION_MODULE` extension point implemented (option (a));
+  `compile/functions.py` + wiring in `agent.py`/`catalog.py`; 8 tests in
+  `test_custom_function_module.py`; ADR-005 addendum.  G02: module-map
+  drift guard in `test_documentation_consistency.py` (2 tests); proven to
+  catch pre-audit `strategies/` staleness.
 - **2026-08-23 deep code review (R01–R15)** — logged against
   `e0bf24f..HEAD`; R01–R05 closed the same day, R06–R15 in two waves the
   same day (evidence: CHANGELOG "Review wave 1/2" entries; commits

@@ -2,6 +2,28 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-24 — Verification review hardening (H06, H07, H09, H16, H17)
+
+5 findings from a verification review of the H01–H15 fix commit:
+
+- **H09**: unset `DEPLOYMENT_ENV` now requires allowlist (fail closed);
+  `resolve_allowlisted_file` treats `None` the same as unrecognized values.
+  Conftest `_default_deployment_env` fixture sets `docker-compose` for all
+  tests.
+- **H16**: `is_production()` unified with allowlist logic — now returns
+  `True` for any deployment not in `_NON_PRODUCTION_DEPLOYMENTS` (including
+  unrecognized values like `prod-us`). `_PRODUCTION_DEPLOYMENTS` removed.
+- **H06**: memoization removed from `custom_function_registry()`; it reads
+  `AGENT_FUNCTION_MODULE` on every call. The `get_root_agent()` singleton
+  already ensures at most one build per process.
+- **H17**: `custom_function_registry()` stores the load error in
+  `_last_load_error`; `check_custom_function_error()` re-raises it when a
+  graph references an unresolvable custom function. Wired into
+  `_resolve_function` in `compile/workflow.py`.
+- **H07**: `load_custom_functions` now accepts a `sources` dict tracking
+  the origin of each registered name; collision-skip log messages name the
+  actual prior source.
+
 ## 2026-08-24 — Post-merge review hardening (H01–H15)
 
 All 15 findings from a code review of the G01/G02 commit (`a3c20e5`)

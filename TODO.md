@@ -9,12 +9,12 @@ Last audited: **2026-08-24** — backlog empty. All work streams closed on
 that date: the workflow re-architecture program (Phases A–F, ADR-005
 Implemented), the deep code review (R01–R15), the CI smoke-assertion
 fix (C01), the doc/architecture-accuracy findings (G01, G02), and the
-post-merge review findings (H01–H15).
+post-merge review findings (H01–H17).
 
 ## Verification baseline
 
-- Local suite: **474 passed**, **94.17% coverage** (90% minimum) —
-  2026-08-24 post-H01–H15 run.
+- Local suite: **475 passed**, **94.17% coverage** (90% minimum) —
+  2026-08-24 post-H06/H07/H09/H16/H17 run.
 - Local checks passed: locked dependency validation, Ruff (check + format),
   targeted Pyright (config + agent.py), ADK contract guards, SHA-pinned
   workflow validation, package build, YAML and JSON parsing, Markdown
@@ -126,65 +126,42 @@ None — the backlog is empty. Add new findings/tasks above this line with
 the established format (problem → fix → done-when), ranked most severe
 first.
 
-### H01–H15 — post-merge review of G01/G02 commit (all closed 2026-08-24)
+### H06, H07, H09, H16, H17 — verification review findings (all closed 2026-08-24)
 
-All 15 findings from the code review of `a3c20e5` are closed in a single
-wave. Per-finding evidence:
+- **H06** — memoization removed from `custom_function_registry()`; it now
+  reads `AGENT_FUNCTION_MODULE` on every call. The `get_root_agent()`
+  singleton already ensures at most one build per process. Test:
+  `test_registry_reads_env_on_every_call`.
+- **H07** — `load_custom_functions` now accepts a `sources` dict tracking
+  the origin of each registered name; collision-skip log messages name the
+  actual prior source (module path or "built-in").
+- **H09** — unset `DEPLOYMENT_ENV` now requires allowlist (fail closed);
+  `resolve_allowlisted_file` treats `None` the same as unrecognized values.
+  Test: `test_unrecognized_deployment_env_requires_allowlist` (covers both
+  unrecognized and unset). Conftest `_default_deployment_env` fixture sets
+  `docker-compose` for all tests.
+- **H16** — `is_production()` unified with allowlist logic: now returns
+  `True` for any deployment not in `_NON_PRODUCTION_DEPLOYMENTS` (including
+  unrecognized values like `prod-us`). `_PRODUCTION_DEPLOYMENTS` removed.
+- **H17** — `custom_function_registry()` stores the load error in
+  `_last_load_error`; `check_custom_function_error()` re-raises it when a
+  graph references an unresolvable custom function. Wired into
+  `_resolve_function` in `compile/workflow.py`. Test:
+  `test_broken_module_surfaces_error_for_custom_function`.
 
-- **H01** — `plan_execute` reserved in `_RESERVED_FUNCTION_NAMES`;
-  `load_custom_functions` rejects it at load time. Test:
-  `test_plan_execute_is_reserved`.
-- **H02** — shadow guard moved into `load_custom_functions` itself;
-  collision check always includes `DEFAULT_FUNCTION_REGISTRY` +
-  `_RESERVED_FUNCTION_NAMES` regardless of caller's seed dict. Test:
-  `test_builtins_are_never_shadowed_even_with_empty_seed`.
-- **H03** — `custom_function_registry()` catches `Exception` from
-  `load_custom_functions`, logs warning, returns builtins only. Test:
-  `test_broken_module_does_not_crash_unused_preset`.
-- **H04** — `value.strip()` applied before `Path()` construction in
-  `resolve_allowlisted_file`. Covered by existing allowlist tests.
-- **H05** — `use_cases/registry.py` migrated to
-  `util.resolve_allowlisted_file`; no independent copy remains.
-  `sys.modules` cleanup (H08 pattern) applied to the use-case loader too.
-- **H06** — `custom_function_registry()` memoized in `_cached_registry`
-  (module-level global, reset via `_reset_cache()`). Test:
-  `test_memoized_registry_returns_same_objects`.
-- **H07** — collision-skip log message now distinguishes built-in/reserved
-  collisions ("collides with a built-in or reserved function name") from
-  already-registered collisions ("already registered").
-- **H08** — `exec_module` wrapped in try/except; `sys.modules` entry
-  removed on failure. Test: `test_sys_modules_cleaned_on_import_failure`.
-- **H09** — `_NON_PRODUCTION_DEPLOYMENTS` set added; unrecognized
-  `DEPLOYMENT_ENV` values require allowlist (fail closed). Test:
-  `test_unrecognized_deployment_env_requires_allowlist`.
-- **H10** — `_is_within_root()` uses `os.path.samefile` for
-  case-insensitive comparison on macOS APFS; falls back to `Path` equality
-  when paths don't exist.
-- **H11** — ADR-005 addendum corrected `_build_root_graph` →
-  `_build_graph_root`.
-- **H12** — ARCHITECTURE.md `util.py` row updated to list
-  `resolve_allowlisted_file()`.
-- **H13** — README.md now points to `AGENT_FUNCTION_MODULE`/
-  `AGENT_FUNCTION_MODULE_ALLOWLIST` alongside the existing
-  `AGENT_USE_CASE_MODULE` mention.
-- **H14** — `_custom_function_registry` wrapper deleted from `agent.py`;
-  `_build_graph_root` calls `custom_function_registry()` directly.
-- **H15** — `_write_config` extracted to `conftest.py` as `write_config`
-  fixture; both `test_served_graph_config.py` and
-  `test_custom_function_module.py` use the shared fixture.
-
-Suite: 474 passed, ruff check+format clean, ADK assumptions green.
+Suite: 475 passed, ruff check+format clean, ADK assumptions green.
 
 ## History
 
-- **2026-08-24 post-merge review findings (H01–H15)** — all 15 closed in
-  one wave: security hardening (H02 shadow guard, H03 graceful failure,
-  H04 whitespace strip, H08 sys.modules cleanup, H09 fail-closed
-  DEPLOYMENT_ENV, H10 case-insensitive allowlist), correctness (H01
-  plan_execute reservation, H07 log message), performance (H06 caching),
-  dedupe (H05 use-case loader migration), code quality (H14 wrapper
-  removal, H15 shared test helper), docs (H11 ADR-005 name, H12
-  ARCHITECTURE row, H13 README pointer). Suite 474 passed.
+- **2026-08-24 verification review findings (H06, H07, H09, H16, H17)**
+  — all 5 closed: H06 (memoization removed — registry reads env every
+  call), H07 (collision log tracks source origin), H09 (unset
+  DEPLOYMENT_ENV requires allowlist), H16 (is_production unified with
+  allowlist logic), H17 (load errors surfaced for graphs that need custom
+  functions). Suite 475 passed.
+- **2026-08-24 post-merge review findings (H01–H15) filed** — 15 findings
+  from a code review of the G01/G02 commit (`a3c20e5`); see the
+  verification entry above for actual closure status.
 - **2026-08-23 doc/architecture-accuracy findings (G01, G02)** — G01:
   `AGENT_FUNCTION_MODULE` extension point implemented (option (a));
   `compile/functions.py` + wiring in `agent.py`/`catalog.py`; 8 tests in

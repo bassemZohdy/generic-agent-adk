@@ -9,26 +9,26 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-_PRODUCTION_DEPLOYMENTS = frozenset(
-    {"prod", "production", "staging", "cloud-run", "cloudrun"}
-)
-
-#: Explicitly non-production deployments that skip the allowlist requirement.
-#: Any ``DEPLOYMENT_ENV`` value not in this set requires an allowlist (H09:
-#: fail closed on unrecognized values).
+#: Explicitly non-production deployments that skip the allowlist requirement
+#: and cookie-security/docs-route gating.  Any ``DEPLOYMENT_ENV`` value not
+#: in this set — including unrecognized values and a fully unset variable —
+#: is treated as production (H09, H16: fail closed).
 _NON_PRODUCTION_DEPLOYMENTS = frozenset(
     {"docker-compose", "dev", "development", "test", "local"}
 )
 
 
 def is_production(deployment: str) -> bool:
-    """Return ``True`` when ``deployment`` names a production-like environment.
+    """Return ``True`` when *deployment* is NOT explicitly non-production.
+
+    Fail closed: only deployments in :data:`_NON_PRODUCTION_DEPLOYMENTS`
+    are exempt; unrecognized values (e.g. ``prod-us``) are treated as
+    production (H16).
 
     Used by every interface adapter (REST, Live, auth-gateway, service-api)
-    and the use-case custom-module loader to gate documentation routes and
-    enforce allowlist requirements.
+    and the custom-module allowlist gate.
     """
-    return deployment.lower() in _PRODUCTION_DEPLOYMENTS
+    return deployment.lower() not in _NON_PRODUCTION_DEPLOYMENTS
 
 
 def _is_within_root(candidate: Path, root: Path) -> bool:
@@ -73,8 +73,9 @@ def resolve_allowlisted_file(module_path: str, allowlist_env: str, noun: str) ->
 
     Raises:
         OSError: If the file does not exist.
-        ValueError: If a production-like deployment sets no allowlist, or
-            the module lies outside the configured allowlist roots.
+        ValueError: If a production-like deployment (or unset
+            ``DEPLOYMENT_ENV``) sets no allowlist, or the module lies
+            outside the configured allowlist roots.
     """
     candidate = Path(module_path).expanduser().resolve()
     if not candidate.is_file():
@@ -84,12 +85,13 @@ def resolve_allowlisted_file(module_path: str, allowlist_env: str, noun: str) ->
         for value in os.environ.get(allowlist_env, "").split(os.pathsep)
         if value.strip()
     )
-    deployment = os.environ.get("DEPLOYMENT_ENV", "docker-compose")
-    # H09: fail closed — only explicitly non-production deployments skip the
-    # allowlist requirement; unrecognized values require one.
-    if deployment.lower() not in _NON_PRODUCTION_DEPLOYMENTS and not allowed_roots:
+    deployment = os.environ.get("DEPLOYMENT_ENV")
+    # H09: unset DEPLOYMENT_ENV requires allowlist (fail closed — only
+    # explicitly non-production deployments skip the requirement).
+    if (deployment is None or is_production(deployment)) and not allowed_roots:
         raise ValueError(
-            f"{allowlist_env} is required before loading custom {noun} in {deployment}"
+            f"{allowlist_env} is required before loading custom {noun}"
+            + (f" in {deployment}" if deployment is not None else "")
         )
     if allowed_roots and not any(
         _is_within_root(candidate, root) for root in allowed_roots

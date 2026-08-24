@@ -27,7 +27,7 @@ from basic_agent.compile.functions import (
     _RESERVED_FUNCTION_NAMES,
     CUSTOM_FUNCTION_ALLOWLIST_ENV,
     CUSTOM_FUNCTION_MODULE_ENV,
-    _reset_cache,
+    check_custom_function_error,
     custom_function_registry,
     load_custom_functions,
 )
@@ -102,14 +102,6 @@ class DeterministicLlm(BaseLlm):
         )
 
 
-@pytest.fixture(autouse=True)
-def _reset_function_cache():
-    """Reset the memoized registry before each test (H06)."""
-    _reset_cache()
-    yield
-    _reset_cache()
-
-
 @pytest.fixture
 def fake_model(monkeypatch):
     model = DeterministicLlm(model="deterministic")
@@ -174,10 +166,16 @@ def test_production_requires_allowlist(monkeypatch, tmp_path, functions_module):
 def test_unrecognized_deployment_env_requires_allowlist(
     monkeypatch, tmp_path, functions_module
 ):
-    """H09: fail closed on unrecognized DEPLOYMENT_ENV values."""
+    """H09: fail closed on unrecognized and unset DEPLOYMENT_ENV values."""
     monkeypatch.delenv(CUSTOM_FUNCTION_ALLOWLIST_ENV, raising=False)
-    monkeypatch.setenv("DEPLOYMENT_ENV", "prod-us")
 
+    # Unrecognized value requires allowlist.
+    monkeypatch.setenv("DEPLOYMENT_ENV", "prod-us")
+    with pytest.raises(ValueError, match=CUSTOM_FUNCTION_ALLOWLIST_ENV):
+        load_custom_functions(str(functions_module), functions={})
+
+    # H09: unset DEPLOYMENT_ENV also requires allowlist.
+    monkeypatch.delenv("DEPLOYMENT_ENV", raising=False)
     with pytest.raises(ValueError, match=CUSTOM_FUNCTION_ALLOWLIST_ENV):
         load_custom_functions(str(functions_module), functions={})
 
@@ -210,12 +208,22 @@ def test_broken_module_does_not_crash_unused_preset(monkeypatch, tmp_path):
     assert registry == DEFAULT_FUNCTION_REGISTRY
 
 
+def test_broken_module_surfaces_error_for_custom_function(monkeypatch, tmp_path):
+    """H17: a broken module's original error surfaces when a graph needs it."""
+    bad_module = tmp_path / "broken_for_custom.py"
+    bad_module.write_text("raise RuntimeError('module is broken')\n", encoding="utf-8")
+    monkeypatch.setenv(CUSTOM_FUNCTION_MODULE_ENV, str(bad_module))
+
+    custom_function_registry()
+    with pytest.raises(ValueError, match="failed to load"):
+        check_custom_function_error("my_custom_fn")
+
+
 def test_sys_modules_cleaned_on_import_failure(monkeypatch, tmp_path):
     """H08: a broken module leaves no sys.modules entry behind."""
     bad_module = tmp_path / "broken_import.py"
     bad_module.write_text("raise ImportError('test failure')\n", encoding="utf-8")
 
-    # Compute the expected module name (same uuid5 logic as the loader).
     import uuid
     from pathlib import Path
 
@@ -297,11 +305,12 @@ def test_no_env_var_leaves_only_builtins(monkeypatch):
     assert custom_function_registry() == DEFAULT_FUNCTION_REGISTRY
 
 
-def test_memoized_registry_returns_same_objects(monkeypatch, functions_module):
-    """H06: two calls return the same function objects (identity-equal)."""
-    monkeypatch.setenv(CUSTOM_FUNCTION_MODULE_ENV, str(functions_module))
+def test_registry_reads_env_on_every_call(monkeypatch, functions_module):
+    """H06: changing AGENT_FUNCTION_MODULE between calls is reflected."""
+    monkeypatch.delenv(CUSTOM_FUNCTION_MODULE_ENV, raising=False)
     reg1 = custom_function_registry()
-    reg2 = custom_function_registry()
+    assert "enrich_state" not in reg1
 
-    assert reg1 is reg2
-    assert reg1["enrich_state"] is reg2["enrich_state"]
+    monkeypatch.setenv(CUSTOM_FUNCTION_MODULE_ENV, str(functions_module))
+    reg2 = custom_function_registry()
+    assert "enrich_state" in reg2

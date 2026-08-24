@@ -31,13 +31,16 @@ CUSTOM_FUNCTION_ALLOWLIST_ENV = "AGENT_FUNCTION_MODULE_ALLOWLIST"
 #: by a hardcoded branch in ``_resolve_function`` — H01).
 _RESERVED_FUNCTION_NAMES = frozenset({"plan_execute"})
 
-#: Cached result of :func:`custom_function_registry` (H06).
-_cached_registry: dict[str, Callable[..., Any]] | None = None
+#: Last load error from :func:`custom_function_registry` (H17).  Surfaced
+#: by :func:`check_custom_function_error` when a graph references a custom
+#: function whose module failed to import.
+_last_load_error: Exception | None = None
 
 
 def load_custom_functions(
     module_path: str,
     functions: dict[str, Callable[..., Any]] | None = None,
+    sources: dict[str, str] | None = None,
 ) -> list[str]:
     """Import a module file and return its additional graph functions.
 
@@ -51,6 +54,7 @@ def load_custom_functions(
     Args:
         module_path: Filesystem path to a ``.py`` module.
         functions: Registry to merge into; defaults to empty.
+        sources: Optional name → origin mapping for collision logging (H07).
 
     Returns:
         Sorted list of newly registered function names.
@@ -68,6 +72,7 @@ def load_custom_functions(
         module_path, CUSTOM_FUNCTION_ALLOWLIST_ENV, "graph-function"
     )
     functions = {} if functions is None else functions
+    sources = {} if sources is None else sources
 
     module_uuid = uuid.uuid5(uuid.NAMESPACE_URL, str(candidate)).hex
     module_name = f"custom_graph_functions_{module_uuid}"
@@ -117,12 +122,15 @@ def load_custom_functions(
             )
             continue
         if name in functions:
+            origin = sources.get(name, "a previously registered source")
             logger.info(
-                "Custom graph function %r skipped: already registered",
+                "Custom graph function %r skipped: already registered by %s",
                 name,
+                origin,
             )
             continue
         functions[name] = func
+        sources[name] = str(module_path)
         registered.append(name)
         logger.info("Registered custom graph function %r from %s", name, module_path)
     return sorted(registered)
@@ -134,48 +142,66 @@ def custom_function_registry() -> dict[str, Callable[..., Any]]:
     Reads ``AGENT_FUNCTION_MODULE`` at call time (not import time); when set,
     the module's ``FUNCTIONS`` are loaded into a copy of
     :data:`DEFAULT_FUNCTION_REGISTRY`.  Built-in and reserved names can never
-    be shadowed (H02).  The result is memoized per process (H06).
+    be shadowed (H02).
 
     H03: a bad/missing module logs a warning and returns the built-in
     registry only, so presets/graphs that don't reference custom functions
-    still serve normally.
+    still serve normally.  H17: the load error is stored in
+    :data:`_last_load_error` so :func:`check_custom_function_error` can
+    surface it when a graph actually needs a custom function.
+
+    H06: NOT memoized — reads env on every call so that changing
+    ``AGENT_FUNCTION_MODULE`` mid-process is reflected immediately.
+    The ``get_root_agent()`` singleton already ensures at most one build
+    per process in production.
 
     Returns:
         Registry suitable for :func:`compile_graph`'s ``function_registry``.
     """
-    global _cached_registry
-    if _cached_registry is not None:
-        return _cached_registry
+    global _last_load_error
 
     from .workflow import DEFAULT_FUNCTION_REGISTRY
 
     functions: dict[str, Callable[..., Any]] = {**DEFAULT_FUNCTION_REGISTRY}
+    sources: dict[str, str] = {name: "built-in" for name in DEFAULT_FUNCTION_REGISTRY}
+    _last_load_error = None
     module_path = os.environ.get(CUSTOM_FUNCTION_MODULE_ENV)
     if module_path:
         try:
-            load_custom_functions(module_path, functions=functions)
-        except Exception:
+            load_custom_functions(module_path, functions=functions, sources=sources)
+        except Exception as exc:
+            _last_load_error = exc
             logger.warning(
                 "Failed to load custom graph-function module %r; "
                 "serving built-in functions only",
                 module_path,
                 exc_info=True,
             )
-    _cached_registry = functions
     return functions
 
 
-def _reset_cache() -> None:
-    """Reset the memoized registry (test helper)."""
-    global _cached_registry
-    _cached_registry = None
+def check_custom_function_error(name: str) -> None:
+    """Re-raise the module load error if *name* is an unresolvable custom function (H17).
+
+    Called by :func:`compile.workflow._resolve_function` when a function name
+    is not found in the registry.  If the module failed to load and the name
+    is not a built-in, the original actionable error is raised instead of the
+    generic "requires options.function" message.
+    """
+    from .workflow import DEFAULT_FUNCTION_REGISTRY
+
+    if _last_load_error is not None and name not in DEFAULT_FUNCTION_REGISTRY:
+        raise ValueError(
+            f"Custom graph function {name!r} is unavailable because "
+            f"{CUSTOM_FUNCTION_MODULE_ENV} failed to load; see log for details"
+        ) from _last_load_error
 
 
 __all__ = [
     "CUSTOM_FUNCTION_ALLOWLIST_ENV",
     "CUSTOM_FUNCTION_MODULE_ENV",
     "_RESERVED_FUNCTION_NAMES",
-    "_reset_cache",
+    "check_custom_function_error",
     "custom_function_registry",
     "load_custom_functions",
 ]

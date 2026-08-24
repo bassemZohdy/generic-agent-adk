@@ -58,6 +58,16 @@ def settings_patch(monkeypatch):
     return patch
 
 
+@pytest.fixture(autouse=True)
+def _default_deployment_env(monkeypatch):
+    """Default DEPLOYMENT_ENV to docker-compose for all tests (H09).
+
+    Unset DEPLOYMENT_ENV now requires an allowlist (fail closed).  Tests
+    that need a different value set it explicitly via monkeypatch.setenv.
+    """
+    monkeypatch.setenv("DEPLOYMENT_ENV", "docker-compose")
+
+
 @pytest.fixture
 def write_config(tmp_path, monkeypatch):
     """Write a YAML config file and set AGENT_CONFIG_FILE (H15: shared helper)."""

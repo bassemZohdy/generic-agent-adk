@@ -5,14 +5,16 @@ This file contains **unfinished work only**. Completed work is recorded in
 standing context a future contributor (human or agent) needs before taking
 any task.
 
-Last audited: **2026-08-23** — backlog empty. All work streams closed on
-that date: the workflow re-architecture program (Phases A–F, ADR-005
-Implemented), the deep code review (R01–R15), the CI smoke-assertion
-fix (C01), and the doc/architecture-accuracy findings (G01, G02).
+Last audited: **2026-08-24** — backlog reopened by a post-merge code
+review of the G01/G02 commit (`a3c20e5`), filing **H01–H15**. Every prior
+work stream remains closed: the workflow re-architecture program
+(Phases A–F, ADR-005 Implemented), the deep code review (R01–R15), the CI
+smoke-assertion fix (C01), and the doc/architecture-accuracy findings
+(G01, G02) themselves.
 
 ## Verification baseline
 
-- Local suite: **469 passed**, **94.14% coverage** (90% minimum) —
+- Local suite: **469 passed**, **94.17% coverage** (90% minimum) —
   2026-08-23 post-G01/G02 run.
 - Local checks passed: locked dependency validation, Ruff (check + format),
   targeted Pyright (config + agent.py), ADK contract guards, SHA-pinned
@@ -39,7 +41,9 @@ fix (C01), and the doc/architecture-accuracy findings (G01, G02).
 
 ## Status summary
 
-**Backlog empty (2026-08-23).** Everything ever tracked here is closed:
+**Backlog: 15 open findings (H01–H15), filed 2026-08-24** from a code
+review of the G01/G02 commit (`a3c20e5`) — see "Remaining work" below.
+Everything tracked before that review is closed:
 
 - **Workflow re-architecture program** — Phases A–F complete; ADR-005
   **Implemented**; the workflow compiler is the only backend (legacy
@@ -121,37 +125,235 @@ lives in git history (each closure was committed with its findings text).
 
 ## Remaining work
 
-None — the backlog is empty. Add new findings/tasks above this line with
-the established format (problem → fix → done-when), ranked most severe
-first.
+Filed 2026-08-24 from a code review of the G01/G02 commit (`a3c20e5`),
+ranked most severe first. Add new findings/tasks above this line with the
+established format (problem → fix → done-when), ranked most severe first.
 
-### G01 — `graph:` function nodes have no config-level extension point
+### H01 — `"plan_execute"` custom function nodes are silently unreachable
 
-**Done (2026-08-23).** Option (a) implemented: `compile/functions.py`
-loads a Python module exposing a `FUNCTIONS` dict of callables into the
-compiler's function registry via `AGENT_FUNCTION_MODULE` (allowlisted in
-production via `AGENT_FUNCTION_MODULE_ALLOWLIST`).  Both `compile_graph`
-call sites (`agent._build_graph_root`, `Preset.build`) now pass the merged
-registry; built-in names (`route_dispatch`, `aggregate_perspectives`) can
-never be shadowed.  The allowlist/production rules are shared with the
-use-case loader via `util.resolve_allowlisted_file` (R13-style dedupe).
-ADR-005 addendum records the decision.  `tests/test_custom_function_module.py`
-(8 tests): end-to-end through `_build_root_agent` with a non-built-in
-function name writes state, builtin-shadow rejection, production allowlist
-enforcement, malformed-module rejection, and no-env-var regression.  Suite
-469 passed, ruff clean, ADK assumptions green.
+**Problem:** `compile/workflow.py:208`'s `_resolve_function` hardcodes a
+`key == "plan_execute"` branch that runs *before* the custom-registry
+lookup, so a module that registers `FUNCTIONS = {"plan_execute": fn}`
+passes the built-in collision check (the name isn't in
+`DEFAULT_FUNCTION_REGISTRY`) but `fn` is never called — the hardcoded
+dynamic-planner branch always wins. Contradicts the documented guarantee
+that built-ins "can never be shadowed" (`compile/functions.py:108-110`).
 
-### G02 — extend `tests/test_documentation_consistency.py` for architecture-doc/module-map drift
+**Fix:** Either reserve `"plan_execute"` explicitly in the collision check
+(so registering it is rejected with a clear error) or route it through
+the same registry-lookup path as `route_dispatch`/`aggregate_perspectives`.
 
-**Done (2026-08-23).** `test_documentation_consistency.py` gained two tests:
-`test_module_map_documents_every_top_level_package_entry` (every
-`src/basic_agent/` entry has a row in the module map) and
-`test_module_map_names_only_modules_that_exist_on_disk` (no documented row
-names a deleted module).  Proven to catch pre-audit drift: running the
-checker against `git show 305234f^:docs/ARCHITECTURE.md` flags `strategies`
-as stale and `compile`/`policies`/`presets`/`runtime.py` as missing — the
-exact class of staleness G02 was filed to prevent.  Suite 469 passed, ruff
-clean.
+**Done when:** A test proves a custom `"plan_execute"` function is either
+rejected at load time with a clear error, or actually invoked when a node
+sets `options.function: plan_execute`.
+
+### H02 — `load_custom_functions()` has no built-in-shadow guard of its own
+
+**Problem:** `compile/functions.py:90`'s docstring claims a custom module
+"can never override built-in behavior," but the guarantee only holds
+because `custom_function_registry()` happens to pre-seed the dict with
+`DEFAULT_FUNCTION_REGISTRY` before calling it.
+`tests/test_custom_function_module.py::test_production_requires_allowlist`
+already proves the unseeded case: calling `load_custom_functions(path,
+functions={})` registers a colliding `route_dispatch` name.
+
+**Fix:** Move the shadow-guard check inside `load_custom_functions()`
+itself (e.g. always merge against `DEFAULT_FUNCTION_REGISTRY` internally,
+or raise if the caller's seed dict is missing required built-in keys).
+
+**Done when:** `load_custom_functions(path, functions={})` with a
+colliding name raises/rejects instead of registering, and the docstring's
+claim is true regardless of caller.
+
+### H03 — bad `AGENT_FUNCTION_MODULE` crashes every preset, not just the ones using it
+
+**Problem:** `presets/catalog.py:180` (`Preset.build`) and `agent.py`'s
+`_build_graph_root` call `custom_function_registry()` unconditionally,
+even for graphs with zero `kind: function` nodes. A
+missing/non-allowlisted/malformed module raises `OSError`/`ValueError`
+out of `get_root_agent()` and fails the whole served agent.
+
+**Fix:** Only resolve the custom registry when the graph/preset being
+built actually contains a `kind: function` node (or lazily resolve
+per-node instead of eagerly for the whole graph).
+
+**Done when:** A config with an invalid `AGENT_FUNCTION_MODULE` still
+serves presets/graphs that don't reference custom functions; a test
+covers this.
+
+### H04 — whitespace-padded allowlist entries silently never match
+
+**Problem:** `util.py:52`'s allowed-roots generator filters entries with
+`if value.strip()` but builds the `Path` from the unstripped `value`, so
+`"/allowed/a: /allowed/b"` (stray space after the separator) makes the
+second entry resolve with a literal leading space and never match a real
+directory.
+
+**Fix:** Strip `value` before constructing the `Path`.
+
+**Done when:** A test with a whitespace-padded allowlist entry resolves
+correctly.
+
+### H05 — use-case loader was never migrated to the shared allowlist helper (dedupe claim is false)
+
+**Problem:** CHANGELOG.md, the ADR-005 addendum, and
+`compile/functions.py`'s docstring all claim the allowlist/production
+logic is now shared with the use-case loader via
+`util.resolve_allowlisted_file` ("R13-style dedupe"), but
+`use_cases/registry.py:160` still runs its own independent, byte-for-byte
+copy of the same logic (confirmed: `git diff -- src/basic_agent/use_cases/registry.py`
+is empty across the G01 commit).
+
+**Fix:** Migrate `load_custom_use_cases` (and its importlib boilerplate,
+`registry.py:183-190`) to call `util.resolve_allowlisted_file`, and
+correct the CHANGELOG/ADR-005/docstring claims if migration is
+deliberately deferred.
+
+**Done when:** `registry.py` calls `util.resolve_allowlisted_file` (no
+independent copy remains), or the false "shared" claims are removed from
+CHANGELOG.md, ADR-005, and `compile/functions.py`.
+
+### H06 — `custom_function_registry()` re-imports the module on every call (no caching)
+
+**Problem:** Unlike `use_cases/registry.py`'s `get_default_registry()`
+(memoized in a module-level global), `compile/functions.py:103`'s
+`custom_function_registry()` re-resolves the allowlist and fully
+re-imports/re-execs the `AGENT_FUNCTION_MODULE` file on every call.
+Callers that build more than one root/preset per process (several tests
+already do) re-run the module's top-level code each time, resetting any
+module-level state and returning function objects with different
+identity across calls.
+
+**Fix:** Memoize the registry the same way `get_default_registry()` does.
+
+**Done when:** Two calls to `custom_function_registry()` in the same
+process return the same function objects (identity-equal) and the module
+is imported once.
+
+### H07 — collision-skip log message blames the wrong module
+
+**Problem:** `compile/functions.py:90` logs
+`"Custom graph function %r skipped: %s already provides it"` with
+`CUSTOM_FUNCTION_MODULE_ENV` (the literal string
+`"AGENT_FUNCTION_MODULE"`) as the second value — naming the operator's
+own env var, not the built-in registry or prior module that actually
+caused the skip.
+
+**Fix:** Log the actual source of the collision (e.g. "a built-in
+function" or the module that already registered the name).
+
+**Done when:** The log message names the real conflicting source.
+
+### H08 — `sys.modules` left in a broken state on partial custom-module import failure
+
+**Problem:** `compile/functions.py:61` assigns
+`sys.modules[module_name] = module` before `spec.loader.exec_module(module)`
+runs, with no cleanup if `exec_module` raises partway through — unlike
+CPython's real import machinery, which removes the entry on exec failure.
+
+**Fix:** Wrap `exec_module` in try/except and `del sys.modules[module_name]`
+on failure (or only insert into `sys.modules` after `exec_module`
+succeeds).
+
+**Done when:** A custom module whose top-level code raises leaves no
+entry in `sys.modules`; a test covers this.
+
+### H09 — unset/unlisted `DEPLOYMENT_ENV` silently skips allowlist enforcement
+
+**Problem:** `util.py:57`'s production check matches `DEPLOYMENT_ENV`
+against an exact-string set (`prod`, `production`, `staging`,
+`cloud-run`, `cloudrun`); any unset or unlisted value (e.g. `prod-us`) is
+silently treated as non-production, skipping allowlist enforcement. This
+diff extends the pre-existing (use-case-only) fail-open behavior to a
+second, more dangerous surface: arbitrary code execution via
+`AGENT_FUNCTION_MODULE`.
+
+**Fix:** Fail closed on unrecognized `DEPLOYMENT_ENV` values for the
+function-module path (or require an explicit "non-production" opt-in
+rather than defaulting to it).
+
+**Done when:** An unset/unrecognized `DEPLOYMENT_ENV` with
+`AGENT_FUNCTION_MODULE` set either enforces the allowlist or raises,
+rather than silently bypassing it; a test covers this.
+
+### H10 — allowlist path containment check is case-sensitive, breaks on macOS
+
+**Problem:** `util.py:63`'s `candidate == root or root in candidate.parents`
+is a case-sensitive comparison, but `Path.resolve()` doesn't normalize
+case on case-insensitive filesystems (macOS's default APFS), so an
+allowlist root and a same-file module path differing only in case fail
+the check.
+
+**Fix:** Normalize case for comparison on case-insensitive platforms, or
+document the requirement that allowlist entries must case-match exactly.
+
+**Done when:** An allowlist root and a module path that differ only in
+case resolve consistently on macOS; a test covers this (or the
+limitation is explicitly documented).
+
+### H11 — ADR-005 addendum misnames `_build_graph_root`
+
+**Problem:** `docs/ADR-005-graph-first-taxonomy-and-configuration.md:192`
+names the call site `agent._build_root_graph`; the real function
+(`agent.py:428`) is `_build_graph_root`. CHANGELOG.md's G01 entry has the
+correct name.
+
+**Fix:** Correct the ADR-005 addendum to `_build_graph_root`.
+
+**Done when:** ADR-005 and CHANGELOG.md agree on the function name.
+
+### H12 — `ARCHITECTURE.md` module-map row for `util.py` is stale
+
+**Problem:** `docs/ARCHITECTURE.md:62` still lists only `is_production()`
+and `split_csv()` for `util.py`, unchanged by the G01 commit even though
+it added a third public export, `resolve_allowlisted_file()`. G02's new
+drift-guard tests only check row *presence*, not row *content*, so this
+staleness passes them undetected.
+
+**Fix:** Add `resolve_allowlisted_file()` to the `util.py` module-map row.
+
+**Done when:** The `util.py` row lists all three public exports.
+
+### H13 — README.md not updated for the new `AGENT_FUNCTION_MODULE*` env vars
+
+**Problem:** `.env.example`, CHANGELOG.md, and TODO.md were updated for
+the new `AGENT_FUNCTION_MODULE`/`AGENT_FUNCTION_MODULE_ALLOWLIST` config
+surface, but README.md — which documents the analogous
+`AGENT_USE_CASE_MODULE` pair by pointing readers at `.env.example`
+(README.md:63) — was not given an equivalent pointer.
+
+**Fix:** Add a README.md pointer for `AGENT_FUNCTION_MODULE`/
+`AGENT_FUNCTION_MODULE_ALLOWLIST`, matching the existing
+`AGENT_USE_CASE_MODULE` pattern.
+
+**Done when:** README.md documents (or points to) both env var pairs
+symmetrically.
+
+### H14 — needless wrapper `_custom_function_registry()` in `agent.py`
+
+**Problem:** `agent.py:421`'s `_custom_function_registry()` is a private
+5-line wrapper that only lazy-imports and calls through to
+`compile.functions.custom_function_registry()`, used at one call site,
+with no circular-import need forcing the indirection — inconsistent with
+`catalog.py`'s direct call to the same function.
+
+**Fix:** Delete the wrapper; call `custom_function_registry()` directly
+at the `_build_graph_root` call site.
+
+**Done when:** `agent.py` has no `_custom_function_registry` wrapper.
+
+### H15 — duplicate `_write_config` test helper
+
+**Problem:** `tests/test_custom_function_module.py:115`'s
+`_write_config(tmp_path, monkeypatch, content)` is a byte-for-byte
+duplicate of `tests/test_served_graph_config.py`'s `_write_config`
+(line 155).
+
+**Fix:** Extract the shared helper into a common test-support module (or
+import one from the other) instead of maintaining two copies.
+
+**Done when:** Only one implementation of `_write_config` exists, shared
+by both test files.
 
 ## History
 

@@ -2,7 +2,7 @@
 
 An AI agent that adapts to your needs. Choose what you want it to do, configure it with environment variables, and run it with one Docker command.
 
-[![Tests](https://img.shields.io/badge/tests-469%20passing-brightgreen)](./tests/)
+[![Tests](https://img.shields.io/badge/tests-474%20passing-brightgreen)](./tests/)
 [![Coverage](https://img.shields.io/badge/coverage-94.17%25-brightgreen)](./tests/)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/status-active%20%2F%20staging-yellow)](.)
@@ -61,7 +61,9 @@ Set `AGENT_USE_CASE` to pick a behavior:
 These are the eight built-in canonical keys. They currently have no built-in
 aliases. Custom modules may register additional keys; see
 `AGENT_USE_CASE_MODULE` and `AGENT_USE_CASE_MODULE_ALLOWLIST` in
-[`.env.example`](./.env.example).
+[`.env.example`](./.env.example). Custom graph function nodes
+(`kind: function` with `options.function`) can be extended the same way via
+`AGENT_FUNCTION_MODULE` and `AGENT_FUNCTION_MODULE_ALLOWLIST`.
 
 ```bash
 docker run -e AGENT_USE_CASE=pipeline \

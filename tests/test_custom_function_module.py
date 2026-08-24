@@ -11,6 +11,7 @@ directly — mirroring the R06 rule in ``test_served_graph_config.py``.
 from __future__ import annotations
 
 import asyncio
+import sys
 
 import pytest
 from google.adk.models.base_llm import BaseLlm
@@ -23,8 +24,11 @@ from google.genai import types
 from basic_agent import agent as agent_module
 from basic_agent.agent import resolve_agent_config
 from basic_agent.compile.functions import (
+    _RESERVED_FUNCTION_NAMES,
     CUSTOM_FUNCTION_ALLOWLIST_ENV,
     CUSTOM_FUNCTION_MODULE_ENV,
+    _reset_cache,
+    custom_function_registry,
     load_custom_functions,
 )
 from basic_agent.compile.workflow import DEFAULT_FUNCTION_REGISTRY
@@ -98,6 +102,14 @@ class DeterministicLlm(BaseLlm):
         )
 
 
+@pytest.fixture(autouse=True)
+def _reset_function_cache():
+    """Reset the memoized registry before each test (H06)."""
+    _reset_cache()
+    yield
+    _reset_cache()
+
+
 @pytest.fixture
 def fake_model(monkeypatch):
     model = DeterministicLlm(model="deterministic")
@@ -112,12 +124,6 @@ def functions_module(tmp_path):
     return module_file
 
 
-def _write_config(tmp_path, monkeypatch, content: str):
-    config_file = tmp_path / "agent.yaml"
-    config_file.write_text(content, encoding="utf-8")
-    monkeypatch.setenv("AGENT_CONFIG_FILE", str(config_file))
-
-
 def test_load_custom_functions_registers_new_names(functions_module):
     functions: dict = {**DEFAULT_FUNCTION_REGISTRY}
     registered = load_custom_functions(str(functions_module), functions=functions)
@@ -127,13 +133,23 @@ def test_load_custom_functions_registers_new_names(functions_module):
     assert callable(functions["enrich_state"])
 
 
-def test_builtins_are_never_shadowed(functions_module):
-    functions: dict = {**DEFAULT_FUNCTION_REGISTRY}
-    registered = load_custom_functions(str(functions_module), functions=functions)
+def test_builtins_are_never_shadowed_even_with_empty_seed(functions_module):
+    """H02: the shadow guard is in load_custom_functions itself."""
+    registered = load_custom_functions(str(functions_module), functions={})
 
-    # route_dispatch collides with a built-in: skipped, never overridden.
     assert "route_dispatch" not in registered
-    assert functions["route_dispatch"] is DEFAULT_FUNCTION_REGISTRY["route_dispatch"]
+    assert "enrich_state" in registered
+
+
+def test_plan_execute_is_reserved(functions_module, tmp_path):
+    """H01: plan_execute can't be overridden by a custom module."""
+    source = 'def plan_execute(ctx, node_input=None): pass\nFUNCTIONS = {"plan_execute": plan_execute}\n'
+    module_file = tmp_path / "plan_override.py"
+    module_file.write_text(source, encoding="utf-8")
+    registered = load_custom_functions(str(module_file), functions={})
+
+    assert "plan_execute" not in registered
+    assert "plan_execute" in _RESERVED_FUNCTION_NAMES
 
 
 def test_production_requires_allowlist(monkeypatch, tmp_path, functions_module):
@@ -150,13 +166,24 @@ def test_production_requires_allowlist(monkeypatch, tmp_path, functions_module):
         load_custom_functions(str(functions_module), functions={})
 
     monkeypatch.setenv(CUSTOM_FUNCTION_ALLOWLIST_ENV, str(tmp_path))
-    # Loaded into an empty registry there are no collisions, so both names
-    # (including the shadow attempt) land; builtin protection happens in
-    # custom_function_registry(), which seeds the built-ins first.
     assert load_custom_functions(str(functions_module), functions={}) == [
         "enrich_state",
-        "route_dispatch",
     ]
+
+
+def test_unrecognized_deployment_env_requires_allowlist(
+    monkeypatch, tmp_path, functions_module
+):
+    """H09: fail closed on unrecognized DEPLOYMENT_ENV values."""
+    monkeypatch.delenv(CUSTOM_FUNCTION_ALLOWLIST_ENV, raising=False)
+    monkeypatch.setenv("DEPLOYMENT_ENV", "prod-us")
+
+    with pytest.raises(ValueError, match=CUSTOM_FUNCTION_ALLOWLIST_ENV):
+        load_custom_functions(str(functions_module), functions={})
+
+    # Known non-production values still skip the allowlist.
+    monkeypatch.setenv("DEPLOYMENT_ENV", "docker-compose")
+    assert "enrich_state" in load_custom_functions(str(functions_module), functions={})
 
 
 def test_missing_functions_dict_is_rejected(tmp_path):
@@ -173,11 +200,45 @@ def test_non_callable_entry_is_rejected(tmp_path):
         load_custom_functions(str(module_file), functions={})
 
 
+def test_broken_module_does_not_crash_unused_preset(monkeypatch, tmp_path):
+    """H03: a bad AGENT_FUNCTION_MODULE warns but doesn't crash presets."""
+    bad_module = tmp_path / "broken.py"
+    bad_module.write_text("raise RuntimeError('boom')\n", encoding="utf-8")
+    monkeypatch.setenv(CUSTOM_FUNCTION_MODULE_ENV, str(bad_module))
+
+    registry = custom_function_registry()
+    assert registry == DEFAULT_FUNCTION_REGISTRY
+
+
+def test_sys_modules_cleaned_on_import_failure(monkeypatch, tmp_path):
+    """H08: a broken module leaves no sys.modules entry behind."""
+    bad_module = tmp_path / "broken_import.py"
+    bad_module.write_text("raise ImportError('test failure')\n", encoding="utf-8")
+
+    # Compute the expected module name (same uuid5 logic as the loader).
+    import uuid
+    from pathlib import Path
+
+    resolved = Path(str(bad_module)).expanduser().resolve()
+    expected_name = (
+        f"custom_graph_functions_{uuid.uuid5(uuid.NAMESPACE_URL, str(resolved)).hex}"
+    )
+
+    before = set(sys.modules)
+    with pytest.raises(ImportError, match="test failure"):
+        load_custom_functions(str(bad_module), functions={})
+    after_new = set(sys.modules) - before
+
+    assert expected_name not in after_new, (
+        f"broken module left {expected_name!r} in sys.modules"
+    )
+
+
 def test_served_graph_resolves_custom_function_node(
-    tmp_path, monkeypatch, functions_module
+    tmp_path, monkeypatch, functions_module, write_config
 ):
     """A non-built-in options.function name compiles through the served root."""
-    _write_config(tmp_path, monkeypatch, GRAPH_WITH_CUSTOM_FUNCTION_YAML)
+    write_config(GRAPH_WITH_CUSTOM_FUNCTION_YAML)
     monkeypatch.setenv(CUSTOM_FUNCTION_MODULE_ENV, str(functions_module))
 
     config = resolve_agent_config()
@@ -185,14 +246,12 @@ def test_served_graph_resolves_custom_function_node(
 
     assert isinstance(root, Workflow)
     enrich = next(n for n in root.graph.nodes if n.name == "enrich")
-    # exec() of the same source yields different function objects than the
-    # loader's own module execution, so compare provenance instead of identity.
     assert enrich._func.__name__ == "enrich_state"
     assert enrich._func.__module__.startswith("custom_graph_functions_")
 
 
 def test_served_graph_runs_custom_function_end_to_end(
-    tmp_path, monkeypatch, functions_module, fake_model
+    tmp_path, monkeypatch, functions_module, fake_model, write_config
 ):
     """The custom function executes inside the served workflow and writes state."""
 
@@ -217,7 +276,7 @@ def test_served_graph_runs_custom_function_end_to_end(
             )
         ]
 
-    _write_config(tmp_path, monkeypatch, GRAPH_WITH_CUSTOM_FUNCTION_YAML)
+    write_config(GRAPH_WITH_CUSTOM_FUNCTION_YAML)
     monkeypatch.setenv(CUSTOM_FUNCTION_MODULE_ENV, str(functions_module))
     config = resolve_agent_config()
 
@@ -228,8 +287,6 @@ def test_served_graph_runs_custom_function_end_to_end(
         if event.actions and event.actions.state_delta:
             state.update(event.actions.state_delta)
 
-    # FunctionNodes don't emit author events; the state delta proves the
-    # custom function executed between the two LLM nodes.
     assert {"intake", "finalize"} <= authors
     assert state["enriched"] == "enriched:deterministic response 1"
     assert state["last_response"] == "deterministic response 2"
@@ -237,7 +294,14 @@ def test_served_graph_runs_custom_function_end_to_end(
 
 def test_no_env_var_leaves_only_builtins(monkeypatch):
     monkeypatch.delenv(CUSTOM_FUNCTION_MODULE_ENV, raising=False)
-
-    from basic_agent.compile.functions import custom_function_registry
-
     assert custom_function_registry() == DEFAULT_FUNCTION_REGISTRY
+
+
+def test_memoized_registry_returns_same_objects(monkeypatch, functions_module):
+    """H06: two calls return the same function objects (identity-equal)."""
+    monkeypatch.setenv(CUSTOM_FUNCTION_MODULE_ENV, str(functions_module))
+    reg1 = custom_function_registry()
+    reg2 = custom_function_registry()
+
+    assert reg1 is reg2
+    assert reg1["enrich_state"] is reg2["enrich_state"]

@@ -2,6 +2,33 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-24 — Post-merge review hardening (H01–H15)
+
+All 15 findings from a code review of the G01/G02 commit (`a3c20e5`)
+closed in a single wave:
+
+- **Security hardening**: H02 (shadow guard in `load_custom_functions`
+  itself — built-in names can never be shadowed regardless of caller's
+  seed dict), H03 (bad `AGENT_FUNCTION_MODULE` warns instead of crashing
+  presets that don't use custom functions), H04 (whitespace-padded
+  allowlist entries stripped before `Path` construction), H08 (`sys.modules`
+  cleaned on partial import failure), H09 (unrecognized `DEPLOYMENT_ENV`
+  values require allowlist — fail closed), H10 (case-insensitive path
+  containment via `os.path.samefile` on macOS).
+- **Correctness**: H01 (`plan_execute` reserved in
+  `_RESERVED_FUNCTION_NAMES` — custom modules can't silently shadow the
+  hardcoded dynamic-planner branch), H07 (collision-skip log message now
+  names the real conflicting source).
+- **Performance**: H06 (`custom_function_registry()` memoized per process).
+- **Dedupe**: H05 (`use_cases/registry.py` migrated to
+  `util.resolve_allowlisted_file` — no independent copy remains).
+- **Code quality**: H14 (needless `_custom_function_registry` wrapper
+  removed from `agent.py`), H15 (shared `write_config` fixture in
+  `conftest.py`).
+- **Documentation**: H11 (ADR-005 addendum corrected function name),
+  H12 (ARCHITECTURE.md `util.py` row updated), H13 (README.md documents
+  `AGENT_FUNCTION_MODULE` env vars).
+
 ## 2026-08-23 — Custom graph-function extension point + module-map drift guard (G01, G02)
 
 - **G01 — `AGENT_FUNCTION_MODULE` extension point**: `compile/functions.py`

@@ -13,6 +13,13 @@ _PRODUCTION_DEPLOYMENTS = frozenset(
     {"prod", "production", "staging", "cloud-run", "cloudrun"}
 )
 
+#: Explicitly non-production deployments that skip the allowlist requirement.
+#: Any ``DEPLOYMENT_ENV`` value not in this set requires an allowlist (H09:
+#: fail closed on unrecognized values).
+_NON_PRODUCTION_DEPLOYMENTS = frozenset(
+    {"docker-compose", "dev", "development", "test", "local"}
+)
+
 
 def is_production(deployment: str) -> bool:
     """Return ``True`` when ``deployment`` names a production-like environment.
@@ -22,6 +29,29 @@ def is_production(deployment: str) -> bool:
     enforce allowlist requirements.
     """
     return deployment.lower() in _PRODUCTION_DEPLOYMENTS
+
+
+def _is_within_root(candidate: Path, root: Path) -> bool:
+    """Check if *candidate* is the same path as *root* or a descendant.
+
+    Uses ``os.path.samefile`` so the comparison is correct on
+    case-insensitive filesystems (macOS APFS) where pure ``Path`` equality
+    would fail for paths differing only in case (H10).
+    """
+    try:
+        if os.path.samefile(candidate, root):
+            return True
+    except (OSError, ValueError):
+        if candidate == root:
+            return True
+    for parent in candidate.parents:
+        try:
+            if os.path.samefile(parent, root):
+                return True
+        except (OSError, ValueError):
+            if parent == root:
+                return True
+    return False
 
 
 def resolve_allowlisted_file(module_path: str, allowlist_env: str, noun: str) -> Path:
@@ -50,17 +80,19 @@ def resolve_allowlisted_file(module_path: str, allowlist_env: str, noun: str) ->
     if not candidate.is_file():
         raise OSError(f"Custom {noun} module does not exist: {candidate}")
     allowed_roots = tuple(
-        Path(value).expanduser().resolve()
+        Path(value.strip()).expanduser().resolve()
         for value in os.environ.get(allowlist_env, "").split(os.pathsep)
         if value.strip()
     )
     deployment = os.environ.get("DEPLOYMENT_ENV", "docker-compose")
-    if is_production(deployment) and not allowed_roots:
+    # H09: fail closed — only explicitly non-production deployments skip the
+    # allowlist requirement; unrecognized values require one.
+    if deployment.lower() not in _NON_PRODUCTION_DEPLOYMENTS and not allowed_roots:
         raise ValueError(
             f"{allowlist_env} is required before loading custom {noun} in {deployment}"
         )
     if allowed_roots and not any(
-        candidate == root or root in candidate.parents for root in allowed_roots
+        _is_within_root(candidate, root) for root in allowed_roots
     ):
         raise ValueError(
             f"Custom {noun} module {candidate} is outside the configured "

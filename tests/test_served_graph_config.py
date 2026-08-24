@@ -152,15 +152,9 @@ def fake_model(monkeypatch):
     return model
 
 
-def _write_config(tmp_path, monkeypatch, content: str):
-    config_file = tmp_path / "agent.yaml"
-    config_file.write_text(content, encoding="utf-8")
-    monkeypatch.setenv("AGENT_CONFIG_FILE", str(config_file))
-
-
-def test_graph_config_compiles_to_the_served_root(tmp_path, monkeypatch):
+def test_graph_config_compiles_to_the_served_root(tmp_path, monkeypatch, write_config):
     """A YAML graph: block replaces the preset root entirely."""
-    _write_config(tmp_path, monkeypatch, GRAPH_CHAIN_YAML)
+    write_config(GRAPH_CHAIN_YAML)
 
     config = resolve_agent_config()
     root = agent_module._build_root_agent(config, "yaml")
@@ -174,7 +168,9 @@ def test_graph_config_compiles_to_the_served_root(tmp_path, monkeypatch):
     assert agent_module._resolved_runtime_snapshot["use_case"] == "graph"
 
 
-def test_served_graph_root_runs_end_to_end(tmp_path, monkeypatch, fake_model):
+def test_served_graph_root_runs_end_to_end(
+    tmp_path, monkeypatch, fake_model, write_config
+):
     """The graph-config root is runnable, not just structurally present."""
 
     async def _run():
@@ -198,7 +194,7 @@ def test_served_graph_root_runs_end_to_end(tmp_path, monkeypatch, fake_model):
             )
         ]
 
-    _write_config(tmp_path, monkeypatch, GRAPH_CHAIN_YAML)
+    write_config(GRAPH_CHAIN_YAML)
     config = resolve_agent_config()
 
     events = asyncio.run(_run())
@@ -213,9 +209,11 @@ def test_served_graph_root_runs_end_to_end(tmp_path, monkeypatch, fake_model):
     assert state["last_response"] == "deterministic response 2"
 
 
-def test_synthesis_policy_appends_synthesizer_to_served_root(tmp_path, monkeypatch):
+def test_synthesis_policy_appends_synthesizer_to_served_root(
+    tmp_path, monkeypatch, write_config
+):
     """policies.synthesis transforms the configured graph spec pre-compile."""
-    _write_config(tmp_path, monkeypatch, GRAPH_FANOUT_SYNTHESIS_YAML)
+    write_config(GRAPH_FANOUT_SYNTHESIS_YAML)
 
     config = resolve_agent_config()
     root = agent_module._build_root_agent(config, "yaml")
@@ -235,9 +233,11 @@ def test_synthesis_policy_appends_synthesizer_to_served_root(tmp_path, monkeypat
     assert "Aggregate the takes." in synth.instruction
 
 
-def test_approval_policy_wires_veto_onto_served_graph_root(tmp_path, monkeypatch):
+def test_approval_policy_wires_veto_onto_served_graph_root(
+    tmp_path, monkeypatch, write_config
+):
     """policies.approval chains a gating callback onto the compiled nodes."""
-    _write_config(tmp_path, monkeypatch, GRAPH_APPROVAL_YAML)
+    write_config(GRAPH_APPROVAL_YAML)
 
     config = resolve_agent_config()
     root = agent_module._build_root_agent(config, "yaml")
@@ -266,9 +266,11 @@ def test_approval_policy_wires_veto_onto_served_graph_root(tmp_path, monkeypatch
     assert node.before_tool_callback(passthrough, {}, ctx) is None
 
 
-def test_approval_policy_also_applies_to_preset_fallback_root(tmp_path, monkeypatch):
+def test_approval_policy_also_applies_to_preset_fallback_root(
+    tmp_path, monkeypatch, write_config
+):
     """The approval policy is topology-independent: preset roots get it too."""
-    _write_config(tmp_path, monkeypatch, PRESET_APPROVAL_YAML)
+    write_config(PRESET_APPROVAL_YAML)
 
     config = resolve_agent_config()
     root = agent_module._build_root_agent(config, "yaml")
@@ -284,9 +286,9 @@ def test_approval_policy_also_applies_to_preset_fallback_root(tmp_path, monkeypa
     assert result is not None and result["status"] == "blocked"
 
 
-def test_preset_fallback_when_no_graph_configured(tmp_path, monkeypatch):
+def test_preset_fallback_when_no_graph_configured(tmp_path, monkeypatch, write_config):
     """Without a graph: block the preset path is unchanged."""
-    _write_config(tmp_path, monkeypatch, PRESET_FALLBACK_YAML)
+    write_config(PRESET_FALLBACK_YAML)
 
     config = resolve_agent_config()
     root = agent_module._build_root_agent(config, "yaml")

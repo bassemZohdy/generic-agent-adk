@@ -418,13 +418,6 @@ def _build_runtime_context(config: AgentConfig) -> RuntimeContext:
     )
 
 
-def _custom_function_registry() -> dict[str, Any]:
-    """Custom graph functions (G01) merged over the built-in registry."""
-    from .compile.functions import custom_function_registry
-
-    return custom_function_registry()
-
-
 def _build_graph_root(
     config: AgentConfig, runtime: RuntimeContext, source: str
 ) -> BaseAgent | Workflow:
@@ -446,13 +439,15 @@ def _build_graph_root(
             ),
         )
         logger.info("synthesis policy applied to the configured graph")
+    from .compile.functions import custom_function_registry
+
     root = compile_graph(
         spec,
         runtime,
         name="graph_agent",
         config=config,
         known_tools=set(_KNOWN_TOOLS),
-        function_registry=_custom_function_registry(),
+        function_registry=custom_function_registry(),
     )
     logger.info(
         "serving configured graph (%d nodes, source: %s)", len(spec.nodes), source

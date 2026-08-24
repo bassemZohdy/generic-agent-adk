@@ -56,3 +56,15 @@ def settings_patch(monkeypatch):
         return updated
 
     return patch
+
+
+@pytest.fixture
+def write_config(tmp_path, monkeypatch):
+    """Write a YAML config file and set AGENT_CONFIG_FILE (H15: shared helper)."""
+
+    def _write(content: str):
+        config_file = tmp_path / "agent.yaml"
+        config_file.write_text(content, encoding="utf-8")
+        monkeypatch.setenv("AGENT_CONFIG_FILE", str(config_file))
+
+    return _write

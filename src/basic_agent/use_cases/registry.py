@@ -8,10 +8,9 @@ import logging
 import os
 import sys
 import uuid
-from pathlib import Path
 
 from ..presets import PRESETS, Preset
-from ..util import is_production
+from ..util import resolve_allowlisted_file
 
 logger = logging.getLogger(__name__)
 
@@ -157,27 +156,9 @@ def load_custom_use_cases(
             without an allowlist, or outside the allowlist.
         Exception: Import errors propagate (nothing is swallowed).
     """
-    candidate = Path(module_path).expanduser().resolve()
-    if not candidate.is_file():
-        raise OSError(f"Custom use-case module does not exist: {candidate}")
-    allowed_roots = tuple(
-        Path(value).expanduser().resolve()
-        for value in os.environ.get(CUSTOM_MODULE_ALLOWLIST_ENV, "").split(os.pathsep)
-        if value.strip()
+    candidate = resolve_allowlisted_file(
+        module_path, CUSTOM_MODULE_ALLOWLIST_ENV, "use-case"
     )
-    deployment = os.environ.get("DEPLOYMENT_ENV", "docker-compose")
-    if is_production(deployment) and not allowed_roots:
-        raise ValueError(
-            f"{CUSTOM_MODULE_ALLOWLIST_ENV} is required before loading custom use cases in "
-            f"{deployment}"
-        )
-    if allowed_roots and not any(
-        candidate == root or root in candidate.parents for root in allowed_roots
-    ):
-        raise ValueError(
-            f"Custom use-case module {candidate} is outside the configured "
-            f"{CUSTOM_MODULE_ALLOWLIST_ENV}"
-        )
 
     registry = registry if registry is not None else get_default_registry()
     module_uuid = uuid.uuid5(uuid.NAMESPACE_URL, str(candidate)).hex
@@ -187,7 +168,11 @@ def load_custom_use_cases(
         raise ValueError(f"Cannot load use-case module from {module_path!r}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
 
     presets: dict[str, Preset] | None = getattr(module, "PRESETS", None)
     if presets is None and isinstance(getattr(module, "PRESET", None), Preset):

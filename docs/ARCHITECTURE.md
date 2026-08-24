@@ -59,7 +59,7 @@ Google ADK Workflow (BaseNode tree)
 | `execution/` | Code-execution sandbox resolution (ADR-004). `resolver.py`: provider specs, `resolve_code_executor()`, `CE_FIELD_ENV_MAP`, hardened Docker executor factory. |
 | `tools.py` | Tool building factories (`build_tool`, MCP/OpenAPI/Skill/ApplicationIntegration toolsets) and the before/after-tool audit callbacks. |
 | `knowledge.py` | Knowledge file caching and `retrieve_knowledge` tool function. |
-| `util.py` | Import-cycle-free shared utilities: `is_production()`, `split_csv()`. Zero imports from the rest of the package. |
+| `util.py` | Import-cycle-free shared utilities: `is_production()`, `split_csv()`, `resolve_allowlisted_file()` (shared allowlist/production gate for custom-module loaders). Zero imports from the rest of the package. |
 | `models.py` | `resolve_model()`: bare string → native Gemini; `provider: litellm` with a `provider/model` name (or a provider-prefixed name) → ADK's `LiteLlm` instance. |
 | `autoconfig.py` | Ambient capability discovery (`discover_capabilities()`). Source of `ProviderConfigurationError`. |
 | `runtime.py` | Framework-neutral `RoleConfig`/`RuntimeContext` data contracts shared by the compile and preset layers (formerly `strategies/base.py`; imports no ADK composition classes). |

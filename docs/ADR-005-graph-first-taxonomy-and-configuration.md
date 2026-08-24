@@ -189,7 +189,7 @@ Phase E–F cleanup.
 ## Addendum (2026-08-23, G01): custom graph-function extension point
 
 The original ADR noted that `compile_graph` accepts a `function_registry`
-parameter but neither call site (`agent._build_root_graph`, `Preset.build`)
+parameter but neither call site (`agent._build_graph_root`, `Preset.build`)
 ever passes one, making `options.function` nodes resolvable only against the
 fixed built-in set (`route_dispatch`, `aggregate_perspectives`, …).  This
 was the one concrete gap where "generic, flexible configuration" stopped

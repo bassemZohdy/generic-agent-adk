@@ -13,6 +13,12 @@ os.environ["TMP"] = str(_LOCAL_TMP)
 os.environ["TEMP"] = str(_LOCAL_TMP)
 os.environ["TMPDIR"] = str(_LOCAL_TMP)
 
+# H16: set a non-production DEPLOYMENT_ENV at process level so module-level
+# _production = is_production(os.environ.get("DEPLOYMENT_ENV")) computations
+# in interfaces/ and auth/ see a safe value at import time.  Tests that need
+# a different value override it via monkeypatch.setenv within the test.
+os.environ.setdefault("DEPLOYMENT_ENV", "docker-compose")
+
 # R05: no tmp_path/tmpdir overrides.  pytest's own basetemp hierarchy (kept
 # under .pytest_working_dir once tempfile.tempdir is set) is managed with the
 # default `tmp_path_retention_count` policy; rmtree-ing per-test dirs here

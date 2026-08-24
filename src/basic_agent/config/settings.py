@@ -64,7 +64,7 @@ def _float(name: str, default: float, *, minimum: float = 0.0) -> float:
 class Settings:
     app_name: str
     app_version: str
-    deployment: str
+    deployment: str | None
     model: str
     live_model: str
     service_api_url: str
@@ -126,9 +126,11 @@ class Settings:
 
 def load_settings() -> Settings:
     app_name = _env("APP_NAME", "basic_agent")
-    deployment = _env("DEPLOYMENT_ENV", "docker-compose")
+    deployment = os.environ.get("DEPLOYMENT_ENV")
     issuer = _env("KEYCLOAK_ISSUER")
     auth_disabled = _bool("AUTH_DISABLED")
+    # H16: use the raw env var (None when unset) so unset DEPLOYMENT_ENV is
+    # treated as production (fail closed), matching resolve_allowlisted_file().
     if is_production(deployment):
         if auth_disabled:
             raise ValueError(

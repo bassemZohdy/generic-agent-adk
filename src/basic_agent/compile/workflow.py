@@ -259,9 +259,10 @@ def _resolve_function(
         return func
     # H17: surface the original module-load error when a custom function
     # name is unresolvable because AGENT_FUNCTION_MODULE failed to load.
+    # H18: pass the registry dict so the error is scoped to this call.
     from .functions import check_custom_function_error
 
-    check_custom_function_error(key or "")
+    check_custom_function_error(key or "", functions)
     raise ValueError(
         f"function node {node.name!r} requires options.function (an entry in "
         "the function registry) or options.kind='loop_counter'"

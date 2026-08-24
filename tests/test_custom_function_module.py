@@ -214,9 +214,28 @@ def test_broken_module_surfaces_error_for_custom_function(monkeypatch, tmp_path)
     bad_module.write_text("raise RuntimeError('module is broken')\n", encoding="utf-8")
     monkeypatch.setenv(CUSTOM_FUNCTION_MODULE_ENV, str(bad_module))
 
-    custom_function_registry()
+    registry = custom_function_registry()
     with pytest.raises(ValueError, match="failed to load"):
-        check_custom_function_error("my_custom_fn")
+        check_custom_function_error("my_custom_fn", registry)
+
+
+def test_unrelated_compile_unaffected_by_prior_broken_load(monkeypatch, tmp_path):
+    """H18: a broken module's error doesn't leak into unrelated registries."""
+    bad_module = tmp_path / "broken_leak.py"
+    bad_module.write_text("raise RuntimeError('leak test')\n", encoding="utf-8")
+    monkeypatch.setenv(CUSTOM_FUNCTION_MODULE_ENV, str(bad_module))
+
+    # First call: broken module attaches _load_error to this registry.
+    broken_registry = custom_function_registry()
+    assert getattr(broken_registry, "_load_error", None) is not None
+
+    # Second call: no AGENT_FUNCTION_MODULE → clean registry, no error.
+    monkeypatch.delenv(CUSTOM_FUNCTION_MODULE_ENV, raising=False)
+    clean_registry = custom_function_registry()
+    assert getattr(clean_registry, "_load_error", None) is None
+
+    # check_custom_function_error on the clean registry does NOT raise.
+    check_custom_function_error("any_function", clean_registry)
 
 
 def test_sys_modules_cleaned_on_import_failure(monkeypatch, tmp_path):

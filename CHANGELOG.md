@@ -2,6 +2,18 @@
 
 All notable changes to this project are recorded here, newest first.
 
+## 2026-08-24 — Verification review hardening (H16, H18)
+
+- **H16**: `Settings.deployment` changed to `str | None`; `load_settings()`
+  uses `os.environ.get("DEPLOYMENT_ENV")` (None when unset) instead of
+  defaulting to `"docker-compose"`. `is_production(None)` returns True
+  (fail closed). All callers using `settings.deployment` now agree with
+  `resolve_allowlisted_file()` on the unset case.
+- **H18**: `_last_load_error` module global replaced with `_FunctionRegistry`
+  dict subclass carrying `_load_error` as an instance attribute.
+  `check_custom_function_error()` reads from the registry dict passed by
+  `_resolve_function`, so unrelated `compile_graph()` calls are unaffected.
+
 ## 2026-08-24 — Verification review hardening (H06, H07, H09, H16, H17)
 
 5 findings from a verification review of the H01–H15 fix commit:

@@ -9,12 +9,12 @@ Last audited: **2026-08-24** — backlog empty. All work streams closed on
 that date: the workflow re-architecture program (Phases A–F, ADR-005
 Implemented), the deep code review (R01–R15), the CI smoke-assertion
 fix (C01), the doc/architecture-accuracy findings (G01, G02), and the
-post-merge review findings (H01–H17).
+post-merge review findings (H01–H18).
 
 ## Verification baseline
 
-- Local suite: **475 passed**, **90.41% coverage** (90% minimum) —
-  2026-08-24 post-H06/H07/H09/H16/H17 run.
+- Local suite: **476 passed**, **90.41% coverage** (90% minimum) —
+  2026-08-24 post-H16/H18 run.
 - Local checks passed: locked dependency validation, Ruff (check + format),
   targeted Pyright (config + agent.py), ADK contract guards, SHA-pinned
   workflow validation, package build, YAML and JSON parsing, Markdown
@@ -126,14 +126,41 @@ None — the backlog is empty. Add new findings/tasks above this line with
 the established format (problem → fix → done-when), ranked most severe
 first.
 
+### H16, H18 — verification review findings (all closed 2026-08-24)
+
+- **H16** — `Settings.deployment` changed to `str | None`; `load_settings()`
+  uses `os.environ.get("DEPLOYMENT_ENV")` (None when unset) instead of
+  defaulting to `"docker-compose"`. `is_production(None)` returns True
+  (fail closed). All callers using `settings.deployment` now agree with
+  `resolve_allowlisted_file()` on the unset case.
+- **H18** — `_last_load_error` module global replaced with `_FunctionRegistry`
+  dict subclass carrying `_load_error` as an instance attribute.
+  `check_custom_function_error()` reads from the registry dict passed by
+  `_resolve_function`, so unrelated `compile_graph()` calls are unaffected.
+  Test: `test_unrelated_compile_unaffected_by_prior_broken_load`.
+
+Suite: 476 passed, ruff check+format clean, ADK assumptions green.
+
 ## History
 
-- **2026-08-24 verification review findings (H06, H07, H09, H16, H17)**
-  — all 5 closed: H06 (memoization removed — registry reads env every
-  call), H07 (collision log tracks source origin), H09 (unset
-  DEPLOYMENT_ENV requires allowlist), H16 (is_production unified with
-  allowlist logic), H17 (load errors surfaced for graphs that need custom
-  functions). Suite 475 passed.
+- **2026-08-24 verification review findings (H16, H18)** — both closed:
+  H16 (Settings.deployment now None when unset, is_production(None) → True),
+  H18 (_FunctionRegistry dict subclass scopes _load_error per call).
+  Suite 476 passed.
+- **2026-08-24 verification review of the H06/H07/H09/H16/H17 fix commit
+  (`154731f`)** — checked each fix against its original failure scenario.
+  **H06, H07, H09, H17 genuinely closed** (H07 has a minor residual gap
+  in an unreachable-in-production code path, not filed). **H16 reopened,
+  narrowed**: unified for explicit unrecognized `DEPLOYMENT_ENV` values,
+  but the unset case still splits from the allowlist check via
+  `config/settings.py`'s pre-defaulting. **H18 filed**: the H17 fix's new
+  `_last_load_error` module global leaks across unrelated
+  `compile_graph()` calls — confirmed with an actual failing pytest run.
+  See "Remaining work" for the reopened/new items. Suite 475 passed
+  otherwise.
+- **2026-08-24 verification review findings (H06, H07, H09, H16, H17)
+  filed** — 5 findings from a verification review of commit `91ff930`;
+  see the verification entry above for actual closure status.
 - **2026-08-24 post-merge review findings (H01–H15) filed** — 15 findings
   from a code review of the G01/G02 commit (`a3c20e5`); see the
   verification entry above for actual closure status.

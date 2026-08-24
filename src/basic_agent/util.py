@@ -18,16 +18,18 @@ _NON_PRODUCTION_DEPLOYMENTS = frozenset(
 )
 
 
-def is_production(deployment: str) -> bool:
+def is_production(deployment: str | None) -> bool:
     """Return ``True`` when *deployment* is NOT explicitly non-production.
 
     Fail closed: only deployments in :data:`_NON_PRODUCTION_DEPLOYMENTS`
-    are exempt; unrecognized values (e.g. ``prod-us``) are treated as
-    production (H16).
+    are exempt; unrecognized values (e.g. ``prod-us``) and ``None`` (unset
+    ``DEPLOYMENT_ENV``) are treated as production (H09, H16).
 
     Used by every interface adapter (REST, Live, auth-gateway, service-api)
     and the custom-module allowlist gate.
     """
+    if deployment is None:
+        return True
     return deployment.lower() not in _NON_PRODUCTION_DEPLOYMENTS
 
 

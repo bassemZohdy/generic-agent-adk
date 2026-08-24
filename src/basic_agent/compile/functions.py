@@ -31,10 +31,11 @@ CUSTOM_FUNCTION_ALLOWLIST_ENV = "AGENT_FUNCTION_MODULE_ALLOWLIST"
 #: by a hardcoded branch in ``_resolve_function`` — H01).
 _RESERVED_FUNCTION_NAMES = frozenset({"plan_execute"})
 
-#: Last load error from :func:`custom_function_registry` (H17).  Surfaced
-#: by :func:`check_custom_function_error` when a graph references a custom
-#: function whose module failed to import.
-_last_load_error: Exception | None = None
+
+class _FunctionRegistry(dict):
+    """Dict subclass that can carry a load-error attribute (H18)."""
+
+    _load_error: Exception | None = None
 
 
 def load_custom_functions(
@@ -157,20 +158,22 @@ def custom_function_registry() -> dict[str, Callable[..., Any]]:
 
     Returns:
         Registry suitable for :func:`compile_graph`'s ``function_registry``.
+        If the module failed to load, the error is attached as
+        ``_load_error`` attribute on the returned dict (H18: scoped to the
+        call, not a module global).
     """
-    global _last_load_error
-
     from .workflow import DEFAULT_FUNCTION_REGISTRY
 
-    functions: dict[str, Callable[..., Any]] = {**DEFAULT_FUNCTION_REGISTRY}
+    functions: dict[str, Callable[..., Any]] = _FunctionRegistry(
+        DEFAULT_FUNCTION_REGISTRY
+    )
     sources: dict[str, str] = {name: "built-in" for name in DEFAULT_FUNCTION_REGISTRY}
-    _last_load_error = None
     module_path = os.environ.get(CUSTOM_FUNCTION_MODULE_ENV)
     if module_path:
         try:
             load_custom_functions(module_path, functions=functions, sources=sources)
         except Exception as exc:
-            _last_load_error = exc
+            functions._load_error = exc
             logger.warning(
                 "Failed to load custom graph-function module %r; "
                 "serving built-in functions only",
@@ -180,21 +183,28 @@ def custom_function_registry() -> dict[str, Callable[..., Any]]:
     return functions
 
 
-def check_custom_function_error(name: str) -> None:
+def check_custom_function_error(
+    name: str, registry: dict[str, Callable[..., Any]]
+) -> None:
     """Re-raise the module load error if *name* is an unresolvable custom function (H17).
 
     Called by :func:`compile.workflow._resolve_function` when a function name
     is not found in the registry.  If the module failed to load and the name
     is not a built-in, the original actionable error is raised instead of the
     generic "requires options.function" message.
+
+    H18: the error is read from the *registry* dict's ``_load_error``
+    attribute (set by :func:`custom_function_registry`), not a module
+    global, so unrelated ``compile_graph()`` calls are unaffected.
     """
     from .workflow import DEFAULT_FUNCTION_REGISTRY
 
-    if _last_load_error is not None and name not in DEFAULT_FUNCTION_REGISTRY:
+    load_error = getattr(registry, "_load_error", None)
+    if load_error is not None and name not in DEFAULT_FUNCTION_REGISTRY:
         raise ValueError(
             f"Custom graph function {name!r} is unavailable because "
             f"{CUSTOM_FUNCTION_MODULE_ENV} failed to load; see log for details"
-        ) from _last_load_error
+        ) from load_error
 
 
 __all__ = [

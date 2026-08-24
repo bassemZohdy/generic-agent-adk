@@ -13,7 +13,7 @@ post-merge review findings (H01–H17).
 
 ## Verification baseline
 
-- Local suite: **475 passed**, **94.17% coverage** (90% minimum) —
+- Local suite: **475 passed**, **90.41% coverage** (90% minimum) —
   2026-08-24 post-H06/H07/H09/H16/H17 run.
 - Local checks passed: locked dependency validation, Ruff (check + format),
   targeted Pyright (config + agent.py), ADK contract guards, SHA-pinned
@@ -125,31 +125,6 @@ lives in git history (each closure was committed with its findings text).
 None — the backlog is empty. Add new findings/tasks above this line with
 the established format (problem → fix → done-when), ranked most severe
 first.
-
-### H06, H07, H09, H16, H17 — verification review findings (all closed 2026-08-24)
-
-- **H06** — memoization removed from `custom_function_registry()`; it now
-  reads `AGENT_FUNCTION_MODULE` on every call. The `get_root_agent()`
-  singleton already ensures at most one build per process. Test:
-  `test_registry_reads_env_on_every_call`.
-- **H07** — `load_custom_functions` now accepts a `sources` dict tracking
-  the origin of each registered name; collision-skip log messages name the
-  actual prior source (module path or "built-in").
-- **H09** — unset `DEPLOYMENT_ENV` now requires allowlist (fail closed);
-  `resolve_allowlisted_file` treats `None` the same as unrecognized values.
-  Test: `test_unrecognized_deployment_env_requires_allowlist` (covers both
-  unrecognized and unset). Conftest `_default_deployment_env` fixture sets
-  `docker-compose` for all tests.
-- **H16** — `is_production()` unified with allowlist logic: now returns
-  `True` for any deployment not in `_NON_PRODUCTION_DEPLOYMENTS` (including
-  unrecognized values like `prod-us`). `_PRODUCTION_DEPLOYMENTS` removed.
-- **H17** — `custom_function_registry()` stores the load error in
-  `_last_load_error`; `check_custom_function_error()` re-raises it when a
-  graph references an unresolvable custom function. Wired into
-  `_resolve_function` in `compile/workflow.py`. Test:
-  `test_broken_module_surfaces_error_for_custom_function`.
-
-Suite: 475 passed, ruff check+format clean, ADK assumptions green.
 
 ## History
 

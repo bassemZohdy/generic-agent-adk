@@ -1,5 +1,11 @@
 # Generic Agent Runtime
 
+> **Consolidation preparation:** the target for portable workflow behavior is
+> [Open Workflow Agent](https://github.com/bassemZohdy/open-workflow-agent).
+> Read the [migration gates and pinned source manifest](docs/migration/README.md)
+> before changing an installed client. This source is retained; no runtime
+> migration, package rename, image promotion or archival is complete.
+
 An AI agent that adapts to your needs. Choose what you want it to do, configure it with environment variables, and run it with one Docker command.
 
 [![Tests](https://img.shields.io/badge/tests-476%20passing-brightgreen)](./tests/)

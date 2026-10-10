@@ -23,5 +23,5 @@ jobs:
           echo "$RUNNER_TOOL_CACHE" >> "$GITHUB_PATH"
       - name: Verify pinned sandbox image, scan, and generate SBOM
         env:
-          SANDBOX_IMAGE: ${{ vars.SANDBOX_IMAGE_DIGEST || 'python:3.13-slim-bookworm@sha256:00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1' }}
+          SANDBOX_IMAGE: ${{ vars.SANDBOX_IMAGE_DIGEST || 'python:3.13-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641' }}
         run: sh scripts/verify-sandbox-image.sh "$SANDBOX_IMAGE"

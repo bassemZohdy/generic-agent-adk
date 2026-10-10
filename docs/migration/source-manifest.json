@@ -1,0 +1,995 @@
+{
+  "schema_version": 1,
+  "source_repository": "bassemZohdy/generic-agent-adk",
+  "source_revision": "9fb772d270f44bdf189e257fb912d798624ab629",
+  "source_file_count": 122,
+  "runtime_code_copied": false,
+  "license_grant_changed": false,
+  "archive_ready": false,
+  "canonical_workflow_baseline": {
+    "repository": "bassemZohdy/open-workflow-agent",
+    "revision": "15bcfba17b4327f927d0729c03c968718738f6db"
+  },
+  "canonical_management_baseline": {
+    "repository": "bassemZohdy/open-simple-agent",
+    "revision": "178039de5b4060d9a7a8b593fcbb479ee57eecb7"
+  },
+  "files": [
+    {
+      "path": ".dockerignore",
+      "git_blob": "5ca838b1a5b3073b2b3bf23926d8d0d754d8b367",
+      "git_mode": "100644",
+      "bytes": 74,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": ".env.example",
+      "git_blob": "9bfd2626c49b5c8b5fe26741e54cfba25b4b576b",
+      "git_mode": "100644",
+      "bytes": 6862,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": ".github/CI-CD-INTEGRATION.md",
+      "git_blob": "d0fed371c7d5edf8022db3706517c5c69653af1d",
+      "git_mode": "100644",
+      "bytes": 11697,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": ".github/PUBLISHING.md",
+      "git_blob": "fe8f6412e19e6ff138a9ff462945e9244f39d44d",
+      "git_mode": "100644",
+      "bytes": 8597,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "git_blob": "b777d0d958538e3d05c8eb3eec175b7d44033bc5",
+      "git_mode": "100644",
+      "bytes": 20360,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": ".github/workflows/verify-published-image.yml",
+      "git_blob": "22446f441451d815bccd4462ce0173b9d7e41243",
+      "git_mode": "100644",
+      "bytes": 2203,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": ".github/workflows/verify-sandbox-image.yml",
+      "git_blob": "886adffbc3052e5972018ee821158917ae263a1d",
+      "git_mode": "100644",
+      "bytes": 1020,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": ".gitignore",
+      "git_blob": "78b0f4a00344c7889bdd05b3a37fec57c01ba8e9",
+      "git_mode": "100644",
+      "bytes": 233,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "git_blob": "b8a004b15536798769c19686be37e046a167fee4",
+      "git_mode": "100644",
+      "bytes": 103,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "git_blob": "b60deb4b26e813304ac8fe95d35e00d270d25308",
+      "git_mode": "100644",
+      "bytes": 39768,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "Dockerfile",
+      "git_blob": "de088225ff35a8a6f564434a2edf952662a8a7db",
+      "git_mode": "100644",
+      "bytes": 2562,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "LICENSE",
+      "git_blob": "bd52dfd557e3f0923855884546d6c663a4b7707c",
+      "git_mode": "100644",
+      "bytes": 10169,
+      "category": "license/provenance",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "README.md",
+      "git_blob": "a60a82102aec7496769f2a9623ad7cc359cd85c1",
+      "git_mode": "100644",
+      "bytes": 15516,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "TODO.md",
+      "git_blob": "2c085b2addaca3dd29b95d8cb752260cea4b0f95",
+      "git_mode": "100644",
+      "bytes": 10540,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "deploy/cloudrun/README.md",
+      "git_blob": "39fd3af7b50c9aaca9db9c84f88ab22ce82f6569",
+      "git_mode": "100644",
+      "bytes": 1293,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "deploy/cloudrun/service.yaml",
+      "git_blob": "9841ec4bbb56cefff7697b8d7a949bdae2bc0fe9",
+      "git_mode": "100644",
+      "bytes": 2436,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docker-compose.yml",
+      "git_blob": "05a0e6e4950da3a8504104be360c0a570dfcc7c9",
+      "git_mode": "100644",
+      "bytes": 17661,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/ADK-UPGRADE-CHECKLIST.md",
+      "git_blob": "c71d7a007d5677136be4211048064eb6d611ea62",
+      "git_mode": "100644",
+      "bytes": 2319,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/ADR-001-generic-runtime-architecture.md",
+      "git_blob": "b6204cb533b21b42ed4df34f8cb4bd2abcd09675",
+      "git_mode": "100644",
+      "bytes": 2811,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/ADR-002-use-case-taxonomy.md",
+      "git_blob": "013add00e096f7bbd97ddcf2dac50c76ffcf3359",
+      "git_mode": "100644",
+      "bytes": 11064,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/ADR-003-adk-workflow-migration.md",
+      "git_blob": "32976e08f7d81c7b5812b8198c197f94301c2fd7",
+      "git_mode": "100644",
+      "bytes": 11138,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/ADR-004-pluggable-code-execution.md",
+      "git_blob": "b04fa168c8b2df937348b0414d4d4963d54d221a",
+      "git_mode": "100644",
+      "bytes": 32573,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/ADR-005-graph-first-taxonomy-and-configuration.md",
+      "git_blob": "5e77579e994646f014dc9c81a32537bd2af52efd",
+      "git_mode": "100644",
+      "bytes": 12400,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "git_blob": "6b1ac334d028be880f58d3aab4c24c57b06e5278",
+      "git_mode": "100644",
+      "bytes": 14297,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/CONFIGURATION.md",
+      "git_blob": "bb4630d2f62fe250cbc8b073d95a517cb8148edf",
+      "git_mode": "100644",
+      "bytes": 9736,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/PERSISTENCE.md",
+      "git_blob": "4f3985045954a32f45f5e26f3fe5031642679d38",
+      "git_mode": "100644",
+      "bytes": 3815,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/STAGING-VERIFICATION.md",
+      "git_blob": "f4558caddcd2e7fe895992999b284921b867be08",
+      "git_mode": "100644",
+      "bytes": 2903,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "docs/SUPPORT.md",
+      "git_blob": "9733799f6eb7f51264483133a7fd53613fba61b3",
+      "git_mode": "100644",
+      "bytes": 1038,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/approval-gate.yaml",
+      "git_blob": "22baa9ce728b644b861928ec4c849932e3216c15",
+      "git_mode": "100644",
+      "bytes": 712,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/assistant.yaml",
+      "git_blob": "ebb028c6c0b1bfba6db7f2ff6a7700da278c6f42",
+      "git_mode": "100644",
+      "bytes": 574,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/expert-dispatch.yaml",
+      "git_blob": "b99628f05de7f52149833745f3c724ed14615399",
+      "git_mode": "100644",
+      "bytes": 1076,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/graph-nested.yaml",
+      "git_blob": "7ea1a93bfc82af8764ecaba4184470ab859a4e83",
+      "git_mode": "100644",
+      "bytes": 1925,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/graph-routed.yaml",
+      "git_blob": "642677e330c120f33e03895b53e9efa273366bb3",
+      "git_mode": "100644",
+      "bytes": 1151,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/multi-perspective.yaml",
+      "git_blob": "9fde70c3c76af1a8fd40173085ac0b9a87eeff9e",
+      "git_mode": "100644",
+      "bytes": 700,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/pipeline.yaml",
+      "git_blob": "f233788defe71611ff1492758349edb05909d956",
+      "git_mode": "100644",
+      "bytes": 1009,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/plan-and-execute.yaml",
+      "git_blob": "b6d2dadd787d8446bce431909d551c115561a14d",
+      "git_mode": "100644",
+      "bytes": 641,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/refine-until-good.yaml",
+      "git_blob": "84bda533570a81b6757b0f483e74c391675e5c1d",
+      "git_mode": "100644",
+      "bytes": 711,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "examples/team-coordinator.yaml",
+      "git_blob": "1459e7256972368e1663b9543b056bb3a9f1c081",
+      "git_mode": "100644",
+      "bytes": 991,
+      "category": "example",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "keycloak/realm-basic-agent-dev.json",
+      "git_blob": "e38725e503f0d3c4af99450653d959a571a3d561",
+      "git_mode": "100644",
+      "bytes": 909,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "keycloak/realm-basic-agent.json",
+      "git_blob": "07864eaac9a74654b887de03d609a136220a9483",
+      "git_mode": "100644",
+      "bytes": 590,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "pyproject.toml",
+      "git_blob": "8b561379022219eb4a9d75494843ea18d1bf1225",
+      "git_mode": "100644",
+      "bytes": 3142,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "pyrightconfig.json",
+      "git_blob": "7818c23bdb7e23145e54ff2e789fd7a86f844344",
+      "git_mode": "100644",
+      "bytes": 152,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "scripts/check-adk-assumptions.py",
+      "git_blob": "692b7450d284414e47013d9ce1c363c34d00155b",
+      "git_mode": "100644",
+      "bytes": 4087,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "scripts/check-doc-links.py",
+      "git_blob": "d2595f3c99e3f4b42fcdecf45d500b654851eb1a",
+      "git_mode": "100644",
+      "bytes": 927,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "scripts/check-workflow-pins.py",
+      "git_blob": "cc56f9d50062ae2d7310fcbe659db933e10de241",
+      "git_mode": "100644",
+      "bytes": 1362,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "scripts/verify-image-dependencies.sh",
+      "git_blob": "8fc04a26e9d13bf63468885e835a48960467d2a2",
+      "git_mode": "100644",
+      "bytes": 1401,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "scripts/verify-sandbox-image.sh",
+      "git_blob": "b4470b8e48915ff00cddc3aef6b4690e5d9dcf82",
+      "git_mode": "100755",
+      "bytes": 1169,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "scripts/verify-sandbox-runtime.sh",
+      "git_blob": "f5c40bf12febc9085179b8a1eba7e03252229561",
+      "git_mode": "100755",
+      "bytes": 1866,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "skills/status-check/SKILL.md",
+      "git_blob": "cb0d8323375b576c91d78f663c77a052942a9364",
+      "git_mode": "100644",
+      "bytes": 633,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/__init__.py",
+      "git_blob": "a62e08d4420c45e63556a3d18d59083cf857aa57",
+      "git_mode": "100644",
+      "bytes": 38,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/agent.py",
+      "git_blob": "39694eb6563defefd22b55fd992b4de7071b129b",
+      "git_mode": "100644",
+      "bytes": 19614,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/auth/__init__.py",
+      "git_blob": "847bac64e7ee9b0cf8ef9411efa8db802f085390",
+      "git_mode": "100644",
+      "bytes": 575,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/auth/core.py",
+      "git_blob": "d12e3129e6027fbfe17ae168fc0aa3d040ea377b",
+      "git_mode": "100644",
+      "bytes": 7835,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/auth/gateway.py",
+      "git_blob": "d04c4ccbadb8264bb74676d857f9dc7d4348c023",
+      "git_mode": "100644",
+      "bytes": 1227,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/autoconfig.py",
+      "git_blob": "a02db1695bdf53ce051add436fa91026111a6bf0",
+      "git_mode": "100644",
+      "bytes": 9543,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/compile/__init__.py",
+      "git_blob": "f12e01c980a35365e83bf3e56aa9461c8df2bf7b",
+      "git_mode": "100644",
+      "bytes": 464,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/compile/functions.py",
+      "git_blob": "5d6a22af2406eac75ce81cd67863bed01c54b3be",
+      "git_mode": "100644",
+      "bytes": 8713,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/compile/llm_node.py",
+      "git_blob": "615dedf87c98758da4dbeeec5caac204f68d18f2",
+      "git_mode": "100644",
+      "bytes": 5626,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/compile/workflow.py",
+      "git_blob": "a25fb096fb09714bb6a889c99312bb0bb30263df",
+      "git_mode": "100644",
+      "bytes": 15573,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/config/__init__.py",
+      "git_blob": "51d8fd9e654e7f35491f7ca02e391592e053b0fa",
+      "git_mode": "100644",
+      "bytes": 910,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/config/defaults.py",
+      "git_blob": "ea9b56b2aaa1f2ef749e89ef56aa967fdea63021",
+      "git_mode": "100644",
+      "bytes": 622,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/config/graph.py",
+      "git_blob": "7f4553b7cb150ae2d44f0e8fb258f1ab48281be3",
+      "git_mode": "100644",
+      "bytes": 7354,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/config/loader.py",
+      "git_blob": "22b881c71e3945938b3e73876b39d2d9f713dc90",
+      "git_mode": "100644",
+      "bytes": 40459,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/config/settings.py",
+      "git_blob": "d83907b20122eee8dc4fddaec23141f570a1ad1e",
+      "git_mode": "100644",
+      "bytes": 9421,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/config/sugar.py",
+      "git_blob": "747a5c783b3ad940700546eb9a1af21509eb5b87",
+      "git_mode": "100644",
+      "bytes": 9163,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/execution/__init__.py",
+      "git_blob": "33cf6224f78a990e39dffd02684d9d885d6bbc3b",
+      "git_mode": "100644",
+      "bytes": 405,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/execution/resolver.py",
+      "git_blob": "4aa1e9434dd842a758cc90489cc1a3be7fce4891",
+      "git_mode": "100644",
+      "bytes": 29448,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/interfaces/__init__.py",
+      "git_blob": "a59b8d9d415ddf0ff701488be0157909c66e2d6d",
+      "git_mode": "100644",
+      "bytes": 373,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/interfaces/agent.py",
+      "git_blob": "bdea986b8f51e94f9874da68255fabe0b4e8bf59",
+      "git_mode": "100644",
+      "bytes": 1022,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/interfaces/live.py",
+      "git_blob": "6d3faae64e3e0e33c1fd044455f4c638874009d6",
+      "git_mode": "100644",
+      "bytes": 13811,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/interfaces/mcp.py",
+      "git_blob": "f0fb2cd6d8be9f8463a6f62843a87ed71057bf41",
+      "git_mode": "100644",
+      "bytes": 838,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/interfaces/rest.py",
+      "git_blob": "04036248d135f1b3fe10ede77365e1e7ccd1f639",
+      "git_mode": "100644",
+      "bytes": 6975,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/interfaces/service.py",
+      "git_blob": "a706e59dc384afc97fe15866b947266637a4afc9",
+      "git_mode": "100644",
+      "bytes": 1612,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/knowledge.py",
+      "git_blob": "5de96cf562b5949f638e11fe33bb1f1b96b0bfcb",
+      "git_mode": "100644",
+      "bytes": 4037,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/models.py",
+      "git_blob": "92aed513300a8a52cc23211cc3d60ee8d71805cb",
+      "git_mode": "100644",
+      "bytes": 2675,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/policies/__init__.py",
+      "git_blob": "b3c7d743d5d2dc7dba542b692183652e01f9fe4e",
+      "git_mode": "100644",
+      "bytes": 877,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/policies/approval.py",
+      "git_blob": "3161b0b8b92a595cffc2d8dec41e8d0e25115894",
+      "git_mode": "100644",
+      "bytes": 5900,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/policies/synthesis.py",
+      "git_blob": "f529527fcd41c4880e8275d16e4b2452a40d2bb6",
+      "git_mode": "100644",
+      "bytes": 3716,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/presets/__init__.py",
+      "git_blob": "806208054c06fcce287c0db320c544d27b7ee25d",
+      "git_mode": "100644",
+      "bytes": 160,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/presets/catalog.py",
+      "git_blob": "c378ccafaa88e76b1a8ab23616e0aefc59b0621a",
+      "git_mode": "100644",
+      "bytes": 19681,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/runtime.py",
+      "git_blob": "7479c9a4aaec0850a84c3539fca99e2a0cc6efa7",
+      "git_mode": "100644",
+      "bytes": 1704,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/telemetry.py",
+      "git_blob": "e04acc372ba66abeada5529b771182bb6518f231",
+      "git_mode": "100644",
+      "bytes": 1557,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/tools.py",
+      "git_blob": "5dcc338a8df51f44b362aef50d5c1b7043aab23a",
+      "git_mode": "100644",
+      "bytes": 11762,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/use_cases/__init__.py",
+      "git_blob": "ecf24b318fe6298eaa5cebccfe77caaa32ba0ab7",
+      "git_mode": "100644",
+      "bytes": 674,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/use_cases/registry.py",
+      "git_blob": "143ad220ab5fed9289b9c25180f1c952de35b89d",
+      "git_mode": "100644",
+      "bytes": 7793,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "src/basic_agent/util.py",
+      "git_blob": "702915eff712539c80ba74bfa8e7a40dd96f34f7",
+      "git_mode": "100644",
+      "bytes": 4408,
+      "category": "runtime",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/conftest.py",
+      "git_blob": "8e55031ecfa33e62652e74c323ad0cc6f94313ac",
+      "git_mode": "100644",
+      "bytes": 3398,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/fakes.py",
+      "git_blob": "a22b7120d848d1ba35a90e926dc8651e0f102144",
+      "git_mode": "100644",
+      "bytes": 4457,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_agent.py",
+      "git_blob": "4a61444e2e7220d11b5f4d9a1ed540f408d44057",
+      "git_mode": "100644",
+      "bytes": 10265,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_approval_gate_enforcement.py",
+      "git_blob": "38ef708a4005f7a868a389ae9b30d23b4f0aefec",
+      "git_mode": "100644",
+      "bytes": 7133,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_auth_coverage.py",
+      "git_blob": "69139ba65be90750136e799488d2075cfc76dfc8",
+      "git_mode": "100644",
+      "bytes": 4562,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_authenticated_interfaces.py",
+      "git_blob": "fbe4847791a50fe0cd37acd960a8eaaf162a7eec",
+      "git_mode": "100644",
+      "bytes": 17548,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_cloud_execution_deployment.py",
+      "git_blob": "576fb974f37cbe03fdc37155dc297a5e8df6f8c3",
+      "git_mode": "100644",
+      "bytes": 4035,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_code_execution.py",
+      "git_blob": "b6d38c244925f03f7d5f1ceffb3351301f076802",
+      "git_mode": "100644",
+      "bytes": 26819,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_compile.py",
+      "git_blob": "11daecfae5f743f725cead21c13c570b7cfb1bc1",
+      "git_mode": "100644",
+      "bytes": 13626,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_compile_fixes.py",
+      "git_blob": "8a4062fab6c2cb1f27eba25e843f0a04eff22e76",
+      "git_mode": "100644",
+      "bytes": 8849,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_config_loader.py",
+      "git_blob": "d50fa2be95fd25fdd40c5ae5f05d9b5c9de5a7c9",
+      "git_mode": "100644",
+      "bytes": 17850,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_configuration_defaults.py",
+      "git_blob": "9306d3322d6d60149a073f7959013528d873b0b0",
+      "git_mode": "100644",
+      "bytes": 2496,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_coverage_improvements.py",
+      "git_blob": "808b384a9693c9578f6b48aff15e47f7da647241",
+      "git_mode": "100644",
+      "bytes": 29643,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_custom_function_module.py",
+      "git_blob": "6fba1e1cffab384a4138cadc5fe718debb570621",
+      "git_mode": "100644",
+      "bytes": 12117,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_documentation_consistency.py",
+      "git_blob": "bacab761819dd7de15fd954566db789ffdafcf90",
+      "git_mode": "100644",
+      "bytes": 4919,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_expert_dispatch_routing.py",
+      "git_blob": "41976dce5dbfb37f558deb070f054758a202602e",
+      "git_mode": "100644",
+      "bytes": 7534,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_graph_config.py",
+      "git_blob": "5ebd9b3d772df2e2c7234228d79755f59d5b0a4d",
+      "git_mode": "100644",
+      "bytes": 9143,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_graph_examples.py",
+      "git_blob": "f8afc5bfbc9bfbdc99316911a3c1bb4d23725c38",
+      "git_mode": "100644",
+      "bytes": 4629,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_managed_persistence.py",
+      "git_blob": "8283005069586999d3751345f03ca539af8a671d",
+      "git_mode": "100644",
+      "bytes": 5191,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_mcp_server.py",
+      "git_blob": "d556b9e17b50d60d33327cd4b5166035e3182a56",
+      "git_mode": "100644",
+      "bytes": 442,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_models.py",
+      "git_blob": "df2e7bc01e0ebbf0013edc2b00a9075d80c8354f",
+      "git_mode": "100644",
+      "bytes": 2476,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_policies.py",
+      "git_blob": "2c2410f70fb72d0116633ebce8d881e4abfa6c28",
+      "git_mode": "100644",
+      "bytes": 16114,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_preset_matrix.py",
+      "git_blob": "782d07a1953c27737234641a22d79229d50e2065",
+      "git_mode": "100644",
+      "bytes": 5930,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_presets.py",
+      "git_blob": "4c9371886c2771d33a6e6c3ffa81069b42318443",
+      "git_mode": "100644",
+      "bytes": 7268,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_runtime_wiring.py",
+      "git_blob": "2569941dbc979379fa6deefb0aaaadffc425471f",
+      "git_mode": "100644",
+      "bytes": 16273,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_sandbox_configuration.py",
+      "git_blob": "ca982c8df3951f3b9be1be61942cb84aa9d98f7f",
+      "git_mode": "100644",
+      "bytes": 4117,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_security_hardening.py",
+      "git_blob": "34bb6863e89ed973d461a455732d1e8e9f36eced",
+      "git_mode": "100644",
+      "bytes": 32877,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_served_graph_config.py",
+      "git_blob": "3bc402feb1f92112d37519080a3a3094f40e0221",
+      "git_mode": "100644",
+      "bytes": 8529,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_served_root.py",
+      "git_blob": "13bad3c238b85914923683e24278b5db4fe2dc83",
+      "git_mode": "100644",
+      "bytes": 3204,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_service_api.py",
+      "git_blob": "a75cbfc698b7701909e44ba166e4c04a4eb7040d",
+      "git_mode": "100644",
+      "bytes": 3975,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_sugar_forms.py",
+      "git_blob": "f3c5e313e7fc8766b57b900dd9863301e1bb8516",
+      "git_mode": "100644",
+      "bytes": 8518,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_sugar_item_exclusivity.py",
+      "git_blob": "243b312a1913631974ce22426555933cf351d3ff",
+      "git_mode": "100644",
+      "bytes": 1595,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_use_cases.py",
+      "git_blob": "0ac8a15d5f83b2f886eb8b67eec8dda095ca8f6b",
+      "git_mode": "100644",
+      "bytes": 7352,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_workflow_gates.py",
+      "git_blob": "ccabd1903d6be3b46be3c0d6425fd6c58b0e53c5",
+      "git_mode": "100644",
+      "bytes": 23075,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "tests/test_workflow_invocations.py",
+      "git_blob": "a565b7199074bf51fb200308570f3e6ee3d4aead",
+      "git_mode": "100644",
+      "bytes": 6764,
+      "category": "tests",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    },
+    {
+      "path": "uv.lock",
+      "git_blob": "364427d24f9187b742e66497552c1356228bf3e9",
+      "git_mode": "100644",
+      "bytes": 544790,
+      "category": "operations/config/documentation",
+      "disposition": "retained_at_origin_pending_compatibility_mapping"
+    }
+  ]
+}

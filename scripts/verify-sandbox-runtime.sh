@@ -13,8 +13,9 @@ fi
 # socket only for the duration of the test, creates one hardened child
 # sandbox, executes a harmless snippet, inspects the resulting Docker
 # HostConfig, and explicitly removes the child in a finally block.
-docker run --rm --user 0 \
+docker run --rm -i --user 0 \
   -v "$docker_socket:/var/run/docker.sock" \
+  -e DEPLOYMENT_ENV=docker-compose \
   -e DOCKER_HOST=unix:///var/run/docker.sock \
   "$app_image" python - <<'PY'
 from types import SimpleNamespace

@@ -24,7 +24,9 @@ dependencies = [
     "msgpack>=1.2.1",
     "opentelemetry-exporter-otlp-proto-grpc>=1.28.0",
     "opentelemetry-sdk>=1.28.0",
-    "PyJWT[crypto]>=2.8.0",
+    "PyJWT[crypto]>=2.14.0",
+    # Keep the shared HTTP dependency above the runtime image audit's fixed floor.
+    "urllib3>=2.8.0",
 ]
 
 [project.optional-dependencies]

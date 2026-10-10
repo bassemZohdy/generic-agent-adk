@@ -70,7 +70,7 @@ DOCKER_IMAGE_ENV = "AGENT_CODE_EXECUTION_DOCKER_IMAGE"
 #: full hardened constraint set (read-only rootfs + tmpfs + no caps).
 DEFAULT_SANDBOX_IMAGE = (
     "python:3.13-slim-bookworm@sha256:"
-    "00faa2debb87529f9f0764e9491d8ba400a3678976616c3bd7cb193745ac20d1"
+    "a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641"
 )
 MAX_EXECUTION_OUTPUT_BYTES = 1_048_576
 
